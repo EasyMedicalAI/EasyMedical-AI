@@ -1,12 +1,8 @@
 import { Platform } from 'react-native';
 
-// Import react-native-health
-let RNHealth: any;
-try {
-  RNHealth = require('react-native-health').default;
-} catch (e) {
-  console.warn('react-native-health not available');
-}
+// Mock data generator for wearable health metrics
+// This provides realistic simulated data for development/testing
+// Real HealthKit integration can replace these methods later without changing the component interface
 
 // Types for health data
 export interface HealthData {
@@ -22,197 +18,72 @@ export interface HealthData {
 
 export const healthService = {
   /**
-   * Request permissions from HealthKit (iOS) or Google Fit (Android)
+   * Request permissions (mock - always succeeds)
+   * Real HealthKit permissions will be handled when react-native-health is integrated
    */
   async requestPermissions(): Promise<boolean> {
-    try {
-      if (Platform.OS === 'ios' && RNHealth) {
-        const permissions = {
-          permissions: {
-            read: [
-              'HKQuantityTypeIdentifierHeartRate',
-              'HKQuantityTypeIdentifierOxygenSaturation',
-              'HKQuantityTypeIdentifierBodyTemperature',
-              'HKQuantityTypeIdentifierRespiratoryRate',
-              'HKQuantityTypeIdentifierHeartRateVariabilitySDNN',
-              'HKQuantityTypeIdentifierVO2Max',
-              'HKQuantityTypeIdentifierRestingHeartRate',
-            ],
-          },
-        };
-
-        await RNHealth.initHealthKit(permissions);
-        return true;
-      } else if (Platform.OS === 'android') {
-        console.log('Google Fit integration coming soon');
-        return false;
-      }
-      return false;
-    } catch (error) {
-      console.error('Error requesting health permissions:', error);
-      return false;
-    }
+    return new Promise((resolve) => {
+      setTimeout(() => resolve(true), 500);
+    });
   },
 
   /**
-   * Fetch latest heart rate data
+   * Fetch latest heart rate data (mock)
+   * Returns realistic heart rate between 60-100 bpm with natural variation
    */
   async getHeartRate(): Promise<number | undefined> {
-    try {
-      if (!RNHealth) return undefined;
-
-      const startDate = new Date();
-      startDate.setMinutes(startDate.getMinutes() - 5);
-
-      const samples = await RNHealth.getHeartRateSamples({
-        startDate: startDate.toISOString(),
-        endDate: new Date().toISOString(),
-        limit: 1,
-      });
-
-      return samples?.length > 0 ? Math.round(samples[0].value) : undefined;
-    } catch (error) {
-      console.error('Error fetching heart rate:', error);
-      return undefined;
-    }
+    const baseHR = 72;
+    const variance = Math.sin(Date.now() / 5000) * 8;
+    const noise = (Math.random() - 0.5) * 6;
+    return Math.round(baseHR + variance + noise);
   },
 
   /**
-   * Fetch latest blood oxygen (SpO2) data
+   * Fetch latest blood oxygen (SpO2) data (mock)
+   * Returns realistic SpO2 between 95-99%
    */
   async getBloodOxygen(): Promise<number | undefined> {
-    try {
-      if (!RNHealth) return undefined;
-
-      const startDate = new Date();
-      startDate.setMinutes(startDate.getMinutes() - 5);
-
-      const samples = await RNHealth.getOxygenSaturationSamples({
-        startDate: startDate.toISOString(),
-        endDate: new Date().toISOString(),
-        limit: 1,
-      });
-
-      return samples?.length > 0 ? Math.round(samples[0].value) : undefined;
-    } catch (error) {
-      console.error('Error fetching blood oxygen:', error);
-      return undefined;
-    }
+    return 96 + Math.random() * 3;
   },
 
   /**
-   * Fetch latest body temperature data
+   * Fetch latest body temperature data (mock)
+   * Returns realistic body temperature between 36.5-37.5°C
    */
   async getBodyTemperature(): Promise<number | undefined> {
-    try {
-      if (!RNHealth) return undefined;
-
-      const startDate = new Date();
-      startDate.setHours(startDate.getHours() - 1);
-
-      const samples = await RNHealth.getBodyTemperatureSamples({
-        startDate: startDate.toISOString(),
-        endDate: new Date().toISOString(),
-        limit: 1,
-      });
-
-      return samples?.length > 0 ? parseFloat(samples[0].value.toFixed(1)) : undefined;
-    } catch (error) {
-      console.error('Error fetching body temperature:', error);
-      return undefined;
-    }
+    return parseFloat((36.8 + (Math.random() - 0.5) * 0.6).toFixed(1));
   },
 
   /**
-   * Fetch latest respiratory rate data
+   * Fetch latest respiratory rate data (mock)
+   * Returns realistic respiratory rate between 12-20 breaths/min
    */
   async getRespiratoryRate(): Promise<number | undefined> {
-    try {
-      if (!RNHealth) return undefined;
-
-      const startDate = new Date();
-      startDate.setMinutes(startDate.getMinutes() - 5);
-
-      const samples = await RNHealth.getRespiratoryRateSamples({
-        startDate: startDate.toISOString(),
-        endDate: new Date().toISOString(),
-        limit: 1,
-      });
-
-      return samples?.length > 0 ? Math.round(samples[0].value) : undefined;
-    } catch (error) {
-      console.error('Error fetching respiratory rate:', error);
-      return undefined;
-    }
+    return Math.round(16 + (Math.random() - 0.5) * 6);
   },
 
   /**
-   * Fetch latest HRV (Heart Rate Variability) data
+   * Fetch latest HRV (Heart Rate Variability) data (mock)
+   * Returns realistic HRV between 20-80ms
    */
   async getHRV(): Promise<number | undefined> {
-    try {
-      if (!RNHealth) return undefined;
-
-      const startDate = new Date();
-      startDate.setMinutes(startDate.getMinutes() - 5);
-
-      const samples = await RNHealth.getHeartRateVariabilitySamples({
-        startDate: startDate.toISOString(),
-        endDate: new Date().toISOString(),
-        limit: 1,
-      });
-
-      return samples?.length > 0 ? Math.round(samples[0].value) : undefined;
-    } catch (error) {
-      console.error('Error fetching HRV:', error);
-      return undefined;
-    }
+    return Math.round(50 + (Math.random() - 0.5) * 40);
   },
 
   /**
-   * Fetch latest VO2 Max data
+   * Fetch latest VO2 Max data (mock)
+   * Returns realistic VO2 Max between 30-50 ml/kg/min
    */
   async getVO2Max(): Promise<number | undefined> {
-    try {
-      if (!RNHealth) return undefined;
-
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 7);
-
-      const samples = await RNHealth.getVO2MaxSamples({
-        startDate: startDate.toISOString(),
-        endDate: new Date().toISOString(),
-        limit: 1,
-      });
-
-      return samples?.length > 0 ? Math.round(samples[0].value) : undefined;
-    } catch (error) {
-      console.error('Error fetching VO2 Max:', error);
-      return undefined;
-    }
+    return Math.round(42 + (Math.random() - 0.5) * 12);
   },
 
   /**
-   * Fetch latest resting heart rate data
+   * Fetch latest resting heart rate data (mock)
+   * Returns realistic resting heart rate between 50-70 bpm
    */
   async getRestingHeartRate(): Promise<number | undefined> {
-    try {
-      if (!RNHealth) return undefined;
-
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - 1);
-
-      const samples = await RNHealth.getRestingHeartRateSamples({
-        startDate: startDate.toISOString(),
-        endDate: new Date().toISOString(),
-        limit: 1,
-      });
-
-      return samples?.length > 0 ? Math.round(samples[0].value) : undefined;
-    } catch (error) {
-      console.error('Error fetching resting heart rate:', error);
-      return undefined;
-    }
+    return Math.round(58 + (Math.random() - 0.5) * 12);
   },
 
   /**
@@ -255,17 +126,9 @@ export const healthService = {
   },
 
   /**
-   * Check if HealthKit is available on this device
+   * Check if HealthKit is available (mock - always true for development)
    */
   async isHealthDataAvailable(): Promise<boolean> {
-    try {
-      if (Platform.OS === 'ios' && RNHealth) {
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Error checking health data availability:', error);
-      return false;
-    }
+    return Platform.OS === 'ios';
   },
 };
