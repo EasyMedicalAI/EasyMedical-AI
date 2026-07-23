@@ -12,7 +12,8 @@
       "bundleIdentifier": "com.jaffe06.EasyMedical",
       "infoPlist": {
         "NSHealthShareUsageDescription": "Access your health data from Apple Health",
-        "NSHealthUpdateUsageDescription": "Read your health data"
+        "NSHealthUpdateUsageDescription": "Read your health data",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -52,4 +53,3 @@
     }
   }
 }
-
