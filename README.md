@@ -1,56 +1,109 @@
-# Welcome to your Expo app 👋
+# EasyMedical
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A mobile app that centralizes all your health records in one place. Upload records from doctors, pharmacies, and labs via photo, gallery, or manual input. AI-powered Claude parses and summarizes records in plain language.
 
-## Get started
+## Features
 
-1. Install dependencies
+- **📊 Dashboard** - Quick view of key medical info (medications, allergies, recent results)
+- **⊕ Upload Records** - Add records via camera, photo library, or manual text input
+- **🏥 Organize by Specialty** - Browse records grouped by medical specialty (Cardiology, Orthopedics, etc.)
+- **🤖 AI Parsing** - Claude automatically extracts key information and creates plain-language summaries
+- **📱 Local Storage** - All records stored securely on your device
+- **☁️ Cloud Sync** - Optional cloud backup (coming soon)
 
-   ```bash
-   npm install
-   ```
+## Quick Start
 
-2. Start the app
+### Prerequisites
+- Node.js 18+
+- Claude API key from https://console.anthropic.com/
 
-   ```bash
-   npx expo start
-   ```
+### Installation
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+1. Install dependencies:
 ```bash
-npm run reset-project
+npm install
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+2. Set up your Claude API key:
+   - Open `.env.local`
+   - Add: `EXPO_PUBLIC_ANTHROPIC_API_KEY=your_key_here`
 
-### Other setup steps
+3. Start the app:
+```bash
+npm start
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+4. Run on device:
+   - **iOS**: Press `i`
+   - **Android**: Press `a`
+   - **Web**: Press `w`
 
-## Learn more
+## How It Works
 
-To learn more about developing your project with Expo, look at the following resources:
+### Upload & AI Processing
+1. Choose upload method (camera, gallery, or text)
+2. Claude API extracts key information:
+   - Medical specialty & provider
+   - Medications & allergies
+   - Test results & conditions
+3. Generates plain-language summary
+4. Saved securely to your device
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### Dashboard
+- View unique medications across all records
+- See all allergies with warning badges
+- Browse recent records
+- One-tap upload for new records
 
-## Join the community
+### Specialties
+- Records organized by medical specialty
+- Expandable sections per specialty
+- Quick access to provider information
 
-Join our community of developers creating universal apps.
+## Project Structure
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```
+src/
+├── screens/           # UI screens
+├── context/           # State management
+├── services/          # Claude API, storage
+├── types/             # TypeScript types
+└── app/               # Routing (expo-router)
+```
+
+## Technology
+
+- React Native + Expo
+- Anthropic Claude API
+- AsyncStorage for local data
+- TypeScript
+
+## Building
+
+```bash
+# Development
+eas build --platform ios --profile preview
+eas build --platform android --profile preview
+
+# Production
+eas build --platform ios
+eas build --platform android
+```
+
+## Troubleshooting
+
+**Claude API errors?**
+- Check `.env.local` has your API key
+- Verify key at https://console.anthropic.com/
+
+**Records not saving?**
+- Check device storage space
+- Verify AsyncStorage permissions
+
+## Future Plans
+
+- Cloud backup with Firebase
+- Better OCR for document scanning
+- Doctor collaboration features
+- Appointment reminders
+- Insurance information storage

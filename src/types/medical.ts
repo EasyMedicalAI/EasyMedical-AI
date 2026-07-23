@@ -1,0 +1,70 @@
+export interface ExtractedData {
+  medications?: string[];
+  allergies?: string[];
+  conditions?: string[];
+  testResults?: Record<string, string>;
+  dates?: Record<string, string>;
+  [key: string]: any;
+}
+
+export interface MedicalRecord {
+  id: string;
+  uploadDate: string;
+  imageUri?: string;
+  originalText?: string;
+  specialty: string;
+  provider: string;
+  summary: string;
+  extractedData: ExtractedData;
+  processed: boolean;
+}
+
+export interface VitalSigns {
+  bloodPressure?: string;
+  heartRate?: number;
+  temperature?: number;
+  oxygenSaturation?: number;
+  lastUpdated?: string;
+}
+
+export interface UserHealthData {
+  bloodType?: string;
+  height?: string;
+  weight?: string;
+  conditions?: string[];
+  allergies?: string[];
+  medications?: string[];
+  appointments?: Array<{
+    id: string;
+    dateTime: string;
+    doctorName: string;
+    specialty: string;
+  }>;
+  vaccines?: Array<{
+    name: string;
+    date: string;
+    nextDue?: string;
+  }>;
+  emergencyContacts?: Array<{
+    name: string;
+    relationship: string;
+    phone: string;
+  }>;
+  insurance?: {
+    provider: string;
+    memberId: string;
+    groupNumber?: string;
+  };
+  vitals?: VitalSigns;
+  lastVisitDate?: string;
+  pharmacy?: {
+    name: string;
+    phone: string;
+  };
+}
+
+export interface MedicalHub {
+  records: MedicalRecord[];
+  userData?: UserHealthData;
+  lastSyncDate?: string;
+}

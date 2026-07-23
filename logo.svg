@@ -1,0 +1,40 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img">
+  <title>EasyMedical Logo</title>
+  <desc>Medical folder logo combining a document folder with a medical cross, symbolizing organized health records management</desc>
+
+  <defs>
+    <style>
+      @media (prefers-color-scheme: dark) {
+        .folder-fill { fill: #3b82f6; }
+        .folder-stroke { stroke: #3b82f6; }
+        .cross-fill { fill: #93c5fd; }
+      }
+      @media (prefers-color-scheme: light) {
+        .folder-fill { fill: #1e40af; }
+        .folder-stroke { stroke: #1e40af; }
+        .cross-fill { fill: #1e3a8a; }
+      }
+    </style>
+  </defs>
+
+  <!-- Outer organizing rings -->
+  <circle cx="100" cy="105" r="90" fill="none" class="folder-stroke" stroke-width="1.2" opacity="0.3"/>
+  <circle cx="100" cy="105" r="75" fill="none" class="folder-stroke" stroke-width="1.2" opacity="0.5"/>
+
+  <!-- Folder tab -->
+  <path class="folder-fill" d="M 55 75 L 75 75 L 82 65 L 130 65 L 130 75 Z" stroke="none"/>
+
+  <!-- Folder body -->
+  <path class="folder-fill" d="M 50 80 L 50 140 Q 50 145 55 145 L 145 145 Q 150 145 150 140 L 150 80 Q 150 75 145 75 L 82 75 L 75 65 Q 72 62 68 62 L 55 62 Q 50 62 50 67 Z" stroke="none"/>
+
+  <!-- Medical cross in center -->
+  <g transform="translate(100, 105)">
+    <!-- Vertical bar of cross -->
+    <rect x="-4" y="-16" width="8" height="32" class="cross-fill" rx="2"/>
+    <!-- Horizontal bar of cross -->
+    <rect x="-16" y="-4" width="32" height="8" class="cross-fill" rx="2"/>
+  </g>
+
+  <!-- Subtle shine/highlight on folder -->
+  <path d="M 58 75 Q 65 68 75 68 L 77 71 Q 68 76 58 82 Z" fill="white" opacity="0.15"/>
+</svg>
