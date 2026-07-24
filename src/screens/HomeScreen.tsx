@@ -710,21 +710,33 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
               {userData.familyHistory && userData.familyHistory.length > 0 ? (
-                userData.familyHistory.map((family, idx) => (
-                  <View key={idx} style={styles.historyEntry}>
+                Object.entries(
+                  userData.familyHistory.reduce((acc, family, idx) => {
+                    if (!acc[family.familyMember]) {
+                      acc[family.familyMember] = [];
+                    }
+                    acc[family.familyMember].push({ ...family, idx });
+                    return acc;
+                  }, {})
+                ).map(([member, conditions]) => (
+                  <View key={member} style={styles.historyEntry}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.entryTitle}>{family.familyMember}</Text>
-                      <Text style={styles.entryMeta}>{family.condition}</Text>
+                      <Text style={styles.entryTitle}>{member}</Text>
+                      {conditions.map((item, condIdx) => (
+                        <View key={item.idx} style={{ marginTop: 8 }}>
+                          <Text style={styles.entryMeta}>{condIdx + 1}. {item.condition}</Text>
+                          <TouchableOpacity onPress={() => {
+                            setEditData(userData);
+                            setEditingHistoryType('family');
+                            setEditingIndex(item.idx);
+                            setFamilyMember(item.familyMember);
+                            setFamilyCondition(item.condition);
+                          }}>
+                            <Text style={styles.editLink}>Edit</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ))}
                     </View>
-                    <TouchableOpacity onPress={() => {
-                      setEditData(userData);
-                      setEditingHistoryType('family');
-                      setEditingIndex(idx);
-                      setFamilyMember(family.familyMember);
-                      setFamilyCondition(family.condition);
-                    }}>
-                      <Text style={styles.editLink}>Edit</Text>
-                    </TouchableOpacity>
                   </View>
                 ))
               ) : (
