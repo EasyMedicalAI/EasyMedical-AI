@@ -730,60 +730,52 @@ export default function HomeScreen() {
                   <Text style={styles.editLink}>+ Add</Text>
                 </TouchableOpacity>
               </View>
-              <View style={styles.tagContainer}>
-                {(userData.conditions && userData.conditions.length > 0) ? (
-                  userData.conditions.map((condition, idx) => (
-                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
-                      {editingConditionIdx === idx ? (
-                        <TextInput
-                          style={[styles.input, { flex: 1, height: 36 }]}
-                          value={editingConditionValue}
-                          onChangeText={setEditingConditionValue}
-                        />
-                      ) : (
-                        <View style={[styles.tag, { flex: 1 }]}>
-                          <Text style={[styles.tagText, { flex: 1 }]} numberOfLines={1}>{condition}</Text>
-                        </View>
-                      )}
-                      {editingConditionIdx === idx ? (
-                        <>
-                          <TouchableOpacity
-                            onPress={async () => {
-                              const updated = [...(userData.conditions || [])];
-                              updated[idx] = editingConditionValue;
-                              const updatedData = { ...editData, conditions: updated };
-                              setEditData(updatedData);
-                              await updateUserData(updatedData);
-                              setEditingConditionIdx(null);
-                            }}
-                          >
-                            <Text style={styles.editLink}>✓</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => setEditingConditionIdx(null)}>
-                            <Text style={styles.editLink}>✕</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <TouchableOpacity onPress={() => {
-                          setEditingConditionIdx(idx);
-                          setEditingConditionValue(condition);
-                        }}>
-                          <Text style={styles.editLink}>Edit</Text>
+              {(userData.conditions && userData.conditions.length > 0) ? (
+                userData.conditions.map((condition, idx) => (
+                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
+                    {editingConditionIdx === idx ? (
+                      <TextInput
+                        style={[styles.input, { flex: 1, height: 36 }]}
+                        value={editingConditionValue}
+                        onChangeText={setEditingConditionValue}
+                      />
+                    ) : (
+                      <Text style={[styles.healthItem, { flex: 1 }]}>• {condition}</Text>
+                    )}
+                    {editingConditionIdx === idx ? (
+                      <>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            const updated = [...(userData.conditions || [])];
+                            updated[idx] = editingConditionValue;
+                            const updatedData = { ...editData, conditions: updated };
+                            setEditData(updatedData);
+                            await updateUserData(updatedData);
+                            setEditingConditionIdx(null);
+                          }}
+                        >
+                          <Text style={styles.editLink}>✓</Text>
                         </TouchableOpacity>
-                      )}
-                    </View>
-                  ))
-                ) : (
-                  <>
-                    <View style={styles.tag}>
-                      <Text style={styles.tagText}>Hypertension</Text>
-                    </View>
-                    <View style={styles.tag}>
-                      <Text style={styles.tagText}>Type 2 Diabetes</Text>
-                    </View>
-                  </>
-                )}
-              </View>
+                        <TouchableOpacity onPress={() => setEditingConditionIdx(null)}>
+                          <Text style={styles.editLink}>✕</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <TouchableOpacity onPress={() => {
+                        setEditingConditionIdx(idx);
+                        setEditingConditionValue(condition);
+                      }}>
+                        <Text style={styles.editLink}>Edit</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))
+              ) : (
+                <>
+                  <Text style={styles.healthItem}>• Hypertension</Text>
+                  <Text style={styles.healthItem}>• Type 2 Diabetes</Text>
+                </>
+              )}
               {addingCondition && (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
                   <TextInput
@@ -822,60 +814,52 @@ export default function HomeScreen() {
                   <Text style={styles.editLink}>+ Add</Text>
                 </TouchableOpacity>
               </View>
-              <View style={styles.tagContainer}>
-                {(userData.allergies && userData.allergies.length > 0) ? (
-                  userData.allergies.map((allergy, idx) => (
-                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
-                      {editingAllergyIdx === idx ? (
-                        <TextInput
-                          style={[styles.input, { flex: 1, height: 36 }]}
-                          value={editingAllergyValue}
-                          onChangeText={setEditingAllergyValue}
-                        />
-                      ) : (
-                        <View style={[styles.tag, styles.allergyTag, { flex: 1 }]}>
-                          <Text style={[styles.tagText, styles.allergyText, { flex: 1 }]} numberOfLines={1}>{allergy}</Text>
-                        </View>
-                      )}
-                      {editingAllergyIdx === idx ? (
-                        <>
-                          <TouchableOpacity
-                            onPress={async () => {
-                              const updated = [...(userData.allergies || [])];
-                              updated[idx] = editingAllergyValue;
-                              const updatedData = { ...editData, allergies: updated };
-                              setEditData(updatedData);
-                              await updateUserData(updatedData);
-                              setEditingAllergyIdx(null);
-                            }}
-                          >
-                            <Text style={styles.editLink}>✓</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => setEditingAllergyIdx(null)}>
-                            <Text style={styles.editLink}>✕</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <TouchableOpacity onPress={() => {
-                          setEditingAllergyIdx(idx);
-                          setEditingAllergyValue(allergy);
-                        }}>
-                          <Text style={styles.editLink}>Edit</Text>
+              {(userData.allergies && userData.allergies.length > 0) ? (
+                userData.allergies.map((allergy, idx) => (
+                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
+                    {editingAllergyIdx === idx ? (
+                      <TextInput
+                        style={[styles.input, { flex: 1, height: 36 }]}
+                        value={editingAllergyValue}
+                        onChangeText={setEditingAllergyValue}
+                      />
+                    ) : (
+                      <Text style={[styles.healthItem, { flex: 1, color: '#FF3333' }]}>• {allergy}</Text>
+                    )}
+                    {editingAllergyIdx === idx ? (
+                      <>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            const updated = [...(userData.allergies || [])];
+                            updated[idx] = editingAllergyValue;
+                            const updatedData = { ...editData, allergies: updated };
+                            setEditData(updatedData);
+                            await updateUserData(updatedData);
+                            setEditingAllergyIdx(null);
+                          }}
+                        >
+                          <Text style={styles.editLink}>✓</Text>
                         </TouchableOpacity>
-                      )}
-                    </View>
-                  ))
-                ) : (
-                  <>
-                    <View style={[styles.tag, styles.allergyTag]}>
-                      <Text style={[styles.tagText, styles.allergyText]}>Penicillin</Text>
-                    </View>
-                    <View style={[styles.tag, styles.allergyTag]}>
-                      <Text style={[styles.tagText, styles.allergyText]}>Sulfa drugs</Text>
-                    </View>
-                  </>
-                )}
-              </View>
+                        <TouchableOpacity onPress={() => setEditingAllergyIdx(null)}>
+                          <Text style={styles.editLink}>✕</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <TouchableOpacity onPress={() => {
+                        setEditingAllergyIdx(idx);
+                        setEditingAllergyValue(allergy);
+                      }}>
+                        <Text style={styles.editLink}>Edit</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))
+              ) : (
+                <>
+                  <Text style={[styles.healthItem, { color: '#FF3333' }]}>• Penicillin</Text>
+                  <Text style={[styles.healthItem, { color: '#FF3333' }]}>• Sulfa drugs</Text>
+                </>
+              )}
               {addingAllergy && (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
                   <TextInput
