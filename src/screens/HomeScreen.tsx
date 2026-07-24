@@ -1157,7 +1157,7 @@ export default function HomeScreen() {
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView style={styles.modalContent}>
+          <View style={styles.modalContent}>
             {editingHistoryType === 'surgical' && (
               <>
                 <Text style={styles.label}>Surgery Name</Text>
@@ -1285,7 +1285,7 @@ export default function HomeScreen() {
                 <Text style={styles.deleteButtonText}>Delete</Text>
               </TouchableOpacity>
             )}
-          </ScrollView>
+          </View>
         </View>
       </Modal>
 
