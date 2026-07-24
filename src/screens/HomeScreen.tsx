@@ -50,6 +50,9 @@ export default function HomeScreen() {
   const [selectedBirthdayYear, setSelectedBirthdayYear] = useState(1990);
   const [selectedGender, setSelectedGender] = useState('Other');
   const [customGender, setCustomGender] = useState('');
+  const [historyType, setHistoryType] = useState('');
+  const [historyDescription, setHistoryDescription] = useState('');
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
 
   if (loading) {
     return (
@@ -184,6 +187,29 @@ export default function HomeScreen() {
         setEmergencyContactName('');
         setEmergencyContactRelationship('');
         setEmergencyContactPhone('');
+      } else if (editingSection === 'history' && historyType && historyDescription) {
+        let updatedHistory;
+
+        if (editingHistoryId) {
+          // Update existing history
+          updatedHistory = (editData.medicalHistory || []).map(history =>
+            history.id === editingHistoryId
+              ? { id: editingHistoryId, type: historyType, description: historyDescription }
+              : history
+          );
+        } else {
+          // Add new history
+          const newHistory = {
+            id: String(Date.now()),
+            type: historyType,
+            description: historyDescription,
+          };
+          updatedHistory = [...(editData.medicalHistory || []), newHistory];
+        }
+
+        await updateUserData({ ...editData, medicalHistory: updatedHistory });
+        setHistoryType('');
+        setHistoryDescription('');
       } else {
         await updateUserData(editData);
       }
@@ -231,6 +257,12 @@ export default function HomeScreen() {
         Alert.alert('Success', 'Insurance deleted');
         setEditingSection(null);
         setEditingInsuranceId(null);
+      } else if (editingSection === 'history' && editingHistoryId) {
+        const updatedHistory = (editData.medicalHistory || []).filter(history => history.id !== editingHistoryId);
+        await updateUserData({ ...editData, medicalHistory: updatedHistory });
+        Alert.alert('Success', 'History deleted');
+        setEditingSection(null);
+        setEditingHistoryId(null);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to delete');
@@ -567,6 +599,56 @@ export default function HomeScreen() {
                 </>
               )}
             </View>
+          </View>
+        </View>
+
+        {/* HEALTH HISTORY Section */}
+        <View style={styles.section}>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardIcon}>📚</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>Health History</Text>
+              <Text style={styles.cardMeta}>{userData.medicalHistory?.length || 0} entries</Text>
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            {userData.medicalHistory && userData.medicalHistory.length > 0 ? (
+              userData.medicalHistory.map((history, idx) => (
+                <View key={history.id}>
+                  <View style={styles.historyItemRow}>
+                    <View style={styles.historyItem}>
+                      <Text style={styles.historyType}>{history.type}</Text>
+                      <Text style={styles.historyDescription}>{history.description}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => {
+                      setEditData(userData);
+                      setEditingSection('history');
+                      setEditingHistoryId(history.id);
+                      setHistoryType(history.type);
+                      setHistoryDescription(history.description);
+                    }}>
+                      <Text style={styles.editLink}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {idx < userData.medicalHistory.length - 1 && <View style={styles.divider} />}
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyText}>No medical history added</Text>
+            )}
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => {
+                setEditData(userData);
+                setEditingSection('history');
+                setEditingHistoryId(null);
+                setHistoryType('');
+                setHistoryDescription('');
+              }}
+            >
+              <Text style={styles.addButtonText}>+ Add History</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -910,6 +992,65 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* History Modal */}
+      <Modal visible={editingSection === 'history'} animationType="slide" onRequestClose={handleCancel}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{editingHistoryId ? 'Edit History' : 'Add History'}</Text>
+            <TouchableOpacity onPress={handleCancel}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            <Text style={styles.label}>History Type</Text>
+            <View style={styles.typeButtonsContainer}>
+              {['Surgical History', 'Family History', 'Hospitalization', 'Injury', 'Procedure', 'Past Condition'].map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.typeButton,
+                    historyType === type && styles.typeButtonSelected,
+                  ]}
+                  onPress={() => setHistoryType(type)}
+                >
+                  <Text
+                    style={[
+                      styles.typeButtonText,
+                      historyType === type && styles.typeButtonTextSelected,
+                    ]}
+                  >
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.label}>Details</Text>
+            <TextInput
+              style={[styles.input, styles.descriptionInput]}
+              placeholder="Describe the medical history..."
+              placeholderTextColor="#999"
+              value={historyDescription}
+              onChangeText={setHistoryDescription}
+              multiline
+              numberOfLines={4}
+            />
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
+                <Text style={styles.buttonTextWhite}>Save</Text>
+              </TouchableOpacity>
+            </View>
+            {editingHistoryId && (
+              <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+                <Text style={styles.deleteButtonText}>Delete History</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
         </View>
       </Modal>
 
@@ -2337,5 +2478,56 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: '#000',
+  },
+  historyItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+  },
+  historyItem: {
+    flex: 1,
+  },
+  historyType: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  historyDescription: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
+  },
+  typeButtonsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  typeButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  typeButtonSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  typeButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+  },
+  typeButtonTextSelected: {
+    color: '#FFF',
+  },
+  descriptionInput: {
+    height: 100,
+    paddingTop: 12,
+    textAlignVertical: 'top',
   },
 });
