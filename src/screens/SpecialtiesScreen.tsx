@@ -104,6 +104,11 @@ export default function SpecialtiesScreen() {
         )}
       </View>
 
+      {/* Upload Records Section */}
+      <View style={styles.uploadRecordsSection}>
+        <Text style={styles.uploadRecordsTitle}>Upload Records</Text>
+      </View>
+
       {/* Specialties Filter */}
       <View style={styles.specialtiesFilterContainer}>
         {[...specialties].sort().map(specialty => {
@@ -232,6 +237,15 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#666',
+  },
+  uploadRecordsSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  uploadRecordsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
   },
   specialtiesFilterContainer: {
     paddingHorizontal: 20,
