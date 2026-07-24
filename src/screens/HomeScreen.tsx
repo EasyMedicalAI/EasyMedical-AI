@@ -64,6 +64,10 @@ export default function HomeScreen() {
   const [historyDateMonth, setHistoryDateMonth] = useState(0);
   const [historyDateDay, setHistoryDateDay] = useState(1);
   const [historyDateYear, setHistoryDateYear] = useState(new Date().getFullYear());
+  const [addingPrescriptionMed, setAddingPrescriptionMed] = useState(false);
+  const [newPrescriptionMed, setNewPrescriptionMed] = useState('');
+  const [addingOtcMed, setAddingOtcMed] = useState(false);
+  const [newOtcMed, setNewOtcMed] = useState('');
 
   if (loading) {
     return (
@@ -538,12 +542,17 @@ export default function HomeScreen() {
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>💊 Prescription Medications</Text>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('prescriptionMedications');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity onPress={() => {
+                    setEditData(userData);
+                    setEditingSection('prescriptionMedications');
+                  }}>
+                    <Text style={styles.editLink}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setAddingPrescriptionMed(!addingPrescriptionMed)}>
+                    <Text style={styles.editLink}>+ Add</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) ? (
                 userData.prescriptionMedications.map((med, idx) => (
@@ -555,18 +564,49 @@ export default function HomeScreen() {
                   <Text style={styles.healthItem}>• Metformin 500mg twice daily</Text>
                 </>
               )}
+              {addingPrescriptionMed && (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, height: 40 }]}
+                    placeholder="Enter medication"
+                    placeholderTextColor="#999"
+                    value={newPrescriptionMed}
+                    onChangeText={setNewPrescriptionMed}
+                  />
+                  <TouchableOpacity
+                    style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
+                    onPress={() => {
+                      if (newPrescriptionMed.trim()) {
+                        setEditData({
+                          ...editData,
+                          prescriptionMedications: [...(editData.prescriptionMedications || []), newPrescriptionMed.trim()]
+                        });
+                        setNewPrescriptionMed('');
+                        setAddingPrescriptionMed(false);
+                      }
+                    }}
+                  >
+                    <Text style={{ color: '#FFF', fontWeight: '600' }}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             {/* OTC Medications and Supplements */}
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>🌿 OTC Medications & Supplements</Text>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('otcMedications');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity onPress={() => {
+                    setEditData(userData);
+                    setEditingSection('otcMedications');
+                  }}>
+                    <Text style={styles.editLink}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setAddingOtcMed(!addingOtcMed)}>
+                    <Text style={styles.editLink}>+ Add</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               {(userData.otcMedications && userData.otcMedications.length > 0) ? (
                 userData.otcMedications.map((med, idx) => (
@@ -577,6 +617,32 @@ export default function HomeScreen() {
                   <Text style={styles.healthItem}>• Vitamin D 2000 IU daily</Text>
                   <Text style={styles.healthItem}>• Omega-3 supplements</Text>
                 </>
+              )}
+              {addingOtcMed && (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, height: 40 }]}
+                    placeholder="Enter OTC medication or supplement"
+                    placeholderTextColor="#999"
+                    value={newOtcMed}
+                    onChangeText={setNewOtcMed}
+                  />
+                  <TouchableOpacity
+                    style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
+                    onPress={() => {
+                      if (newOtcMed.trim()) {
+                        setEditData({
+                          ...editData,
+                          otcMedications: [...(editData.otcMedications || []), newOtcMed.trim()]
+                        });
+                        setNewOtcMed('');
+                        setAddingOtcMed(false);
+                      }
+                    }}
+                  >
+                    <Text style={{ color: '#FFF', fontWeight: '600' }}>Add</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
 
