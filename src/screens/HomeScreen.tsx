@@ -25,6 +25,7 @@ export default function HomeScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(7); // Aug (0-indexed)
   const [selectedDay, setSelectedDay] = useState(15);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedHour, setSelectedHour] = useState(2);
   const [selectedMinute, setSelectedMinute] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState('PM');
@@ -174,7 +175,7 @@ export default function HomeScreen() {
 
   const handleDateTimePickerDone = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const formattedDateTime = `${months[selectedMonth]} ${selectedDay}, 2024 • ${selectedHour}:${String(selectedMinute).padStart(2, '0')} ${selectedPeriod}`;
+    const formattedDateTime = `${months[selectedMonth]} ${selectedDay}, ${selectedYear} • ${selectedHour}:${String(selectedMinute).padStart(2, '0')} ${selectedPeriod}`;
     setAppointmentDateTime(formattedDateTime);
     setShowDatePicker(false);
     setEditingSection('appointments');
@@ -594,6 +595,7 @@ export default function HomeScreen() {
                   setEditingAppointmentId(null);
                   setSelectedMonth(7);
                   setSelectedDay(15);
+                  setSelectedYear(new Date().getFullYear());
                   setSelectedHour(2);
                   setSelectedMinute(0);
                   setSelectedPeriod('PM');
@@ -1348,6 +1350,24 @@ export default function HomeScreen() {
                     >
                       <Text style={[styles.pickerOptionText, selectedDay === day && styles.pickerOptionTextSelected]}>
                         {day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Year Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Year</Text>
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                  {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map((year) => (
+                    <TouchableOpacity
+                      key={year}
+                      style={[styles.pickerOption, selectedYear === year && styles.pickerOptionSelected]}
+                      onPress={() => setSelectedYear(year)}
+                    >
+                      <Text style={[styles.pickerOptionText, selectedYear === year && styles.pickerOptionTextSelected]}>
+                        {year}
                       </Text>
                     </TouchableOpacity>
                   ))}
