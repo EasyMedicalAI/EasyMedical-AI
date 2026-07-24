@@ -46,7 +46,7 @@ export default function TabLayout() {
         />
         <TabButton
           icon="🏥"
-          label="Specialties"
+          label="Records"
           active={activeTab === 'specialties'}
           onPress={() => setActiveTab('specialties')}
         />
