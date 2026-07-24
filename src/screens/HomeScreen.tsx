@@ -704,29 +704,34 @@ export default function HomeScreen() {
             <View style={styles.cardTitleRow}>
               <Text style={styles.cardIcon}>📞</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Emergency Contact</Text>
-                <Text style={styles.cardMeta}>Primary contact</Text>
+                <Text style={styles.cardTitle}>Emergency Contacts</Text>
+                <Text style={styles.cardMeta}>{userData.emergencyContacts?.length || 0} contacts</Text>
               </View>
             </View>
             <View style={styles.card}>
               {userData.emergencyContacts && userData.emergencyContacts.length > 0 ? (
-                <View style={styles.contactRowWithEdit}>
-                  <View>
-                    <Text style={styles.contactName}>{userData.emergencyContacts[0].name}</Text>
-                    <Text style={styles.contactRelationship}>{userData.emergencyContacts[0].relationship}</Text>
-                    <Text style={styles.contactPhoneNumber}>{userData.emergencyContacts[0].phone}</Text>
+                userData.emergencyContacts.map((contact, idx) => (
+                  <View key={idx}>
+                    <View style={styles.contactRowWithEdit}>
+                      <View>
+                        <Text style={styles.contactName}>{contact.name}</Text>
+                        <Text style={styles.contactRelationship}>{contact.relationship}</Text>
+                        <Text style={styles.contactPhoneNumber}>{contact.phone}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => {
+                        setEditData(userData);
+                        setEditingSection('emergency');
+                        setEditingEmergencyContactId(idx);
+                        setEmergencyContactName(contact.name);
+                        setEmergencyContactRelationship(contact.relationship);
+                        setEmergencyContactPhone(contact.phone);
+                      }}>
+                        <Text style={styles.editLink}>Edit</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {idx < userData.emergencyContacts.length - 1 && <View style={styles.divider} />}
                   </View>
-                  <TouchableOpacity onPress={() => {
-                    setEditData(userData);
-                    setEditingSection('emergency');
-                    setEditingEmergencyContactId(0);
-                    setEmergencyContactName(userData.emergencyContacts[0].name);
-                    setEmergencyContactRelationship(userData.emergencyContacts[0].relationship);
-                    setEmergencyContactPhone(userData.emergencyContacts[0].phone);
-                  }}>
-                    <Text style={styles.editLink}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
+                ))
               ) : (
                 <View style={styles.contactRowWithEdit}>
                   <View>
@@ -751,6 +756,10 @@ export default function HomeScreen() {
                 onPress={() => {
                   setEditData(userData);
                   setEditingSection('emergency');
+                  setEditingEmergencyContactId(null);
+                  setEmergencyContactName('');
+                  setEmergencyContactRelationship('');
+                  setEmergencyContactPhone('');
                 }}
               >
                 <Text style={styles.addButtonText}>+ Add Contact</Text>
