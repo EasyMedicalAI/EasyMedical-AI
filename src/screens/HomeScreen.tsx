@@ -81,6 +81,30 @@ export default function HomeScreen() {
     return age;
   };
 
+  const parseAppointmentDate = (dateTimeStr: string): Date => {
+    // Parse format like "August 15, 2024 • 2:00 PM"
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const parts = dateTimeStr.split(' • ');
+    const datePart = parts[0];
+    const timePart = parts[1] || '';
+
+    const dateParts = datePart.split(' ');
+    const monthStr = dateParts[0];
+    const dayStr = parseInt(dateParts[1].replace(',', ''));
+    const yearStr = parseInt(dateParts[2]);
+    const monthIdx = months.indexOf(monthStr);
+
+    const timeParts = timePart.split(':');
+    let hour = parseInt(timeParts[0]) || 0;
+    const minute = parseInt(timeParts[1]) || 0;
+    const period = timePart.includes('PM') ? 'PM' : 'AM';
+
+    if (period === 'PM' && hour !== 12) hour += 12;
+    if (period === 'AM' && hour === 12) hour = 0;
+
+    return new Date(yearStr, monthIdx, dayStr, hour, minute);
+  };
+
   const handleSaveEdit = async () => {
     try {
       if (editingSection === 'appointments' && appointmentDateTime && appointmentDoctorName && appointmentSpecialty) {
@@ -559,7 +583,7 @@ export default function HomeScreen() {
             <View style={styles.card}>
               {userData.appointments && userData.appointments.length > 0 ? (
                 [...userData.appointments]
-                  .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime())
+                  .sort((a, b) => parseAppointmentDate(a.dateTime).getTime() - parseAppointmentDate(b.dateTime).getTime())
                   .map((apt, idx) => (
                     <View key={apt.id}>
                       <View style={styles.appointmentItemRow}>
