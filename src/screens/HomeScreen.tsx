@@ -1176,20 +1176,7 @@ export default function HomeScreen() {
                 <Text style={styles.label}>Date</Text>
                 <TouchableOpacity
                   style={styles.dateTimeButton}
-                  onPress={() => {
-                    if (surgeryDate) {
-                      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                      const parts = surgeryDate.split(' ');
-                      const monthStr = parts[0];
-                      const dayStr = parseInt(parts[1].replace(',', ''));
-                      const yearStr = parseInt(parts[2]);
-                      const monthIdx = months.indexOf(monthStr);
-                      setHistoryDateMonth(monthIdx >= 0 ? monthIdx : 0);
-                      setHistoryDateDay(dayStr || 1);
-                      setHistoryDateYear(yearStr || new Date().getFullYear());
-                    }
-                    setShowHistoryDatePicker(true);
-                  }}
+                  onPress={() => setShowHistoryDatePicker(true)}
                 >
                   <Text style={styles.dateTimeButtonText}>
                     {surgeryDate || 'Select date...'}
@@ -1256,20 +1243,7 @@ export default function HomeScreen() {
                 <Text style={styles.label}>Date</Text>
                 <TouchableOpacity
                   style={styles.dateTimeButton}
-                  onPress={() => {
-                    if (hospitalizationDate) {
-                      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                      const parts = hospitalizationDate.split(' ');
-                      const monthStr = parts[0];
-                      const dayStr = parseInt(parts[1]?.replace(',', '') || '1');
-                      const yearStr = parseInt(parts[2] || String(new Date().getFullYear()));
-                      const monthIdx = months.indexOf(monthStr);
-                      setHistoryDateMonth(monthIdx >= 0 ? monthIdx : 0);
-                      setHistoryDateDay(dayStr || 1);
-                      setHistoryDateYear(yearStr || new Date().getFullYear());
-                    }
-                    setShowHistoryDatePicker(true);
-                  }}
+                  onPress={() => setShowHistoryDatePicker(true)}
                 >
                   <Text style={styles.dateTimeButtonText}>
                     {hospitalizationDate || 'Select date...'}
