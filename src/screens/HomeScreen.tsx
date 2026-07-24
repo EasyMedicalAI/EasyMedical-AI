@@ -733,7 +733,7 @@ export default function HomeScreen() {
               <View style={styles.tagContainer}>
                 {(userData.conditions && userData.conditions.length > 0) ? (
                   userData.conditions.map((condition, idx) => (
-                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
                       {editingConditionIdx === idx ? (
                         <TextInput
                           style={[styles.input, { flex: 1, height: 36 }]}
@@ -741,8 +741,8 @@ export default function HomeScreen() {
                           onChangeText={setEditingConditionValue}
                         />
                       ) : (
-                        <View style={styles.tag}>
-                          <Text style={styles.tagText}>{condition}</Text>
+                        <View style={[styles.tag, { flex: 1 }]}>
+                          <Text style={[styles.tagText, { flex: 1 }]} numberOfLines={1}>{condition}</Text>
                         </View>
                       )}
                       {editingConditionIdx === idx ? (
@@ -825,7 +825,7 @@ export default function HomeScreen() {
               <View style={styles.tagContainer}>
                 {(userData.allergies && userData.allergies.length > 0) ? (
                   userData.allergies.map((allergy, idx) => (
-                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
                       {editingAllergyIdx === idx ? (
                         <TextInput
                           style={[styles.input, { flex: 1, height: 36 }]}
@@ -833,8 +833,8 @@ export default function HomeScreen() {
                           onChangeText={setEditingAllergyValue}
                         />
                       ) : (
-                        <View style={[styles.tag, styles.allergyTag]}>
-                          <Text style={[styles.tagText, styles.allergyText]}>{allergy}</Text>
+                        <View style={[styles.tag, styles.allergyTag, { flex: 1 }]}>
+                          <Text style={[styles.tagText, styles.allergyText, { flex: 1 }]} numberOfLines={1}>{allergy}</Text>
                         </View>
                       )}
                       {editingAllergyIdx === idx ? (
