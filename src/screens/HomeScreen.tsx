@@ -68,6 +68,18 @@ export default function HomeScreen() {
   const [newPrescriptionMed, setNewPrescriptionMed] = useState('');
   const [addingOtcMed, setAddingOtcMed] = useState(false);
   const [newOtcMed, setNewOtcMed] = useState('');
+  const [addingCondition, setAddingCondition] = useState(false);
+  const [newCondition, setNewCondition] = useState('');
+  const [editingConditionIdx, setEditingConditionIdx] = useState<number | null>(null);
+  const [editingConditionValue, setEditingConditionValue] = useState('');
+  const [addingAllergy, setAddingAllergy] = useState(false);
+  const [newAllergy, setNewAllergy] = useState('');
+  const [editingAllergyIdx, setEditingAllergyIdx] = useState<number | null>(null);
+  const [editingAllergyValue, setEditingAllergyValue] = useState('');
+  const [addingVaccine, setAddingVaccine] = useState(false);
+  const [newVaccine, setNewVaccine] = useState('');
+  const [editingVaccineIdx, setEditingVaccineIdx] = useState<number | null>(null);
+  const [editingVaccineValue, setEditingVaccineValue] = useState('');
 
   if (loading) {
     return (
@@ -650,18 +662,49 @@ export default function HomeScreen() {
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>⚕️ Conditions</Text>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('conditions');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
+                <TouchableOpacity onPress={() => setAddingCondition(!addingCondition)}>
+                  <Text style={styles.editLink}>+ Add</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.tagContainer}>
                 {(userData.conditions && userData.conditions.length > 0) ? (
                   userData.conditions.map((condition, idx) => (
-                    <View key={idx} style={styles.tag}>
-                      <Text style={styles.tagText}>{condition}</Text>
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {editingConditionIdx === idx ? (
+                        <TextInput
+                          style={[styles.input, { flex: 1, height: 36 }]}
+                          value={editingConditionValue}
+                          onChangeText={setEditingConditionValue}
+                        />
+                      ) : (
+                        <View style={styles.tag}>
+                          <Text style={styles.tagText}>{condition}</Text>
+                        </View>
+                      )}
+                      {editingConditionIdx === idx ? (
+                        <>
+                          <TouchableOpacity
+                            onPress={() => {
+                              const updated = [...(userData.conditions || [])];
+                              updated[idx] = editingConditionValue;
+                              setEditData({ ...editData, conditions: updated });
+                              setEditingConditionIdx(null);
+                            }}
+                          >
+                            <Text style={styles.editLink}>✓</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => setEditingConditionIdx(null)}>
+                            <Text style={styles.editLink}>✕</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        <TouchableOpacity onPress={() => {
+                          setEditingConditionIdx(idx);
+                          setEditingConditionValue(condition);
+                        }}>
+                          <Text style={styles.editLink}>Edit</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   ))
                 ) : (
@@ -675,24 +718,81 @@ export default function HomeScreen() {
                   </>
                 )}
               </View>
+              {addingCondition && (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, height: 40 }]}
+                    placeholder="Enter condition"
+                    placeholderTextColor="#999"
+                    value={newCondition}
+                    onChangeText={setNewCondition}
+                  />
+                  <TouchableOpacity
+                    style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
+                    onPress={() => {
+                      if (newCondition.trim()) {
+                        setEditData({
+                          ...editData,
+                          conditions: [...(editData.conditions || []), newCondition.trim()]
+                        });
+                        setNewCondition('');
+                        setAddingCondition(false);
+                      }
+                    }}
+                  >
+                    <Text style={{ color: '#FFF', fontWeight: '600' }}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             {/* Allergies */}
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>⚠️ Allergies</Text>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('allergies');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
+                <TouchableOpacity onPress={() => setAddingAllergy(!addingAllergy)}>
+                  <Text style={styles.editLink}>+ Add</Text>
                 </TouchableOpacity>
               </View>
               <View style={styles.tagContainer}>
                 {(userData.allergies && userData.allergies.length > 0) ? (
                   userData.allergies.map((allergy, idx) => (
-                    <View key={idx} style={[styles.tag, styles.allergyTag]}>
-                      <Text style={[styles.tagText, styles.allergyText]}>{allergy}</Text>
+                    <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      {editingAllergyIdx === idx ? (
+                        <TextInput
+                          style={[styles.input, { flex: 1, height: 36 }]}
+                          value={editingAllergyValue}
+                          onChangeText={setEditingAllergyValue}
+                        />
+                      ) : (
+                        <View style={[styles.tag, styles.allergyTag]}>
+                          <Text style={[styles.tagText, styles.allergyText]}>{allergy}</Text>
+                        </View>
+                      )}
+                      {editingAllergyIdx === idx ? (
+                        <>
+                          <TouchableOpacity
+                            onPress={() => {
+                              const updated = [...(userData.allergies || [])];
+                              updated[idx] = editingAllergyValue;
+                              setEditData({ ...editData, allergies: updated });
+                              setEditingAllergyIdx(null);
+                            }}
+                          >
+                            <Text style={styles.editLink}>✓</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => setEditingAllergyIdx(null)}>
+                            <Text style={styles.editLink}>✕</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        <TouchableOpacity onPress={() => {
+                          setEditingAllergyIdx(idx);
+                          setEditingAllergyValue(allergy);
+                        }}>
+                          <Text style={styles.editLink}>Edit</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   ))
                 ) : (
@@ -706,24 +806,81 @@ export default function HomeScreen() {
                   </>
                 )}
               </View>
+              {addingAllergy && (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, height: 40 }]}
+                    placeholder="Enter allergy"
+                    placeholderTextColor="#999"
+                    value={newAllergy}
+                    onChangeText={setNewAllergy}
+                  />
+                  <TouchableOpacity
+                    style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
+                    onPress={() => {
+                      if (newAllergy.trim()) {
+                        setEditData({
+                          ...editData,
+                          allergies: [...(editData.allergies || []), newAllergy.trim()]
+                        });
+                        setNewAllergy('');
+                        setAddingAllergy(false);
+                      }
+                    }}
+                  >
+                    <Text style={{ color: '#FFF', fontWeight: '600' }}>Add</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
             {/* Vaccines */}
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>💉 Vaccinations</Text>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('vaccines');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
+                <TouchableOpacity onPress={() => setAddingVaccine(!addingVaccine)}>
+                  <Text style={styles.editLink}>+ Add</Text>
                 </TouchableOpacity>
               </View>
               {(userData.vaccines && userData.vaccines.length > 0) ? (
                 userData.vaccines.map((vaccine, idx) => (
-                  <View key={idx}>
-                    <Text style={styles.healthItem}>• {vaccine.name}</Text>
-                    <Text style={styles.healthItemMeta}>  {new Date(vaccine.date).toLocaleDateString()}</Text>
+                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 6 }}>
+                    {editingVaccineIdx === idx ? (
+                      <TextInput
+                        style={[styles.input, { flex: 1, height: 36 }]}
+                        value={editingVaccineValue}
+                        onChangeText={setEditingVaccineValue}
+                      />
+                    ) : (
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.healthItem}>• {vaccine.name}</Text>
+                        <Text style={styles.healthItemMeta}>  {new Date(vaccine.date).toLocaleDateString()}</Text>
+                      </View>
+                    )}
+                    {editingVaccineIdx === idx ? (
+                      <>
+                        <TouchableOpacity
+                          onPress={() => {
+                            const updated = [...(userData.vaccines || [])];
+                            updated[idx] = { ...vaccine, name: editingVaccineValue };
+                            setEditData({ ...editData, vaccines: updated });
+                            setEditingVaccineIdx(null);
+                          }}
+                        >
+                          <Text style={styles.editLink}>✓</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setEditingVaccineIdx(null)}>
+                          <Text style={styles.editLink}>✕</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <TouchableOpacity onPress={() => {
+                        setEditingVaccineIdx(idx);
+                        setEditingVaccineValue(vaccine.name);
+                      }}>
+                        <Text style={styles.editLink}>Edit</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))
               ) : (
@@ -733,6 +890,32 @@ export default function HomeScreen() {
                   <Text style={styles.healthItem}>• Flu Shot</Text>
                   <Text style={styles.healthItemMeta}>  9/20/2024</Text>
                 </>
+              )}
+              {addingVaccine && (
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, height: 40 }]}
+                    placeholder="Enter vaccine name"
+                    placeholderTextColor="#999"
+                    value={newVaccine}
+                    onChangeText={setNewVaccine}
+                  />
+                  <TouchableOpacity
+                    style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
+                    onPress={() => {
+                      if (newVaccine.trim()) {
+                        setEditData({
+                          ...editData,
+                          vaccines: [...(editData.vaccines || []), { name: newVaccine.trim(), date: new Date().toISOString() }]
+                        });
+                        setNewVaccine('');
+                        setAddingVaccine(false);
+                      }
+                    }}
+                  >
+                    <Text style={{ color: '#FFF', fontWeight: '600' }}>Add</Text>
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
           </View>
