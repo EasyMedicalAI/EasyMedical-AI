@@ -1251,7 +1251,32 @@ export default function HomeScreen() {
                       </Text>
                     </TouchableOpacity>
                   ))}
+                  <TouchableOpacity
+                    style={[
+                      styles.familyButton,
+                      familyMember !== 'Mother' && familyMember !== 'Father' && familyMember !== 'Sister' && familyMember !== 'Brother' && familyMember !== 'Grandmother' && familyMember !== 'Grandfather' && familyMember !== 'Aunt' && familyMember !== 'Uncle' && familyMember !== '' && styles.familyButtonSelected,
+                    ]}
+                    onPress={() => setFamilyMember('')}
+                  >
+                    <Text
+                      style={[
+                        styles.familyButtonText,
+                        familyMember !== 'Mother' && familyMember !== 'Father' && familyMember !== 'Sister' && familyMember !== 'Brother' && familyMember !== 'Grandmother' && familyMember !== 'Grandfather' && familyMember !== 'Aunt' && familyMember !== 'Uncle' && familyMember !== '' && styles.familyButtonTextSelected,
+                      ]}
+                    >
+                      Other
+                    </Text>
+                  </TouchableOpacity>
                 </View>
+                {familyMember !== 'Mother' && familyMember !== 'Father' && familyMember !== 'Sister' && familyMember !== 'Brother' && familyMember !== 'Grandmother' && familyMember !== 'Grandfather' && familyMember !== 'Aunt' && familyMember !== 'Uncle' && (
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter family member name"
+                    placeholderTextColor="#999"
+                    value={familyMember}
+                    onChangeText={setFamilyMember}
+                  />
+                )}
                 <Text style={styles.label}>Condition</Text>
                 <TextInput
                   style={styles.input}
