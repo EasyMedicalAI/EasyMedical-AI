@@ -551,31 +551,36 @@ export default function HomeScreen() {
             <View style={styles.cardTitleRow}>
               <Text style={styles.cardIcon}>📅</Text>
               <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Upcoming Appointment</Text>
-                <Text style={styles.cardMeta}>Next scheduled</Text>
+                <Text style={styles.cardTitle}>Upcoming Appointments</Text>
+                <Text style={styles.cardMeta}>{userData.appointments?.length || 0} scheduled</Text>
               </View>
             </View>
             <View style={styles.card}>
               {userData.appointments && userData.appointments.length > 0 ? (
-                userData.appointments.slice(0, 1).map((apt) => (
-                  <View key={apt.id} style={styles.appointmentItemRow}>
-                    <View style={styles.appointmentItem}>
-                      <Text style={styles.appointmentDate}>{apt.dateTime}</Text>
-                      <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
-                      <Text style={styles.appointmentSpecialty}>{apt.specialty}</Text>
+                [...userData.appointments]
+                  .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime())
+                  .map((apt, idx) => (
+                    <View key={apt.id}>
+                      <View style={styles.appointmentItemRow}>
+                        <View style={styles.appointmentItem}>
+                          <Text style={styles.appointmentDate}>{apt.dateTime}</Text>
+                          <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
+                          <Text style={styles.appointmentSpecialty}>{apt.specialty}</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => {
+                          setEditData(userData);
+                          setEditingSection('appointments');
+                          setEditingAppointmentId(apt.id);
+                          setAppointmentDateTime(apt.dateTime);
+                          setAppointmentDoctorName(apt.doctorName);
+                          setAppointmentSpecialty(apt.specialty);
+                        }}>
+                          <Text style={styles.editLink}>Edit</Text>
+                        </TouchableOpacity>
+                      </View>
+                      {idx < userData.appointments.length - 1 && <View style={styles.divider} />}
                     </View>
-                    <TouchableOpacity onPress={() => {
-                      setEditData(userData);
-                      setEditingSection('appointments');
-                      setEditingAppointmentId(apt.id);
-                      setAppointmentDateTime(apt.dateTime);
-                      setAppointmentDoctorName(apt.doctorName);
-                      setAppointmentSpecialty(apt.specialty);
-                    }}>
-                      <Text style={styles.editLink}>Edit</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))
+                  ))
               ) : (
                 <Text style={styles.emptyText}>No upcoming appointments</Text>
               )}
