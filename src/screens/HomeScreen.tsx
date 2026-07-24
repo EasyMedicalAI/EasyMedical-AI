@@ -1283,12 +1283,10 @@ export default function HomeScreen() {
               value={new Date(historyDateYear, historyDateMonth, historyDateDay)}
               mode="date"
               display="spinner"
-              onChange={(event, selectedDate) => {
-                if (selectedDate) {
-                  setHistoryDateMonth(selectedDate.getMonth());
-                  setHistoryDateDay(selectedDate.getDate());
-                  setHistoryDateYear(selectedDate.getFullYear());
-                }
+              onValueChange={(selectedDate) => {
+                setHistoryDateMonth(selectedDate.getMonth());
+                setHistoryDateDay(selectedDate.getDate());
+                setHistoryDateYear(selectedDate.getFullYear());
               }}
             />
             <TouchableOpacity
