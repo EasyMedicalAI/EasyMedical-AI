@@ -723,7 +723,7 @@ export default function HomeScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.entryTitle}>{member}</Text>
                       {conditions.map((item, condIdx) => (
-                        <View key={item.idx} style={{ marginTop: 8 }}>
+                        <View key={item.idx} style={{ marginTop: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Text style={styles.entryMeta}>{condIdx + 1}. {item.condition}</Text>
                           <TouchableOpacity onPress={() => {
                             setEditData(userData);
