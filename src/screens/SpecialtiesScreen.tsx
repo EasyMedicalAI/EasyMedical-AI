@@ -15,7 +15,26 @@ export default function SpecialtiesScreen() {
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const router = useRouter();
 
-  const specialties = getUniqueSpecialties();
+  const defaultSpecialties = [
+    'Cardiology',
+    'Dermatology',
+    'Orthopedics',
+    'Neurology',
+    'Psychiatry',
+    'Ophthalmology',
+    'ENT',
+    'Gastroenterology',
+    'Pulmonology',
+    'Rheumatology',
+    'Endocrinology',
+    'Urology',
+    'Oncology',
+    'Primary Care',
+    'Lab',
+    'Dentistry',
+  ];
+
+  const specialties = getUniqueSpecialties().length > 0 ? getUniqueSpecialties() : defaultSpecialties;
 
   const toggleSpecialty = (specialty: string) => {
     setSelectedSpecialties(prev =>
@@ -34,25 +53,6 @@ export default function SpecialtiesScreen() {
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
       </View>
-    );
-  }
-
-  if (records.length === 0) {
-    return (
-      <ScrollView style={styles.container}>
-        <View style={styles.topBar}>
-          <View />
-          <Text style={styles.appName}>EasyMedical</Text>
-        </View>
-        <View style={styles.header}>
-          <Text style={styles.title}>By Specialty</Text>
-          <Text style={styles.subtitle}>Organize records by medical specialty</Text>
-        </View>
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>No records yet</Text>
-          <Text style={styles.emptySubtext}>Upload records to organize them by specialty</Text>
-        </View>
-      </ScrollView>
     );
   }
 
