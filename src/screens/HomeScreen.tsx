@@ -197,6 +197,26 @@ export default function HomeScreen() {
     setEditingEmergencyContactId(null);
   };
 
+  const handleDelete = async () => {
+    try {
+      if (editingSection === 'appointments' && editingAppointmentId) {
+        const updatedAppointments = (editData.appointments || []).filter(apt => apt.id !== editingAppointmentId);
+        await updateUserData({ ...editData, appointments: updatedAppointments });
+        Alert.alert('Success', 'Appointment deleted');
+        setEditingSection(null);
+        setEditingAppointmentId(null);
+      } else if (editingSection === 'emergency' && editingEmergencyContactId !== null) {
+        const updatedContacts = (editData.emergencyContacts || []).filter((_, idx) => idx !== editingEmergencyContactId);
+        await updateUserData({ ...editData, emergencyContacts: updatedContacts });
+        Alert.alert('Success', 'Emergency contact deleted');
+        setEditingSection(null);
+        setEditingEmergencyContactId(null);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete');
+    }
+  };
+
   const handleDateTimePickerDone = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const formattedDateTime = `${months[selectedMonth]} ${selectedDay}, ${selectedYear} • ${selectedHour}:${String(selectedMinute).padStart(2, '0')} ${selectedPeriod}`;
@@ -1329,6 +1349,11 @@ export default function HomeScreen() {
                 <Text style={styles.buttonTextWhite}>Save</Text>
               </TouchableOpacity>
             </View>
+            {editingAppointmentId && (
+              <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+                <Text style={styles.deleteButtonText}>Delete Appointment</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </View>
       </Modal>
@@ -1503,6 +1528,11 @@ export default function HomeScreen() {
                 <Text style={styles.buttonTextWhite}>Save</Text>
               </TouchableOpacity>
             </View>
+            {editingEmergencyContactId !== null && (
+              <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+                <Text style={styles.deleteButtonText}>Delete Contact</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </View>
       </Modal>
@@ -2214,6 +2244,21 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#007AFF',
     fontWeight: '500',
+  },
+  deleteButton: {
+    backgroundColor: '#FF3B30',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  deleteButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   snapshotHeader: {
     paddingHorizontal: 20,
