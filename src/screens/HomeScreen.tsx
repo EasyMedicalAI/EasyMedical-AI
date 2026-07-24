@@ -40,6 +40,7 @@ export default function HomeScreen() {
   const [insuranceProvider, setInsuranceProvider] = useState('');
   const [insuranceMemberId, setInsuranceMemberId] = useState('');
   const [insuranceGroupNumber, setInsuranceGroupNumber] = useState('');
+  const [editingInsuranceId, setEditingInsuranceId] = useState<number | null>(null);
   const [emergencyContactName, setEmergencyContactName] = useState('');
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
@@ -134,14 +135,27 @@ export default function HomeScreen() {
         setAppointmentDoctorName('');
         setAppointmentSpecialty('');
       } else if (editingSection === 'insurance' && insuranceProvider) {
-        await updateUserData({
-          ...editData,
-          insurance: {
+        let updatedInsurances;
+
+        if (editingInsuranceId !== null) {
+          // Update existing insurance
+          updatedInsurances = (editData.insurances || []).map((insurance, idx) =>
+            idx === editingInsuranceId
+              ? { provider: insuranceProvider, memberId: insuranceMemberId, groupNumber: insuranceGroupNumber }
+              : insurance
+          );
+          setEditingInsuranceId(null);
+        } else {
+          // Add new insurance
+          const newInsurance = {
             provider: insuranceProvider,
             memberId: insuranceMemberId,
             groupNumber: insuranceGroupNumber,
-          }
-        });
+          };
+          updatedInsurances = [...(editData.insurances || []), newInsurance];
+        }
+
+        await updateUserData({ ...editData, insurances: updatedInsurances });
         setInsuranceProvider('');
         setInsuranceMemberId('');
         setInsuranceGroupNumber('');
@@ -211,6 +225,12 @@ export default function HomeScreen() {
         Alert.alert('Success', 'Emergency contact deleted');
         setEditingSection(null);
         setEditingEmergencyContactId(null);
+      } else if (editingSection === 'insurance' && editingInsuranceId !== null) {
+        const updatedInsurances = (editData.insurances || []).filter((_, idx) => idx !== editingInsuranceId);
+        await updateUserData({ ...editData, insurances: updatedInsurances });
+        Alert.alert('Success', 'Insurance deleted');
+        setEditingSection(null);
+        setEditingInsuranceId(null);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to delete');
@@ -657,41 +677,75 @@ export default function HomeScreen() {
               <Text style={styles.cardIcon}>🏥</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>Insurance</Text>
-                <Text style={styles.cardMeta}>Active coverage</Text>
+                <Text style={styles.cardMeta}>{userData.insurances?.length || 0} plans</Text>
               </View>
             </View>
             <View style={styles.card}>
-              <View style={styles.infoRowWithEdit}>
-                <View style={styles.infoColumn}>
-                  <Text style={styles.infoLabel}>Provider</Text>
-                  <Text style={styles.infoValue}>
-                    {userData.insurance?.provider || 'Blue Cross Blue Shield'}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('insurance');
-                  setInsuranceProvider(userData.insurance?.provider || '');
-                  setInsuranceMemberId(userData.insurance?.memberId || '');
-                  setInsuranceGroupNumber(userData.insurance?.groupNumber || '');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Member ID</Text>
-                <Text style={styles.infoValueMono}>
-                  {userData.insurance?.memberId || 'BCX123456789'}
-                </Text>
-              </View>
+              {userData.insurances && userData.insurances.length > 0 ? (
+                userData.insurances.map((insurance, idx) => (
+                  <View key={idx}>
+                    <View style={styles.infoRowWithEdit}>
+                      <View style={styles.infoColumn}>
+                        <Text style={styles.infoLabel}>Provider</Text>
+                        <Text style={styles.infoValue}>{insurance.provider}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => {
+                        setEditData(userData);
+                        setEditingSection('insurance');
+                        setEditingInsuranceId(idx);
+                        setInsuranceProvider(insurance.provider);
+                        setInsuranceMemberId(insurance.memberId || '');
+                        setInsuranceGroupNumber(insurance.groupNumber || '');
+                      }}>
+                        <Text style={styles.editLink}>Edit</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoLabel}>Member ID</Text>
+                      <Text style={styles.infoValueMono}>{insurance.memberId || '—'}</Text>
+                    </View>
+                    {insurance.groupNumber && (
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Group Number</Text>
+                        <Text style={styles.infoValueMono}>{insurance.groupNumber}</Text>
+                      </View>
+                    )}
+                    {idx < userData.insurances.length - 1 && <View style={styles.divider} />}
+                  </View>
+                ))
+              ) : (
+                <>
+                  <View style={styles.infoRowWithEdit}>
+                    <View style={styles.infoColumn}>
+                      <Text style={styles.infoLabel}>Provider</Text>
+                      <Text style={styles.infoValue}>Blue Cross Blue Shield</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => {
+                      setEditData(userData);
+                      setEditingSection('insurance');
+                      setEditingInsuranceId(0);
+                      setInsuranceProvider('Blue Cross Blue Shield');
+                      setInsuranceMemberId('BCX123456789');
+                      setInsuranceGroupNumber('');
+                    }}>
+                      <Text style={styles.editLink}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Member ID</Text>
+                    <Text style={styles.infoValueMono}>BCX123456789</Text>
+                  </View>
+                </>
+              )}
               <TouchableOpacity
                 style={styles.addButton}
                 onPress={() => {
                   setEditData(userData);
                   setEditingSection('insurance');
-                  setInsuranceProvider(userData.insurance?.provider || '');
-                  setInsuranceMemberId(userData.insurance?.memberId || '');
-                  setInsuranceGroupNumber(userData.insurance?.groupNumber || '');
+                  setEditingInsuranceId(null);
+                  setInsuranceProvider('');
+                  setInsuranceMemberId('');
+                  setInsuranceGroupNumber('');
                 }}
               >
                 <Text style={styles.addButtonText}>+ Add Insurance</Text>
@@ -1278,7 +1332,7 @@ export default function HomeScreen() {
       <Modal visible={editingSection === 'insurance'} animationType="slide" onRequestClose={handleCancel}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Insurance</Text>
+            <Text style={styles.modalTitle}>{editingInsuranceId !== null ? 'Edit Insurance' : 'Add Insurance'}</Text>
             <TouchableOpacity onPress={handleCancel}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
@@ -1313,6 +1367,11 @@ export default function HomeScreen() {
                 <Text style={styles.buttonTextWhite}>Save</Text>
               </TouchableOpacity>
             </View>
+            {editingInsuranceId !== null && (
+              <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+                <Text style={styles.deleteButtonText}>Delete Insurance</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </View>
       </Modal>
