@@ -9,13 +9,11 @@ import {
   Modal,
   TextInput,
   Alert,
-  Image,
 } from 'react-native';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import { v4 as uuidv4 } from 'uuid';
 import { claudeService } from '@/services/claudeService';
-import * as ImagePicker from 'expo-image-picker';
 
 export default function SpecialtiesScreen() {
   const { records, loading, getUniqueSpecialties, addRecord } = useRecords();
@@ -23,8 +21,6 @@ export default function SpecialtiesScreen() {
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
   const [recordText, setRecordText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadMode, setUploadMode] = useState<'method' | 'text' | 'photo' | 'pdf'>('method');
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const router = useRouter();
 
   const defaultSpecialties = [
@@ -86,67 +82,6 @@ export default function SpecialtiesScreen() {
 
       setUploadingSpecialty(null);
       setRecordText('');
-      setUploadMode('method');
-      setPhotoUri(null);
-      Alert.alert('Success', 'Record added to your team!');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to process record: ' + String(error));
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleTakePhoto = async () => {
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 1,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
-      setUploadMode('photo');
-    }
-  };
-
-  const handlePickPhoto = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 1,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUri(result.assets[0].uri);
-      setUploadMode('photo');
-    }
-  };
-
-  const handleUploadPhoto = async () => {
-    if (!uploadingSpecialty || !photoUri) {
-      Alert.alert('Error', 'Please select a photo');
-      return;
-    }
-
-    setIsUploading(true);
-    try {
-      const recordId = uuidv4();
-      const textFromImage = `Medical record photo uploaded from ${uploadingSpecialty}. Image URI: ${photoUri}`;
-      const parsedRecord = await claudeService.parseRecordFromText(textFromImage, recordId);
-
-      await addRecord({
-        id: recordId,
-        uploadDate: parsedRecord.uploadDate || new Date().toISOString(),
-        originalText: parsedRecord.originalText,
-        specialty: uploadingSpecialty,
-        provider: parsedRecord.provider || 'Unknown',
-        summary: parsedRecord.summary || 'Medical record',
-        extractedData: parsedRecord.extractedData || {},
-        processed: true,
-        isTeamMember: true,
-      });
-
-      setUploadingSpecialty(null);
-      setPhotoUri(null);
-      setUploadMode('method');
       Alert.alert('Success', 'Record added to your team!');
     } catch (error) {
       Alert.alert('Error', 'Failed to process record: ' + String(error));
@@ -304,104 +239,40 @@ export default function SpecialtiesScreen() {
       <View style={styles.spacing} />
 
       {/* Upload Modal */}
-      <Modal visible={uploadingSpecialty !== null} animationType="slide" onRequestClose={() => {
-        setUploadingSpecialty(null);
-        setRecordText('');
-        setPhotoUri(null);
-        setUploadMode('method');
-      }}>
+      <Modal visible={uploadingSpecialty !== null} animationType="slide" onRequestClose={() => setUploadingSpecialty(null)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Upload {uploadingSpecialty} Record</Text>
             <TouchableOpacity onPress={() => {
               setUploadingSpecialty(null);
               setRecordText('');
-              setPhotoUri(null);
-              setUploadMode('method');
             }}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalContent}>
-            {uploadMode === 'method' && (
-              <>
-                <Text style={styles.label}>How would you like to upload?</Text>
-                <Text style={styles.sublabel}>Choose a method to upload your medical records</Text>
-                <TouchableOpacity style={styles.methodButton} onPress={handleTakePhoto}>
-                  <Text style={styles.methodButtonIcon}>📷</Text>
-                  <Text style={styles.methodButtonText}>Take Photo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.methodButton} onPress={handlePickPhoto}>
-                  <Text style={styles.methodButtonIcon}>🖼️</Text>
-                  <Text style={styles.methodButtonText}>Choose Photo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.methodButton} onPress={() => setUploadMode('text')}>
-                  <Text style={styles.methodButtonIcon}>✍️</Text>
-                  <Text style={styles.methodButtonText}>Type Details</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {uploadMode === 'text' && (
-              <>
-                <Text style={styles.label}>Medical Record Details</Text>
-                <Text style={styles.sublabel}>Enter the medical record information, and Claude will extract key details</Text>
-                <TextInput
-                  style={[styles.input, { minHeight: 200 }]}
-                  placeholder="Paste or type the medical record here..."
-                  placeholderTextColor="#999"
-                  value={recordText}
-                  onChangeText={setRecordText}
-                  multiline
-                  editable={!isUploading}
-                />
-                <TouchableOpacity
-                  style={styles.methodButton}
-                  onPress={() => setUploadMode('method')}
-                >
-                  <Text style={styles.methodButtonText}>← Back</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.addButton, isUploading && styles.buttonDisabled]}
-                  onPress={handleUploadRecord}
-                  disabled={isUploading}
-                >
-                  {isUploading ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <Text style={styles.addButtonText}>Add to My Team</Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            )}
-
-            {uploadMode === 'photo' && photoUri && (
-              <>
-                <Text style={styles.label}>Preview Your Document</Text>
-                <Image source={{ uri: photoUri }} style={styles.photoPreview} />
-                <Text style={styles.sublabel}>Claude will analyze this image and extract key information</Text>
-                <TouchableOpacity
-                  style={styles.methodButton}
-                  onPress={() => {
-                    setUploadMode('method');
-                    setPhotoUri(null);
-                  }}
-                >
-                  <Text style={styles.methodButtonText}>← Back</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.addButton, isUploading && styles.buttonDisabled]}
-                  onPress={handleUploadPhoto}
-                  disabled={isUploading}
-                >
-                  {isUploading ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <Text style={styles.addButtonText}>Add to My Team</Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            )}
+            <Text style={styles.label}>Medical Record Details</Text>
+            <Text style={styles.sublabel}>Paste or type medical record information, and Claude will extract key details</Text>
+            <TextInput
+              style={[styles.input, { minHeight: 200 }]}
+              placeholder="Paste or type the medical record here..."
+              placeholderTextColor="#999"
+              value={recordText}
+              onChangeText={setRecordText}
+              multiline
+              editable={!isUploading}
+            />
+            <TouchableOpacity
+              style={[styles.addButton, isUploading && styles.buttonDisabled]}
+              onPress={handleUploadRecord}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.addButtonText}>Add to My Team</Text>
+              )}
+            </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>
@@ -738,33 +609,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
-  },
-  methodButton: {
-    backgroundColor: '#FFF',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  methodButtonIcon: {
-    fontSize: 24,
-  },
-  methodButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#007AFF',
-  },
-  photoPreview: {
-    width: '100%',
-    height: 300,
-    borderRadius: 12,
-    marginVertical: 16,
-    backgroundColor: '#F0F0F0',
   },
 });
