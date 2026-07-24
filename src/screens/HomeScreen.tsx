@@ -824,7 +824,7 @@ export default function HomeScreen() {
                         onChangeText={setEditingAllergyValue}
                       />
                     ) : (
-                      <Text style={[styles.healthItem, { flex: 1, color: '#FF3333' }]}>• {allergy}</Text>
+                      <Text style={[styles.healthItem, { flex: 1 }]}>• {allergy}</Text>
                     )}
                     {editingAllergyIdx === idx ? (
                       <>
@@ -856,8 +856,8 @@ export default function HomeScreen() {
                 ))
               ) : (
                 <>
-                  <Text style={[styles.healthItem, { color: '#FF3333' }]}>• Penicillin</Text>
-                  <Text style={[styles.healthItem, { color: '#FF3333' }]}>• Sulfa drugs</Text>
+                  <Text style={styles.healthItem}>• Penicillin</Text>
+                  <Text style={styles.healthItem}>• Sulfa drugs</Text>
                 </>
               )}
               {addingAllergy && (
