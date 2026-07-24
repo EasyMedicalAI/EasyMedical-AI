@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import HomeScreen from '@/screens/HomeScreen';
-import UploadScreen from '@/screens/UploadScreen';
 import SpecialtiesScreen from '@/screens/SpecialtiesScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
 
@@ -15,9 +14,7 @@ export default function TabLayout() {
     switch (activeTab) {
       case 'home':
         return <HomeScreen />;
-      case 'upload':
-        return <UploadScreen />;
-      case 'specialties':
+      case 'records':
         return <SpecialtiesScreen />;
       case 'settings':
         return <SettingsScreen />;
@@ -39,16 +36,10 @@ export default function TabLayout() {
           onPress={() => setActiveTab('home')}
         />
         <TabButton
-          icon="⊕"
-          label="Upload"
-          active={activeTab === 'upload'}
-          onPress={() => setActiveTab('upload')}
-        />
-        <TabButton
           icon="🏥"
           label="Records"
-          active={activeTab === 'specialties'}
-          onPress={() => setActiveTab('specialties')}
+          active={activeTab === 'records'}
+          onPress={() => setActiveTab('records')}
         />
         <TabButton
           icon="⚙️"

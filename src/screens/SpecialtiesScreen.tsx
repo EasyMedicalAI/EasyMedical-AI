@@ -12,19 +12,24 @@ import {
 } from 'react-native';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
+import { v4 as uuidv4 } from 'uuid';
+import { claudeService } from '@/services/claudeService';
 
 export default function SpecialtiesScreen() {
   const { records, loading, getUniqueSpecialties, getRecordsBySpecialty, updateUserData } = useRecords();
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
-  const [doctorName, setDoctorName] = useState('');
+  const [recordText, setRecordText] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
   const router = useRouter();
+  const { addRecord } = useRecords();
 
   const defaultSpecialties = [
     'Cardiology',
     'Dermatology',
     'Orthopedics',
     'Neurology',
+    'OBGYN',
     'Psychiatry',
     'Ophthalmology',
     'ENT',
@@ -53,23 +58,36 @@ export default function SpecialtiesScreen() {
     ? []
     : records.filter(record => selectedSpecialties.includes(record.specialty));
 
-  const handleAddTeamMember = () => {
-    if (uploadingSpecialty && doctorName.trim()) {
-      // Create a mock record for the team member
-      const newRecord = {
-        id: Date.now().toString(),
-        specialty: uploadingSpecialty,
-        provider: doctorName,
-        summary: `${uploadingSpecialty} specialist`,
-        uploadDate: new Date().toISOString(),
-        isTeamMember: true,
-      };
+  const handleUploadRecord = async () => {
+    if (!uploadingSpecialty || !recordText.trim()) {
+      Alert.alert('Error', 'Please enter record information');
+      return;
+    }
 
-      // Add to records (this would typically go to the backend)
-      // For now, we'll just close the modal
+    setIsUploading(true);
+    try {
+      const recordId = uuidv4();
+      const parsedRecord = await claudeService.parseRecordFromText(recordText, recordId);
+
+      await addRecord({
+        id: recordId,
+        uploadDate: parsedRecord.uploadDate || new Date().toISOString(),
+        originalText: parsedRecord.originalText,
+        specialty: uploadingSpecialty,
+        provider: parsedRecord.provider || 'Unknown',
+        summary: parsedRecord.summary || 'Medical record',
+        extractedData: parsedRecord.extractedData || {},
+        processed: true,
+        isTeamMember: true,
+      });
+
       setUploadingSpecialty(null);
-      setDoctorName('');
-      Alert.alert('Success', `Added ${doctorName} to your team under ${uploadingSpecialty}`);
+      setRecordText('');
+      Alert.alert('Success', 'Record added to your team!');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to process record: ' + String(error));
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -225,27 +243,38 @@ export default function SpecialtiesScreen() {
       <Modal visible={uploadingSpecialty !== null} animationType="slide" onRequestClose={() => setUploadingSpecialty(null)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add {uploadingSpecialty} Doctor</Text>
+            <Text style={styles.modalTitle}>Upload {uploadingSpecialty} Record</Text>
             <TouchableOpacity onPress={() => {
               setUploadingSpecialty(null);
-              setDoctorName('');
+              setRecordText('');
             }}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.modalContent}>
-            <Text style={styles.label}>Doctor/Provider Name</Text>
+          <ScrollView style={styles.modalContent}>
+            <Text style={styles.label}>Medical Record Details</Text>
+            <Text style={styles.sublabel}>Enter the medical record information, and Claude will extract key details</Text>
             <TextInput
-              style={styles.input}
-              placeholder="e.g., Dr. Smith"
+              style={[styles.input, { minHeight: 200 }]}
+              placeholder="Paste or type the medical record here..."
               placeholderTextColor="#999"
-              value={doctorName}
-              onChangeText={setDoctorName}
+              value={recordText}
+              onChangeText={setRecordText}
+              multiline
+              editable={!isUploading}
             />
-            <TouchableOpacity style={styles.addButton} onPress={handleAddTeamMember}>
-              <Text style={styles.addButtonText}>Add to My Team</Text>
+            <TouchableOpacity
+              style={[styles.addButton, isUploading && styles.buttonDisabled]}
+              onPress={handleUploadRecord}
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <Text style={styles.addButtonText}>Add to My Team</Text>
+              )}
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
     </ScrollView>
@@ -258,6 +287,7 @@ function getSpecialtyEmoji(specialty: string): string {
     orthopedics: '🦴',
     dermatology: '🩹',
     neurology: '🧠',
+    obgyn: '👶',
     ophthalmology: '👁️',
     oncology: '🏥',
     lab: '🔬',
@@ -553,6 +583,11 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 8,
   },
+  sublabel: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+  },
   input: {
     borderWidth: 1,
     borderColor: '#E0E0E0',
@@ -567,6 +602,9 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  buttonDisabled: {
+    backgroundColor: '#CCC',
   },
   addButtonText: {
     fontSize: 16,
