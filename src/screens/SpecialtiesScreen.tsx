@@ -56,6 +56,16 @@ export default function SpecialtiesScreen() {
     );
   }
 
+  // Get team records (records marked as part of user's team)
+  const teamRecords = records.filter(r => r.isTeamMember === true);
+  const teamBySpecialty: Record<string, typeof records> = {};
+  teamRecords.forEach(record => {
+    if (!teamBySpecialty[record.specialty]) {
+      teamBySpecialty[record.specialty] = [];
+    }
+    teamBySpecialty[record.specialty].push(record);
+  });
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.topBar}>
@@ -65,6 +75,33 @@ export default function SpecialtiesScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>By Specialty</Text>
         <Text style={styles.subtitle}>{specialties.length} specialties available</Text>
+      </View>
+
+      {/* My Team Section */}
+      <View style={styles.teamSection}>
+        <Text style={styles.sectionTitle}>👥 My Team</Text>
+        {teamRecords.length > 0 ? (
+          Object.entries(teamBySpecialty).map(([specialty, docs]) => (
+            <View key={specialty} style={styles.teamSpecialtyGroup}>
+              <Text style={styles.teamSpecialtyName}>{specialty}</Text>
+              {docs.map(doc => (
+                <TouchableOpacity
+                  key={doc.id}
+                  style={styles.teamRecordItem}
+                  onPress={() => router.push(`/detail/${doc.id}`)}
+                >
+                  <View style={styles.teamRecordContent}>
+                    <Text style={styles.teamRecordProvider}>{doc.provider}</Text>
+                    <Text style={styles.teamRecordMeta}>{doc.summary}</Text>
+                  </View>
+                  <Text style={styles.recordArrow}>›</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ))
+        ) : (
+          <Text style={styles.teamEmptyText}>Mark doctors as your team to see them here</Text>
+        )}
       </View>
 
       {/* Specialties Filter */}
@@ -301,6 +338,59 @@ const styles = StyleSheet.create({
   selectPromptText: {
     fontSize: 14,
     color: '#999',
+  },
+  teamSection: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 12,
+  },
+  teamSpecialtyGroup: {
+    marginBottom: 12,
+  },
+  teamSpecialtyName: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#666',
+    marginBottom: 8,
+  },
+  teamRecordItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  teamRecordContent: {
+    flex: 1,
+    marginRight: 12,
+  },
+  teamRecordProvider: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 2,
+  },
+  teamRecordMeta: {
+    fontSize: 12,
+    color: '#999',
+  },
+  teamEmptyText: {
+    fontSize: 13,
+    color: '#999',
+    fontStyle: 'italic',
   },
   emptyState: {
     marginTop: 60,
