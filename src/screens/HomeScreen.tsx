@@ -9,8 +9,8 @@ import {
   Modal,
   TextInput,
   Alert,
+  Picker,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
@@ -1279,16 +1279,47 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.datePickerContent}>
-            <DateTimePicker
-              value={new Date(historyDateYear, historyDateMonth, historyDateDay)}
-              mode="date"
-              display="spinner"
-              onValueChange={(selectedDate) => {
-                setHistoryDateMonth(selectedDate.getMonth());
-                setHistoryDateDay(selectedDate.getDate());
-                setHistoryDateYear(selectedDate.getFullYear());
-              }}
-            />
+            <View style={styles.pickerRow}>
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Month</Text>
+                <Picker
+                  selectedValue={historyDateMonth}
+                  onValueChange={(itemValue) => setHistoryDateMonth(itemValue)}
+                  style={styles.picker}
+                >
+                  {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
+                    <Picker.Item key={month} label={month} value={idx} />
+                  ))}
+                </Picker>
+              </View>
+
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Day</Text>
+                <Picker
+                  selectedValue={historyDateDay}
+                  onValueChange={(itemValue) => setHistoryDateDay(itemValue)}
+                  style={styles.picker}
+                >
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                    <Picker.Item key={day} label={String(day)} value={day} />
+                  ))}
+                </Picker>
+              </View>
+
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Year</Text>
+                <Picker
+                  selectedValue={historyDateYear}
+                  onValueChange={(itemValue) => setHistoryDateYear(itemValue)}
+                  style={styles.picker}
+                >
+                  {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                    <Picker.Item key={year} label={String(year)} value={year} />
+                  ))}
+                </Picker>
+              </View>
+            </View>
+
             <TouchableOpacity
               style={styles.datePickerDoneButton}
               onPress={() => {
