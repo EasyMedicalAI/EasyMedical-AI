@@ -109,6 +109,26 @@ export default function SpecialtiesScreen() {
         <Text style={styles.uploadRecordsTitle}>Upload Records</Text>
       </View>
 
+      {/* Specialties for Upload */}
+      <View style={styles.uploadSpecialtiesContainer}>
+        {[...specialties].sort().map(specialty => (
+          <TouchableOpacity
+            key={`upload-${specialty}`}
+            style={styles.uploadSpecialtyButton}
+            onPress={() => router.push(`/upload?specialty=${encodeURIComponent(specialty)}`)}
+          >
+            <Text style={styles.uploadSpecialtyButtonText}>
+              {getSpecialtyEmoji(specialty)} {specialty}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* Specialties Filter Header */}
+      <View style={styles.filterHeader}>
+        <Text style={styles.filterHeaderTitle}>Browse by Specialty</Text>
+      </View>
+
       {/* Specialties Filter */}
       <View style={styles.specialtiesFilterContainer}>
         {[...specialties].sort().map(specialty => {
@@ -246,6 +266,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#000',
+  },
+  uploadSpecialtiesContainer: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    gap: 8,
+  },
+  uploadSpecialtyButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#E8E8E8',
+  },
+  uploadSpecialtyButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  filterHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  filterHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#999',
   },
   specialtiesFilterContainer: {
     paddingHorizontal: 20,
