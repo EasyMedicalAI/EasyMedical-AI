@@ -1280,51 +1280,48 @@ export default function HomeScreen() {
           </View>
           <View style={styles.datePickerContent}>
             <View style={styles.pickerRow}>
+              {/* Month Picker */}
               <View style={styles.pickerColumn}>
                 <Text style={styles.pickerLabel}>Month</Text>
-                <Picker
-                  selectedValue={historyDateMonth}
-                  onValueChange={(itemValue) => setHistoryDateMonth(itemValue)}
-                  style={styles.picker}
-                >
-                  {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
-                    <Picker.Item key={month} label={month} value={idx} />
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.pickerOption, historyDateMonth === idx && styles.pickerOptionSelected]}
+                      onPress={() => setHistoryDateMonth(idx)}
+                    >
+                      <Text style={[styles.pickerOptionText, historyDateMonth === idx && styles.pickerOptionTextSelected]}>
+                        {month}
+                      </Text>
+                    </TouchableOpacity>
                   ))}
-                </Picker>
+                </ScrollView>
               </View>
 
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Day</Text>
-                <Picker
-                  selectedValue={historyDateDay}
-                  onValueChange={(itemValue) => setHistoryDateDay(itemValue)}
-                  style={styles.picker}
-                >
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                    <Picker.Item key={day} label={String(day)} value={day} />
-                  ))}
-                </Picker>
-              </View>
-
+              {/* Year Picker */}
               <View style={styles.pickerColumn}>
                 <Text style={styles.pickerLabel}>Year</Text>
-                <Picker
-                  selectedValue={historyDateYear}
-                  onValueChange={(itemValue) => setHistoryDateYear(itemValue)}
-                  style={styles.picker}
-                >
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
                   {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map((year) => (
-                    <Picker.Item key={year} label={String(year)} value={year} />
+                    <TouchableOpacity
+                      key={year}
+                      style={[styles.pickerOption, historyDateYear === year && styles.pickerOptionSelected]}
+                      onPress={() => setHistoryDateYear(year)}
+                    >
+                      <Text style={[styles.pickerOptionText, historyDateYear === year && styles.pickerOptionTextSelected]}>
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
                   ))}
-                </Picker>
+                </ScrollView>
               </View>
             </View>
 
             <TouchableOpacity
               style={styles.datePickerDoneButton}
               onPress={() => {
-                const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                const formattedDate = `${months[historyDateMonth]} ${historyDateDay}, ${historyDateYear}`;
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const formattedDate = `${months[historyDateMonth]} ${historyDateYear}`;
                 if (editingHistoryType === 'surgical') {
                   setSurgeryDate(formattedDate);
                 } else if (editingHistoryType === 'hospitalization') {
