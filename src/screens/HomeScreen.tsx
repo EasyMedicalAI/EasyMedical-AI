@@ -249,6 +249,8 @@ export default function HomeScreen() {
   const handleCancel = () => {
     setEditData(userData);
     setEditingSection(null);
+    setEditingHistoryType(null);
+    setShowHistoryDatePicker(false);
     setMedicationPhoto(null);
     setEditingAppointmentId(null);
     setAppointmentDateTime('');
@@ -1153,7 +1155,10 @@ export default function HomeScreen() {
               {editingHistoryType === 'conditions' && 'Past Condition'}
               {editingHistoryType === 'hospitalization' && 'Hospitalization'}
             </Text>
-            <TouchableOpacity onPress={handleCancel}>
+            <TouchableOpacity onPress={() => {
+              setEditingHistoryType(null);
+              setShowHistoryDatePicker(false);
+            }}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
