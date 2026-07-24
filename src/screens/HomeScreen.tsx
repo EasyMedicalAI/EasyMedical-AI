@@ -2008,7 +2008,8 @@ const styles = StyleSheet.create({
   },
   pickerColumn: {
     flex: 1,
-    height: 300,
+    minHeight: 250,
+    maxHeight: 250,
   },
   pickerLabel: {
     fontSize: 12,
@@ -2020,7 +2021,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   scrollPicker: {
-    flex: 1,
+    height: 220,
     backgroundColor: '#FFF',
     borderRadius: 10,
     borderWidth: 1,
