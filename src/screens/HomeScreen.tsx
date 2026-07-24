@@ -588,6 +588,15 @@ export default function HomeScreen() {
                 style={styles.addButton}
                 onPress={() => {
                   setEditData(userData);
+                  setAppointmentDateTime('');
+                  setAppointmentDoctorName('');
+                  setAppointmentSpecialty('');
+                  setEditingAppointmentId(null);
+                  setSelectedMonth(7);
+                  setSelectedDay(15);
+                  setSelectedHour(2);
+                  setSelectedMinute(0);
+                  setSelectedPeriod('PM');
                   setEditingSection('appointments');
                 }}
               >
