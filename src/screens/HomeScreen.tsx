@@ -43,6 +43,8 @@ export default function HomeScreen() {
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [editingEmergencyContactId, setEditingEmergencyContactId] = useState<number | null>(null);
+  const [selectedAge, setSelectedAge] = useState(35);
+  const [selectedGender, setSelectedGender] = useState('Other');
 
   if (loading) {
     return (
@@ -203,18 +205,39 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>Vitals & Metrics</Text>
 
           <View style={styles.card}>
-            {/* Blood Type */}
+            {/* Age */}
             <View style={styles.vitalRow}>
               <View style={styles.vitalContent}>
                 <Text style={styles.vitalLabel}>
-                  <Text style={styles.vitalEmoji}>🩸</Text>
-                  {' Blood Type: '}
-                  <Text style={styles.vitalValue}>{userData.bloodType}</Text>
+                  <Text style={styles.vitalEmoji}>🎂</Text>
+                  {' Age: '}
+                  <Text style={styles.vitalValue}>{userData.age || '—'}</Text>
                 </Text>
               </View>
               <TouchableOpacity onPress={() => {
                 setEditData(userData);
-                setEditingSection('bloodType');
+                setSelectedAge(parseInt(userData.age) || 35);
+                setEditingSection('age');
+              }}>
+                <Text style={styles.editLink}>Edit</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Gender */}
+            <View style={styles.vitalRow}>
+              <View style={styles.vitalContent}>
+                <Text style={styles.vitalLabel}>
+                  <Text style={styles.vitalEmoji}>👥</Text>
+                  {' Gender: '}
+                  <Text style={styles.vitalValue}>{userData.gender || '—'}</Text>
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => {
+                setEditData(userData);
+                setSelectedGender(userData.gender || 'Other');
+                setEditingSection('gender');
               }}>
                 <Text style={styles.editLink}>Edit</Text>
               </TouchableOpacity>
@@ -276,6 +299,25 @@ export default function HomeScreen() {
               <TouchableOpacity onPress={() => {
                 setEditData(userData);
                 setEditingSection('bloodPressure');
+              }}>
+                <Text style={styles.editLink}>Edit</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Blood Type */}
+            <View style={styles.vitalRow}>
+              <View style={styles.vitalContent}>
+                <Text style={styles.vitalLabel}>
+                  <Text style={styles.vitalEmoji}>🩸</Text>
+                  {' Blood Type: '}
+                  <Text style={styles.vitalValue}>{userData.bloodType}</Text>
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => {
+                setEditData(userData);
+                setEditingSection('bloodType');
               }}>
                 <Text style={styles.editLink}>Edit</Text>
               </TouchableOpacity>
@@ -614,6 +656,91 @@ export default function HomeScreen() {
 
       {/* EDIT MODALS */}
       {/* Blood Type Modal */}
+      {/* Age Modal */}
+      <Modal visible={editingSection === 'age'} animationType="slide" onRequestClose={handleCancel}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Enter Age</Text>
+            <TouchableOpacity onPress={handleCancel}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalContent}>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Age"
+              placeholderTextColor="#999"
+              keyboardType="number-pad"
+              value={String(selectedAge)}
+              onChangeText={(text) => setSelectedAge(parseInt(text) || 0)}
+            />
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={() => {
+                  updateUserData({ ...editData, age: String(selectedAge) });
+                  setEditingSection(null);
+                }}
+              >
+                <Text style={styles.buttonTextWhite}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Gender Modal */}
+      <Modal visible={editingSection === 'gender'} animationType="slide" onRequestClose={handleCancel}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Gender</Text>
+            <TouchableOpacity onPress={handleCancel}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalContent}>
+            <View style={styles.genderGrid}>
+              {['Male', 'Female', 'Other'].map((gender) => (
+                <TouchableOpacity
+                  key={gender}
+                  style={[
+                    styles.genderButton,
+                    selectedGender === gender && styles.genderButtonSelected,
+                  ]}
+                  onPress={() => setSelectedGender(gender)}
+                >
+                  <Text
+                    style={[
+                      styles.genderButtonText,
+                      selectedGender === gender && styles.genderButtonTextSelected,
+                    ]}
+                  >
+                    {gender}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={() => {
+                  updateUserData({ ...editData, gender: selectedGender });
+                  setEditingSection(null);
+                }}
+              >
+                <Text style={styles.buttonTextWhite}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={editingSection === 'bloodType'} animationType="slide" onRequestClose={handleCancel}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -1819,6 +1946,35 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   bloodTypeButtonTextSelected: {
+    color: '#FFF',
+  },
+  genderGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 24,
+  },
+  genderButton: {
+    flex: 1,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 2,
+    borderColor: '#E0E0E0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  genderButtonSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  genderButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  genderButtonTextSelected: {
     color: '#FFF',
   },
 });
