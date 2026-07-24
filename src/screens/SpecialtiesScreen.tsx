@@ -6,13 +6,18 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 
 export default function SpecialtiesScreen() {
-  const { records, loading, getUniqueSpecialties, getRecordsBySpecialty } = useRecords();
+  const { records, loading, getUniqueSpecialties, getRecordsBySpecialty, updateUserData } = useRecords();
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
+  const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
+  const [doctorName, setDoctorName] = useState('');
   const router = useRouter();
 
   const defaultSpecialties = [
@@ -47,6 +52,26 @@ export default function SpecialtiesScreen() {
   const recordsToDisplay = selectedSpecialties.length === 0
     ? []
     : records.filter(record => selectedSpecialties.includes(record.specialty));
+
+  const handleAddTeamMember = () => {
+    if (uploadingSpecialty && doctorName.trim()) {
+      // Create a mock record for the team member
+      const newRecord = {
+        id: Date.now().toString(),
+        specialty: uploadingSpecialty,
+        provider: doctorName,
+        summary: `${uploadingSpecialty} specialist`,
+        uploadDate: new Date().toISOString(),
+        isTeamMember: true,
+      };
+
+      // Add to records (this would typically go to the backend)
+      // For now, we'll just close the modal
+      setUploadingSpecialty(null);
+      setDoctorName('');
+      Alert.alert('Success', `Added ${doctorName} to your team under ${uploadingSpecialty}`);
+    }
+  };
 
   if (loading) {
     return (
@@ -115,7 +140,7 @@ export default function SpecialtiesScreen() {
           <TouchableOpacity
             key={`upload-${specialty}`}
             style={styles.uploadSpecialtyButton}
-            onPress={() => router.push(`/upload?specialty=${encodeURIComponent(specialty)}`)}
+            onPress={() => setUploadingSpecialty(specialty)}
           >
             <Text style={styles.uploadSpecialtyButtonText}>
               {getSpecialtyEmoji(specialty)} {specialty}
@@ -195,6 +220,34 @@ export default function SpecialtiesScreen() {
       )}
 
       <View style={styles.spacing} />
+
+      {/* Upload Modal */}
+      <Modal visible={uploadingSpecialty !== null} animationType="slide" onRequestClose={() => setUploadingSpecialty(null)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Add {uploadingSpecialty} Doctor</Text>
+            <TouchableOpacity onPress={() => {
+              setUploadingSpecialty(null);
+              setDoctorName('');
+            }}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalContent}>
+            <Text style={styles.label}>Doctor/Provider Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g., Dr. Smith"
+              placeholderTextColor="#999"
+              value={doctorName}
+              onChangeText={setDoctorName}
+            />
+            <TouchableOpacity style={styles.addButton} onPress={handleAddTeamMember}>
+              <Text style={styles.addButtonText}>Add to My Team</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -467,5 +520,57 @@ const styles = StyleSheet.create({
   },
   spacing: {
     height: 100,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
+    paddingTop: 50,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+  },
+  closeButton: {
+    fontSize: 24,
+    color: '#007AFF',
+  },
+  modalContent: {
+    padding: 20,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 14,
+    marginBottom: 20,
+  },
+  addButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  addButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
   },
 });
