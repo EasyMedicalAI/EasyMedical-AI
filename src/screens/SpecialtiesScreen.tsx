@@ -12,10 +12,22 @@ import { useRouter } from 'expo-router';
 
 export default function SpecialtiesScreen() {
   const { records, loading, getUniqueSpecialties, getRecordsBySpecialty } = useRecords();
-  const [expandedSpecialty, setExpandedSpecialty] = useState<string | null>(null);
+  const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const router = useRouter();
 
   const specialties = getUniqueSpecialties();
+
+  const toggleSpecialty = (specialty: string) => {
+    setSelectedSpecialties(prev =>
+      prev.includes(specialty)
+        ? prev.filter(s => s !== specialty)
+        : [...prev, specialty]
+    );
+  };
+
+  const recordsToDisplay = selectedSpecialties.length === 0
+    ? []
+    : records.filter(record => selectedSpecialties.includes(record.specialty));
 
   if (loading) {
     return (
@@ -52,69 +64,75 @@ export default function SpecialtiesScreen() {
       </View>
       <View style={styles.header}>
         <Text style={styles.title}>By Specialty</Text>
-        <Text style={styles.subtitle}>{specialties.length} specialties • {records.length} records</Text>
+        <Text style={styles.subtitle}>{specialties.length} specialties available</Text>
       </View>
 
-      <View style={styles.specialtiesContainer}>
-        {specialties.map(specialty => {
-          const specializationRecords = getRecordsBySpecialty(specialty);
-          const isExpanded = expandedSpecialty === specialty;
-          const uniqueProviders = new Set(specializationRecords.map(r => r.provider));
-
-          return (
-            <View key={specialty} style={styles.specialtySection}>
+      {/* Specialties Filter */}
+      <View style={styles.specialtiesFilterContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.specialtiesScroll}>
+          {specialties.map(specialty => {
+            const isSelected = selectedSpecialties.includes(specialty);
+            return (
               <TouchableOpacity
-                style={styles.specialtyHeader}
-                onPress={() => setExpandedSpecialty(isExpanded ? null : specialty)}
+                key={specialty}
+                style={[
+                  styles.specialtyButton,
+                  isSelected && styles.specialtyButtonSelected
+                ]}
+                onPress={() => toggleSpecialty(specialty)}
               >
-                <View style={styles.specialtyInfo}>
-                  <View style={styles.specialtyBadge}>
-                    <Text style={styles.specialtyEmoji}>{getSpecialtyEmoji(specialty)}</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.specialtyName}>{specialty}</Text>
-                    <Text style={styles.specialtyMeta}>
-                      {uniqueProviders.size} provider{uniqueProviders.size !== 1 ? 's' : ''} • {specializationRecords.length} record{specializationRecords.length !== 1 ? 's' : ''}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[styles.arrow, { transform: [{ rotate: isExpanded ? '180deg' : '0deg' }] }]}>
-                  ▼
+                <Text style={[
+                  styles.specialtyButtonText,
+                  isSelected && styles.specialtyButtonTextSelected
+                ]}>
+                  {getSpecialtyEmoji(specialty)} {specialty}
                 </Text>
               </TouchableOpacity>
-
-              {isExpanded && (
-                <View style={styles.recordsList}>
-                  {specializationRecords
-                    .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime())
-                    .map(record => (
-                      <TouchableOpacity
-                        key={record.id}
-                        style={styles.recordItem}
-                        onPress={() => router.push(`/detail/${record.id}`)}
-                      >
-                        <View style={styles.recordContent}>
-                          <Text style={styles.recordProvider}>{record.provider}</Text>
-                          <Text numberOfLines={2} style={styles.recordSummary}>
-                            {record.summary}
-                          </Text>
-                          <Text style={styles.recordDate}>
-                            {new Date(record.uploadDate).toLocaleDateString('en-US', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                            })}
-                          </Text>
-                        </View>
-                        <Text style={styles.recordArrow}>›</Text>
-                      </TouchableOpacity>
-                    ))}
-                </View>
-              )}
-            </View>
-          );
-        })}
+            );
+          })}
+        </ScrollView>
       </View>
+
+      {/* Records Display */}
+      {selectedSpecialties.length > 0 && (
+        <View style={styles.recordsContainer}>
+          <Text style={styles.recordsTitle}>
+            {recordsToDisplay.length} record{recordsToDisplay.length !== 1 ? 's' : ''} found
+          </Text>
+          <View style={styles.recordsList}>
+            {recordsToDisplay
+              .sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime())
+              .map(record => (
+                <TouchableOpacity
+                  key={record.id}
+                  style={styles.recordItem}
+                  onPress={() => router.push(`/detail/${record.id}`)}
+                >
+                  <View style={styles.recordContent}>
+                    <Text style={styles.recordProvider}>{record.provider}</Text>
+                    <Text numberOfLines={2} style={styles.recordSummary}>
+                      {record.summary}
+                    </Text>
+                    <Text style={styles.recordDate}>
+                      {new Date(record.uploadDate).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </Text>
+                  </View>
+                  <Text style={styles.recordArrow}>›</Text>
+                </TouchableOpacity>
+              ))}
+          </View>
+        </View>
+      )}
+
+      {selectedSpecialties.length === 0 && (
+        <View style={styles.selectPrompt}>
+          <Text style={styles.selectPromptText}>Select a specialty above to view records</Text>
+        </View>
+      )}
 
       <View style={styles.spacing} />
     </ScrollView>
@@ -168,7 +186,7 @@ const styles = StyleSheet.create({
   },
   header: {
     padding: 20,
-    paddingTop: 50,
+    paddingTop: 20,
   },
   title: {
     fontSize: 28,
@@ -180,12 +198,43 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
-  specialtiesContainer: {
+  specialtiesFilterContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 20,
-    gap: 12,
+    paddingVertical: 12,
+    backgroundColor: '#FFF',
+    marginBottom: 16,
   },
-  specialtySection: {
+  specialtiesScroll: {
+    flexGrow: 0,
+  },
+  specialtyButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#E8E8E8',
+    marginRight: 8,
+  },
+  specialtyButtonSelected: {
+    backgroundColor: '#000',
+  },
+  specialtyButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#666',
+  },
+  specialtyButtonTextSelected: {
+    color: '#FFF',
+  },
+  recordsContainer: {
+    paddingHorizontal: 20,
+  },
+  recordsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 12,
+  },
+  recordsList: {
     backgroundColor: '#FFF',
     borderRadius: 12,
     overflow: 'hidden',
@@ -193,47 +242,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 2,
-  },
-  specialtyHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-  },
-  specialtyInfo: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  specialtyBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F0F8FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  specialtyEmoji: {
-    fontSize: 24,
-  },
-  specialtyName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 2,
-  },
-  specialtyMeta: {
-    fontSize: 12,
-    color: '#999',
-  },
-  arrow: {
-    fontSize: 16,
-    color: '#CCC',
-  },
-  recordsList: {
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
   },
   recordItem: {
     flexDirection: 'row',
@@ -266,6 +274,15 @@ const styles = StyleSheet.create({
   recordArrow: {
     fontSize: 18,
     color: '#CCC',
+  },
+  selectPrompt: {
+    marginTop: 40,
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  selectPromptText: {
+    fontSize: 14,
+    color: '#999',
   },
   emptyState: {
     marginTop: 60,
