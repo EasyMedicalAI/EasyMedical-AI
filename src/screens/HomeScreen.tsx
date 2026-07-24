@@ -230,7 +230,7 @@ export default function HomeScreen() {
         </View>
 
         {/* VITALS & METRICS Section */}
-        <View style={styles.section}>
+        <View style={styles.vitalsSection}>
           <Text style={styles.sectionTitle}>Vitals & Metrics</Text>
 
           <View style={styles.card}>
@@ -1480,6 +1480,10 @@ const styles = StyleSheet.create({
   section: {
     paddingHorizontal: 20,
     marginBottom: 28,
+  },
+  vitalsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 56,
   },
   sectionHeader: {
     flexDirection: 'row',
