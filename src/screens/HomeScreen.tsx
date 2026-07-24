@@ -587,12 +587,14 @@ export default function HomeScreen() {
                   />
                   <TouchableOpacity
                     style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
-                    onPress={() => {
+                    onPress={async () => {
                       if (newPrescriptionMed.trim()) {
-                        setEditData({
+                        const updatedData = {
                           ...editData,
                           prescriptionMedications: [...(editData.prescriptionMedications || []), newPrescriptionMed.trim()]
-                        });
+                        };
+                        setEditData(updatedData);
+                        await updateUserData(updatedData);
                         setNewPrescriptionMed('');
                         setAddingPrescriptionMed(false);
                       }
@@ -641,12 +643,14 @@ export default function HomeScreen() {
                   />
                   <TouchableOpacity
                     style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
-                    onPress={() => {
+                    onPress={async () => {
                       if (newOtcMed.trim()) {
-                        setEditData({
+                        const updatedData = {
                           ...editData,
                           otcMedications: [...(editData.otcMedications || []), newOtcMed.trim()]
-                        });
+                        };
+                        setEditData(updatedData);
+                        await updateUserData(updatedData);
                         setNewOtcMed('');
                         setAddingOtcMed(false);
                       }
@@ -684,10 +688,12 @@ export default function HomeScreen() {
                       {editingConditionIdx === idx ? (
                         <>
                           <TouchableOpacity
-                            onPress={() => {
+                            onPress={async () => {
                               const updated = [...(userData.conditions || [])];
                               updated[idx] = editingConditionValue;
-                              setEditData({ ...editData, conditions: updated });
+                              const updatedData = { ...editData, conditions: updated };
+                              setEditData(updatedData);
+                              await updateUserData(updatedData);
                               setEditingConditionIdx(null);
                             }}
                           >
@@ -729,12 +735,14 @@ export default function HomeScreen() {
                   />
                   <TouchableOpacity
                     style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
-                    onPress={() => {
+                    onPress={async () => {
                       if (newCondition.trim()) {
-                        setEditData({
+                        const updatedData = {
                           ...editData,
                           conditions: [...(editData.conditions || []), newCondition.trim()]
-                        });
+                        };
+                        setEditData(updatedData);
+                        await updateUserData(updatedData);
                         setNewCondition('');
                         setAddingCondition(false);
                       }
@@ -772,10 +780,12 @@ export default function HomeScreen() {
                       {editingAllergyIdx === idx ? (
                         <>
                           <TouchableOpacity
-                            onPress={() => {
+                            onPress={async () => {
                               const updated = [...(userData.allergies || [])];
                               updated[idx] = editingAllergyValue;
-                              setEditData({ ...editData, allergies: updated });
+                              const updatedData = { ...editData, allergies: updated };
+                              setEditData(updatedData);
+                              await updateUserData(updatedData);
                               setEditingAllergyIdx(null);
                             }}
                           >
@@ -817,12 +827,14 @@ export default function HomeScreen() {
                   />
                   <TouchableOpacity
                     style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
-                    onPress={() => {
+                    onPress={async () => {
                       if (newAllergy.trim()) {
-                        setEditData({
+                        const updatedData = {
                           ...editData,
                           allergies: [...(editData.allergies || []), newAllergy.trim()]
-                        });
+                        };
+                        setEditData(updatedData);
+                        await updateUserData(updatedData);
                         setNewAllergy('');
                         setAddingAllergy(false);
                       }
@@ -860,10 +872,12 @@ export default function HomeScreen() {
                     {editingVaccineIdx === idx ? (
                       <>
                         <TouchableOpacity
-                          onPress={() => {
+                          onPress={async () => {
                             const updated = [...(userData.vaccines || [])];
                             updated[idx] = { ...vaccine, name: editingVaccineValue };
-                            setEditData({ ...editData, vaccines: updated });
+                            const updatedData = { ...editData, vaccines: updated };
+                            setEditData(updatedData);
+                            await updateUserData(updatedData);
                             setEditingVaccineIdx(null);
                           }}
                         >
@@ -902,12 +916,14 @@ export default function HomeScreen() {
                   />
                   <TouchableOpacity
                     style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
-                    onPress={() => {
+                    onPress={async () => {
                       if (newVaccine.trim()) {
-                        setEditData({
+                        const updatedData = {
                           ...editData,
                           vaccines: [...(editData.vaccines || []), { name: newVaccine.trim(), date: new Date().toISOString() }]
-                        });
+                        };
+                        setEditData(updatedData);
+                        await updateUserData(updatedData);
                         setNewVaccine('');
                         setAddingVaccine(false);
                       }
