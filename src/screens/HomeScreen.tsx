@@ -50,9 +50,15 @@ export default function HomeScreen() {
   const [selectedBirthdayYear, setSelectedBirthdayYear] = useState(1990);
   const [selectedGender, setSelectedGender] = useState('Other');
   const [customGender, setCustomGender] = useState('');
-  const [historyType, setHistoryType] = useState('');
-  const [historyDescription, setHistoryDescription] = useState('');
-  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
+  const [editingHistoryType, setEditingHistoryType] = useState<'surgical' | 'family' | 'conditions' | 'hospitalization' | null>(null);
+  const [surgeryDate, setSurgeryDate] = useState('');
+  const [surgeryName, setSurgeryName] = useState('');
+  const [familyMember, setFamilyMember] = useState('');
+  const [familyCondition, setFamilyCondition] = useState('');
+  const [conditionName, setConditionName] = useState('');
+  const [hospitalizationDate, setHospitalizationDate] = useState('');
+  const [hospitalizationReason, setHospitalizationReason] = useState('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
 
   if (loading) {
     return (
@@ -187,29 +193,45 @@ export default function HomeScreen() {
         setEmergencyContactName('');
         setEmergencyContactRelationship('');
         setEmergencyContactPhone('');
-      } else if (editingSection === 'history' && historyType && historyDescription) {
-        let updatedHistory;
-
-        if (editingHistoryId) {
-          // Update existing history
-          updatedHistory = (editData.medicalHistory || []).map(history =>
-            history.id === editingHistoryId
-              ? { id: editingHistoryId, type: historyType, description: historyDescription }
-              : history
-          );
+      } else if (editingHistoryType === 'surgical' && surgeryName && surgeryDate) {
+        let surgicalHistory = editData.surgicalHistory || [];
+        if (editingIndex !== null) {
+          surgicalHistory[editingIndex] = { surgeryName, date: surgeryDate };
         } else {
-          // Add new history
-          const newHistory = {
-            id: String(Date.now()),
-            type: historyType,
-            description: historyDescription,
-          };
-          updatedHistory = [...(editData.medicalHistory || []), newHistory];
+          surgicalHistory.push({ surgeryName, date: surgeryDate });
         }
-
-        await updateUserData({ ...editData, medicalHistory: updatedHistory });
-        setHistoryType('');
-        setHistoryDescription('');
+        await updateUserData({ ...editData, surgicalHistory });
+        setSurgeryName('');
+        setSurgeryDate('');
+      } else if (editingHistoryType === 'family' && familyMember && familyCondition) {
+        let familyHistory = editData.familyHistory || [];
+        if (editingIndex !== null) {
+          familyHistory[editingIndex] = { familyMember, condition: familyCondition };
+        } else {
+          familyHistory.push({ familyMember, condition: familyCondition });
+        }
+        await updateUserData({ ...editData, familyHistory });
+        setFamilyMember('');
+        setFamilyCondition('');
+      } else if (editingHistoryType === 'conditions' && conditionName) {
+        let pastConditions = editData.pastConditions || [];
+        if (editingIndex !== null) {
+          pastConditions[editingIndex] = conditionName;
+        } else {
+          pastConditions.push(conditionName);
+        }
+        await updateUserData({ ...editData, pastConditions });
+        setConditionName('');
+      } else if (editingHistoryType === 'hospitalization' && hospitalizationReason && hospitalizationDate) {
+        let hospitalizations = editData.hospitalizations || [];
+        if (editingIndex !== null) {
+          hospitalizations[editingIndex] = { reason: hospitalizationReason, date: hospitalizationDate };
+        } else {
+          hospitalizations.push({ reason: hospitalizationReason, date: hospitalizationDate });
+        }
+        await updateUserData({ ...editData, hospitalizations });
+        setHospitalizationReason('');
+        setHospitalizationDate('');
       } else {
         await updateUserData(editData);
       }
@@ -257,12 +279,23 @@ export default function HomeScreen() {
         Alert.alert('Success', 'Insurance deleted');
         setEditingSection(null);
         setEditingInsuranceId(null);
-      } else if (editingSection === 'history' && editingHistoryId) {
-        const updatedHistory = (editData.medicalHistory || []).filter(history => history.id !== editingHistoryId);
-        await updateUserData({ ...editData, medicalHistory: updatedHistory });
-        Alert.alert('Success', 'History deleted');
-        setEditingSection(null);
-        setEditingHistoryId(null);
+      } else if (editingHistoryType && editingIndex !== null) {
+        if (editingHistoryType === 'surgical') {
+          const updated = (editData.surgicalHistory || []).filter((_, i) => i !== editingIndex);
+          await updateUserData({ ...editData, surgicalHistory: updated });
+        } else if (editingHistoryType === 'family') {
+          const updated = (editData.familyHistory || []).filter((_, i) => i !== editingIndex);
+          await updateUserData({ ...editData, familyHistory: updated });
+        } else if (editingHistoryType === 'conditions') {
+          const updated = (editData.pastConditions || []).filter((_, i) => i !== editingIndex);
+          await updateUserData({ ...editData, pastConditions: updated });
+        } else if (editingHistoryType === 'hospitalization') {
+          const updated = (editData.hospitalizations || []).filter((_, i) => i !== editingIndex);
+          await updateUserData({ ...editData, hospitalizations: updated });
+        }
+        Alert.alert('Success', 'Entry deleted');
+        setEditingHistoryType(null);
+        setEditingIndex(null);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to delete');
@@ -608,47 +641,158 @@ export default function HomeScreen() {
             <Text style={styles.cardIcon}>📚</Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>Health History</Text>
-              <Text style={styles.cardMeta}>{userData.medicalHistory?.length || 0} entries</Text>
             </View>
           </View>
 
           <View style={styles.card}>
-            {userData.medicalHistory && userData.medicalHistory.length > 0 ? (
-              userData.medicalHistory.map((history, idx) => (
-                <View key={history.id}>
-                  <View style={styles.historyItemRow}>
-                    <View style={styles.historyItem}>
-                      <Text style={styles.historyType}>{history.type}</Text>
-                      <Text style={styles.historyDescription}>{history.description}</Text>
+            {/* Surgical History */}
+            <View style={styles.historyCategory}>
+              <View style={styles.historyCategoryHeader}>
+                <Text style={styles.historyCategoryTitle}>🔧 Surgical History</Text>
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  setEditingHistoryType('surgical');
+                  setEditingIndex(null);
+                  setSurgeryDate('');
+                  setSurgeryName('');
+                }}>
+                  <Text style={styles.addLink}>+ Add</Text>
+                </TouchableOpacity>
+              </View>
+              {userData.surgicalHistory && userData.surgicalHistory.length > 0 ? (
+                userData.surgicalHistory.map((surgery, idx) => (
+                  <View key={idx} style={styles.historyEntry}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.entryTitle}>{surgery.surgeryName}</Text>
+                      <Text style={styles.entryMeta}>{surgery.date}</Text>
                     </View>
                     <TouchableOpacity onPress={() => {
                       setEditData(userData);
-                      setEditingSection('history');
-                      setEditingHistoryId(history.id);
-                      setHistoryType(history.type);
-                      setHistoryDescription(history.description);
+                      setEditingHistoryType('surgical');
+                      setEditingIndex(idx);
+                      setSurgeryDate(surgery.date);
+                      setSurgeryName(surgery.surgeryName);
                     }}>
                       <Text style={styles.editLink}>Edit</Text>
                     </TouchableOpacity>
                   </View>
-                  {idx < userData.medicalHistory.length - 1 && <View style={styles.divider} />}
-                </View>
-              ))
-            ) : (
-              <Text style={styles.emptyText}>No medical history added</Text>
-            )}
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => {
-                setEditData(userData);
-                setEditingSection('history');
-                setEditingHistoryId(null);
-                setHistoryType('');
-                setHistoryDescription('');
-              }}
-            >
-              <Text style={styles.addButtonText}>+ Add History</Text>
-            </TouchableOpacity>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No surgical history added</Text>
+              )}
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Family History */}
+            <View style={styles.historyCategory}>
+              <View style={styles.historyCategoryHeader}>
+                <Text style={styles.historyCategoryTitle}>👨‍👩‍👧 Family History</Text>
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  setEditingHistoryType('family');
+                  setEditingIndex(null);
+                  setFamilyMember('');
+                  setFamilyCondition('');
+                }}>
+                  <Text style={styles.addLink}>+ Add</Text>
+                </TouchableOpacity>
+              </View>
+              {userData.familyHistory && userData.familyHistory.length > 0 ? (
+                userData.familyHistory.map((family, idx) => (
+                  <View key={idx} style={styles.historyEntry}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.entryTitle}>{family.familyMember}</Text>
+                      <Text style={styles.entryMeta}>{family.condition}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => {
+                      setEditData(userData);
+                      setEditingHistoryType('family');
+                      setEditingIndex(idx);
+                      setFamilyMember(family.familyMember);
+                      setFamilyCondition(family.condition);
+                    }}>
+                      <Text style={styles.editLink}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No family history added</Text>
+              )}
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Past Conditions */}
+            <View style={styles.historyCategory}>
+              <View style={styles.historyCategoryHeader}>
+                <Text style={styles.historyCategoryTitle}>📋 Past Conditions</Text>
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  setEditingHistoryType('conditions');
+                  setEditingIndex(null);
+                  setConditionName('');
+                }}>
+                  <Text style={styles.addLink}>+ Add</Text>
+                </TouchableOpacity>
+              </View>
+              {userData.pastConditions && userData.pastConditions.length > 0 ? (
+                userData.pastConditions.map((condition, idx) => (
+                  <View key={idx} style={styles.historyEntry}>
+                    <Text style={styles.entryTitle}>{condition}</Text>
+                    <TouchableOpacity onPress={() => {
+                      setEditData(userData);
+                      setEditingHistoryType('conditions');
+                      setEditingIndex(idx);
+                      setConditionName(condition);
+                    }}>
+                      <Text style={styles.editLink}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No past conditions added</Text>
+              )}
+            </View>
+
+            <View style={styles.divider} />
+
+            {/* Hospitalizations */}
+            <View style={styles.historyCategory}>
+              <View style={styles.historyCategoryHeader}>
+                <Text style={styles.historyCategoryTitle}>🏥 Hospitalizations</Text>
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  setEditingHistoryType('hospitalization');
+                  setEditingIndex(null);
+                  setHospitalizationDate('');
+                  setHospitalizationReason('');
+                }}>
+                  <Text style={styles.addLink}>+ Add</Text>
+                </TouchableOpacity>
+              </View>
+              {userData.hospitalizations && userData.hospitalizations.length > 0 ? (
+                userData.hospitalizations.map((hospitalization, idx) => (
+                  <View key={idx} style={styles.historyEntry}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.entryTitle}>{hospitalization.reason}</Text>
+                      <Text style={styles.entryMeta}>{hospitalization.date}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => {
+                      setEditData(userData);
+                      setEditingHistoryType('hospitalization');
+                      setEditingIndex(idx);
+                      setHospitalizationDate(hospitalization.date);
+                      setHospitalizationReason(hospitalization.reason);
+                    }}>
+                      <Text style={styles.editLink}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No hospitalizations added</Text>
+              )}
+            </View>
           </View>
         </View>
 
@@ -996,47 +1140,106 @@ export default function HomeScreen() {
       </Modal>
 
       {/* History Modal */}
-      <Modal visible={editingSection === 'history'} animationType="slide" onRequestClose={handleCancel}>
+      <Modal visible={editingHistoryType !== null} animationType="slide" onRequestClose={handleCancel}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{editingHistoryId ? 'Edit History' : 'Add History'}</Text>
+            <Text style={styles.modalTitle}>
+              {editingHistoryType === 'surgical' && 'Surgical History'}
+              {editingHistoryType === 'family' && 'Family History'}
+              {editingHistoryType === 'conditions' && 'Past Condition'}
+              {editingHistoryType === 'hospitalization' && 'Hospitalization'}
+            </Text>
             <TouchableOpacity onPress={handleCancel}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalContent}>
-            <Text style={styles.label}>History Type</Text>
-            <View style={styles.typeButtonsContainer}>
-              {['Surgical History', 'Family History', 'Hospitalization', 'Injury', 'Procedure', 'Past Condition'].map((type) => (
-                <TouchableOpacity
-                  key={type}
-                  style={[
-                    styles.typeButton,
-                    historyType === type && styles.typeButtonSelected,
-                  ]}
-                  onPress={() => setHistoryType(type)}
-                >
-                  <Text
-                    style={[
-                      styles.typeButtonText,
-                      historyType === type && styles.typeButtonTextSelected,
-                    ]}
-                  >
-                    {type}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <Text style={styles.label}>Details</Text>
-            <TextInput
-              style={[styles.input, styles.descriptionInput]}
-              placeholder="Describe the medical history..."
-              placeholderTextColor="#999"
-              value={historyDescription}
-              onChangeText={setHistoryDescription}
-              multiline
-              numberOfLines={4}
-            />
+            {editingHistoryType === 'surgical' && (
+              <>
+                <Text style={styles.label}>Surgery Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Appendectomy"
+                  placeholderTextColor="#999"
+                  value={surgeryName}
+                  onChangeText={setSurgeryName}
+                />
+                <Text style={styles.label}>Date</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., January 15, 2020"
+                  placeholderTextColor="#999"
+                  value={surgeryDate}
+                  onChangeText={setSurgeryDate}
+                />
+              </>
+            )}
+            {editingHistoryType === 'family' && (
+              <>
+                <Text style={styles.label}>Family Member</Text>
+                <View style={styles.familyMemberContainer}>
+                  {['Mother', 'Father', 'Sister', 'Brother', 'Grandmother', 'Grandfather', 'Aunt', 'Uncle'].map((member) => (
+                    <TouchableOpacity
+                      key={member}
+                      style={[
+                        styles.familyButton,
+                        familyMember === member && styles.familyButtonSelected,
+                      ]}
+                      onPress={() => setFamilyMember(member)}
+                    >
+                      <Text
+                        style={[
+                          styles.familyButtonText,
+                          familyMember === member && styles.familyButtonTextSelected,
+                        ]}
+                      >
+                        {member}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.label}>Condition</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Diabetes"
+                  placeholderTextColor="#999"
+                  value={familyCondition}
+                  onChangeText={setFamilyCondition}
+                />
+              </>
+            )}
+            {editingHistoryType === 'conditions' && (
+              <>
+                <Text style={styles.label}>Condition Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Asthma"
+                  placeholderTextColor="#999"
+                  value={conditionName}
+                  onChangeText={setConditionName}
+                />
+              </>
+            )}
+            {editingHistoryType === 'hospitalization' && (
+              <>
+                <Text style={styles.label}>Reason</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Pneumonia treatment"
+                  placeholderTextColor="#999"
+                  value={hospitalizationReason}
+                  onChangeText={setHospitalizationReason}
+                />
+                <Text style={styles.label}>Date</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., March 2021"
+                  placeholderTextColor="#999"
+                  value={hospitalizationDate}
+                  onChangeText={setHospitalizationDate}
+                />
+              </>
+            )}
             <View style={styles.buttonContainer}>
               <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
                 <Text style={styles.buttonText}>Cancel</Text>
@@ -1045,9 +1248,9 @@ export default function HomeScreen() {
                 <Text style={styles.buttonTextWhite}>Save</Text>
               </TouchableOpacity>
             </View>
-            {editingHistoryId && (
+            {editingIndex !== null && (
               <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-                <Text style={styles.deleteButtonText}>Delete History</Text>
+                <Text style={styles.deleteButtonText}>Delete</Text>
               </TouchableOpacity>
             )}
           </ScrollView>
@@ -2529,5 +2732,67 @@ const styles = StyleSheet.create({
     height: 100,
     paddingTop: 12,
     textAlignVertical: 'top',
+  },
+  historyCategory: {
+    marginBottom: 16,
+  },
+  historyCategoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  historyCategoryTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+  },
+  addLink: {
+    color: '#007AFF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  historyEntry: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingLeft: 8,
+  },
+  entryTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 2,
+  },
+  entryMeta: {
+    fontSize: 12,
+    color: '#999',
+  },
+  familyMemberContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  familyButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  familyButtonSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  familyButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#666',
+  },
+  familyButtonTextSelected: {
+    color: '#FFF',
   },
 });
