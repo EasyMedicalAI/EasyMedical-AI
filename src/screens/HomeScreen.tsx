@@ -1479,7 +1479,7 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 20,
-    marginBottom: 28,
+    marginBottom: 48,
   },
   sectionHeader: {
     flexDirection: 'row',
