@@ -224,6 +224,11 @@ export default function HomeScreen() {
           <Text style={styles.appName}>EasyMedical</Text>
         </View>
 
+        {/* Your Health Snapshot Title */}
+        <View style={styles.snapshotHeader}>
+          <Text style={styles.snapshotTitle}>Your Health Snapshot</Text>
+        </View>
+
         {/* VITALS & METRICS Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Vitals & Metrics</Text>
@@ -2150,5 +2155,15 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#007AFF',
     fontWeight: '500',
+  },
+  snapshotHeader: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginBottom: 12,
+  },
+  snapshotTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#000',
   },
 });
