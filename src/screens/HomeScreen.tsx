@@ -66,8 +66,12 @@ export default function HomeScreen() {
   const [historyDateYear, setHistoryDateYear] = useState(new Date().getFullYear());
   const [addingPrescriptionMed, setAddingPrescriptionMed] = useState(false);
   const [newPrescriptionMed, setNewPrescriptionMed] = useState('');
+  const [editingPrescriptionMedIdx, setEditingPrescriptionMedIdx] = useState<number | null>(null);
+  const [editingPrescriptionMedValue, setEditingPrescriptionMedValue] = useState('');
   const [addingOtcMed, setAddingOtcMed] = useState(false);
   const [newOtcMed, setNewOtcMed] = useState('');
+  const [editingOtcMedIdx, setEditingOtcMedIdx] = useState<number | null>(null);
+  const [editingOtcMedValue, setEditingOtcMedValue] = useState('');
   const [addingCondition, setAddingCondition] = useState(false);
   const [newCondition, setNewCondition] = useState('');
   const [editingConditionIdx, setEditingConditionIdx] = useState<number | null>(null);
@@ -568,7 +572,43 @@ export default function HomeScreen() {
               </View>
               {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) ? (
                 userData.prescriptionMedications.map((med, idx) => (
-                  <Text key={idx} style={styles.healthItem}>• {med}</Text>
+                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
+                    {editingPrescriptionMedIdx === idx ? (
+                      <TextInput
+                        style={[styles.input, { flex: 1, height: 36 }]}
+                        value={editingPrescriptionMedValue}
+                        onChangeText={setEditingPrescriptionMedValue}
+                      />
+                    ) : (
+                      <Text style={[styles.healthItem, { flex: 1 }]}>• {med}</Text>
+                    )}
+                    {editingPrescriptionMedIdx === idx ? (
+                      <>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            const updated = [...(userData.prescriptionMedications || [])];
+                            updated[idx] = editingPrescriptionMedValue;
+                            const updatedData = { ...editData, prescriptionMedications: updated };
+                            setEditData(updatedData);
+                            await updateUserData(updatedData);
+                            setEditingPrescriptionMedIdx(null);
+                          }}
+                        >
+                          <Text style={styles.editLink}>✓</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setEditingPrescriptionMedIdx(null)}>
+                          <Text style={styles.editLink}>✕</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <TouchableOpacity onPress={() => {
+                        setEditingPrescriptionMedIdx(idx);
+                        setEditingPrescriptionMedValue(med);
+                      }}>
+                        <Text style={styles.editLink}>Edit</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 ))
               ) : (
                 <>
@@ -624,7 +664,43 @@ export default function HomeScreen() {
               </View>
               {(userData.otcMedications && userData.otcMedications.length > 0) ? (
                 userData.otcMedications.map((med, idx) => (
-                  <Text key={idx} style={styles.healthItem}>• {med}</Text>
+                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
+                    {editingOtcMedIdx === idx ? (
+                      <TextInput
+                        style={[styles.input, { flex: 1, height: 36 }]}
+                        value={editingOtcMedValue}
+                        onChangeText={setEditingOtcMedValue}
+                      />
+                    ) : (
+                      <Text style={[styles.healthItem, { flex: 1 }]}>• {med}</Text>
+                    )}
+                    {editingOtcMedIdx === idx ? (
+                      <>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            const updated = [...(userData.otcMedications || [])];
+                            updated[idx] = editingOtcMedValue;
+                            const updatedData = { ...editData, otcMedications: updated };
+                            setEditData(updatedData);
+                            await updateUserData(updatedData);
+                            setEditingOtcMedIdx(null);
+                          }}
+                        >
+                          <Text style={styles.editLink}>✓</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => setEditingOtcMedIdx(null)}>
+                          <Text style={styles.editLink}>✕</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <TouchableOpacity onPress={() => {
+                        setEditingOtcMedIdx(idx);
+                        setEditingOtcMedValue(med);
+                      }}>
+                        <Text style={styles.editLink}>Edit</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 ))
               ) : (
                 <>
