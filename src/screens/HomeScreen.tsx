@@ -534,25 +534,48 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.card}>
-            {/* Medications */}
+            {/* Prescription Medications */}
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
-                <Text style={styles.healthSectionTitle}>💊 Medications</Text>
+                <Text style={styles.healthSectionTitle}>💊 Prescription Medications</Text>
                 <TouchableOpacity onPress={() => {
                   setEditData(userData);
-                  setEditingSection('medications');
+                  setEditingSection('prescriptionMedications');
                 }}>
                   <Text style={styles.editLink}>Edit</Text>
                 </TouchableOpacity>
               </View>
-              {(userData.medications && userData.medications.length > 0) ? (
-                userData.medications.map((med, idx) => (
+              {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) ? (
+                userData.prescriptionMedications.map((med, idx) => (
                   <Text key={idx} style={styles.healthItem}>• {med}</Text>
                 ))
               ) : (
                 <>
                   <Text style={styles.healthItem}>• Lisinopril 10mg daily</Text>
                   <Text style={styles.healthItem}>• Metformin 500mg twice daily</Text>
+                </>
+              )}
+            </View>
+
+            {/* OTC Medications and Supplements */}
+            <View style={styles.healthSection}>
+              <View style={styles.healthSectionHeader}>
+                <Text style={styles.healthSectionTitle}>🌿 OTC Medications & Supplements</Text>
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  setEditingSection('otcMedications');
+                }}>
+                  <Text style={styles.editLink}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+              {(userData.otcMedications && userData.otcMedications.length > 0) ? (
+                userData.otcMedications.map((med, idx) => (
+                  <Text key={idx} style={styles.healthItem}>• {med}</Text>
+                ))
+              ) : (
+                <>
+                  <Text style={styles.healthItem}>• Vitamin D 2000 IU daily</Text>
+                  <Text style={styles.healthItem}>• Omega-3 supplements</Text>
                 </>
               )}
             </View>
