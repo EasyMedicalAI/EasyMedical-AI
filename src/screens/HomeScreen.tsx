@@ -54,6 +54,7 @@ export default function HomeScreen() {
   const [surgeryDate, setSurgeryDate] = useState('');
   const [surgeryName, setSurgeryName] = useState('');
   const [familyMember, setFamilyMember] = useState('');
+  const [familyMemberCustomMode, setFamilyMemberCustomMode] = useState(false);
   const [familyCondition, setFamilyCondition] = useState('');
   const [conditionName, setConditionName] = useState('');
   const [hospitalizationDate, setHospitalizationDate] = useState('');
@@ -245,6 +246,7 @@ export default function HomeScreen() {
       }
       setEditingSection(null);
       setEditingHistoryType(null);
+      setFamilyMemberCustomMode(false);
       Alert.alert('Success', 'Changes saved');
     } catch (error) {
       Alert.alert('Error', 'Failed to save changes');
@@ -256,6 +258,7 @@ export default function HomeScreen() {
     setEditingSection(null);
     setEditingHistoryType(null);
     setShowHistoryDatePicker(false);
+    setFamilyMemberCustomMode(false);
     setMedicationPhoto(null);
     setEditingAppointmentId(null);
     setAppointmentDateTime('');
@@ -1239,7 +1242,10 @@ export default function HomeScreen() {
                         styles.familyButton,
                         familyMember === member && styles.familyButtonSelected,
                       ]}
-                      onPress={() => setFamilyMember(member)}
+                      onPress={() => {
+                        setFamilyMember(member);
+                        setFamilyMemberCustomMode(false);
+                      }}
                     >
                       <Text
                         style={[
@@ -1254,21 +1260,24 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     style={[
                       styles.familyButton,
-                      familyMember !== 'Mother' && familyMember !== 'Father' && familyMember !== 'Sister' && familyMember !== 'Brother' && familyMember !== 'Grandmother' && familyMember !== 'Grandfather' && familyMember !== 'Aunt' && familyMember !== 'Uncle' && familyMember !== '' && styles.familyButtonSelected,
+                      familyMemberCustomMode && styles.familyButtonSelected,
                     ]}
-                    onPress={() => setFamilyMember('')}
+                    onPress={() => {
+                      setFamilyMember('');
+                      setFamilyMemberCustomMode(true);
+                    }}
                   >
                     <Text
                       style={[
                         styles.familyButtonText,
-                        familyMember !== 'Mother' && familyMember !== 'Father' && familyMember !== 'Sister' && familyMember !== 'Brother' && familyMember !== 'Grandmother' && familyMember !== 'Grandfather' && familyMember !== 'Aunt' && familyMember !== 'Uncle' && familyMember !== '' && styles.familyButtonTextSelected,
+                        familyMemberCustomMode && styles.familyButtonTextSelected,
                       ]}
                     >
                       Other
                     </Text>
                   </TouchableOpacity>
                 </View>
-                {familyMember !== 'Mother' && familyMember !== 'Father' && familyMember !== 'Sister' && familyMember !== 'Brother' && familyMember !== 'Grandmother' && familyMember !== 'Grandfather' && familyMember !== 'Aunt' && familyMember !== 'Uncle' && (
+                {familyMemberCustomMode && (
                   <TextInput
                     style={styles.input}
                     placeholder="Enter family member name"
