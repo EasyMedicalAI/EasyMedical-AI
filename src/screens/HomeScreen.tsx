@@ -558,17 +558,9 @@ export default function HomeScreen() {
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>💊 Prescription Medications</Text>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TouchableOpacity onPress={() => {
-                    setEditData(userData);
-                    setEditingSection('prescriptionMedications');
-                  }}>
-                    <Text style={styles.editLink}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setAddingPrescriptionMed(!addingPrescriptionMed)}>
-                    <Text style={styles.editLink}>+ Add</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity onPress={() => setAddingPrescriptionMed(!addingPrescriptionMed)}>
+                  <Text style={styles.editLink}>+ Add</Text>
+                </TouchableOpacity>
               </View>
               {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) ? (
                 userData.prescriptionMedications.map((med, idx) => (
@@ -650,17 +642,9 @@ export default function HomeScreen() {
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>🌿 OTC Medications & Supplements</Text>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TouchableOpacity onPress={() => {
-                    setEditData(userData);
-                    setEditingSection('otcMedications');
-                  }}>
-                    <Text style={styles.editLink}>Edit</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => setAddingOtcMed(!addingOtcMed)}>
-                    <Text style={styles.editLink}>+ Add</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity onPress={() => setAddingOtcMed(!addingOtcMed)}>
+                  <Text style={styles.editLink}>+ Add</Text>
+                </TouchableOpacity>
               </View>
               {(userData.otcMedications && userData.otcMedications.length > 0) ? (
                 userData.otcMedications.map((med, idx) => (
