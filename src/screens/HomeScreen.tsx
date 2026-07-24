@@ -58,6 +58,27 @@ export default function HomeScreen() {
 
   const abnormalResults = getAbnormalResults();
 
+  const calculateAge = (birthday: string): number => {
+    if (!birthday) return 0;
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const parts = birthday.split(' ');
+    const monthStr = parts[0];
+    const dayStr = parseInt(parts[1]);
+    const yearStr = parseInt(parts[2]);
+    const monthIdx = months.indexOf(monthStr);
+
+    const birthDate = new Date(yearStr, monthIdx, dayStr);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dayStr)) {
+      age--;
+    }
+
+    return age;
+  };
+
   const handleSaveEdit = async () => {
     try {
       if (editingSection === 'appointments' && appointmentDateTime && appointmentDoctorName && appointmentSpecialty) {
@@ -213,7 +234,9 @@ export default function HomeScreen() {
                 <Text style={styles.vitalLabel}>
                   <Text style={styles.vitalEmoji}>🎂</Text>
                   {' Birthday: '}
-                  <Text style={styles.vitalValue}>{userData.birthday || '—'}</Text>
+                  <Text style={styles.vitalValue}>
+                    {userData.birthday ? `${userData.birthday} (${calculateAge(userData.birthday)})` : '—'}
+                  </Text>
                 </Text>
               </View>
               <TouchableOpacity onPress={() => {
