@@ -9,8 +9,8 @@ import {
   Modal,
   TextInput,
   Alert,
-  DatePickerIOS,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
@@ -1279,14 +1279,17 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.datePickerContent}>
-            <DatePickerIOS
-              date={new Date(historyDateYear, historyDateMonth, historyDateDay)}
-              onDateChange={(date) => {
-                setHistoryDateMonth(date.getMonth());
-                setHistoryDateDay(date.getDate());
-                setHistoryDateYear(date.getFullYear());
-              }}
+            <DateTimePicker
+              value={new Date(historyDateYear, historyDateMonth, historyDateDay)}
               mode="date"
+              display="spinner"
+              onChange={(event, selectedDate) => {
+                if (selectedDate) {
+                  setHistoryDateMonth(selectedDate.getMonth());
+                  setHistoryDateDay(selectedDate.getDate());
+                  setHistoryDateYear(selectedDate.getFullYear());
+                }
+              }}
             />
             <TouchableOpacity
               style={styles.datePickerDoneButton}
