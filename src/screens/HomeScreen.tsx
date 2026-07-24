@@ -244,6 +244,7 @@ export default function HomeScreen() {
         await updateUserData(editData);
       }
       setEditingSection(null);
+      setEditingHistoryType(null);
       Alert.alert('Success', 'Changes saved');
     } catch (error) {
       Alert.alert('Error', 'Failed to save changes');
