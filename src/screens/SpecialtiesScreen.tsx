@@ -69,28 +69,26 @@ export default function SpecialtiesScreen() {
 
       {/* Specialties Filter */}
       <View style={styles.specialtiesFilterContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.specialtiesScroll}>
-          {specialties.map(specialty => {
-            const isSelected = selectedSpecialties.includes(specialty);
-            return (
-              <TouchableOpacity
-                key={specialty}
-                style={[
-                  styles.specialtyButton,
-                  isSelected && styles.specialtyButtonSelected
-                ]}
-                onPress={() => toggleSpecialty(specialty)}
-              >
-                <Text style={[
-                  styles.specialtyButtonText,
-                  isSelected && styles.specialtyButtonTextSelected
-                ]}>
-                  {getSpecialtyEmoji(specialty)} {specialty}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+        {[...specialties].sort().map(specialty => {
+          const isSelected = selectedSpecialties.includes(specialty);
+          return (
+            <TouchableOpacity
+              key={specialty}
+              style={[
+                styles.specialtyButtonVertical,
+                isSelected && styles.specialtyButtonVerticalSelected
+              ]}
+              onPress={() => toggleSpecialty(specialty)}
+            >
+              <Text style={[
+                styles.specialtyButtonVerticalText,
+                isSelected && styles.specialtyButtonVerticalTextSelected
+              ]}>
+                {getSpecialtyEmoji(specialty)} {specialty}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Records Display */}
@@ -203,6 +201,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: '#FFF',
     marginBottom: 16,
+    gap: 8,
   },
   specialtiesScroll: {
     flexGrow: 0,
@@ -223,6 +222,25 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   specialtyButtonTextSelected: {
+    color: '#FFF',
+  },
+  specialtyButtonVertical: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#E8E8E8',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  specialtyButtonVerticalSelected: {
+    backgroundColor: '#000',
+  },
+  specialtyButtonVerticalText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+  },
+  specialtyButtonVerticalTextSelected: {
     color: '#FFF',
   },
   recordsContainer: {
