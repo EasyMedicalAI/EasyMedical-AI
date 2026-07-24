@@ -348,7 +348,7 @@ export default function HomeScreen() {
 
       setEditData({
         ...editData,
-        medications: [...(editData.medications || []), ...mockMedications],
+        prescriptionMedications: [...(editData.prescriptionMedications || []), ...mockMedications],
       });
 
       Alert.alert('Success', 'Medication information extracted from photo!');
@@ -1673,10 +1673,11 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={editingSection === 'medications'} animationType="slide" onRequestClose={handleCancel}>
+      {/* Prescription Medications Modal */}
+      <Modal visible={editingSection === 'prescriptionMedications'} animationType="slide" onRequestClose={handleCancel}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Medications</Text>
+            <Text style={styles.modalTitle}>Edit Prescription Medications</Text>
             <TouchableOpacity onPress={handleCancel}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
@@ -1700,7 +1701,6 @@ export default function HomeScreen() {
                   </>
                 )}
               </TouchableOpacity>
-
             </View>
 
             {/* Manual Entry Section */}
@@ -1709,10 +1709,10 @@ export default function HomeScreen() {
               <TextInput
                 style={[styles.input, { minHeight: 120 }]}
                 multiline
-                value={editData.medications?.join('\n') || ''}
+                value={editData.prescriptionMedications?.join('\n') || ''}
                 onChangeText={(text) => setEditData({
                   ...editData,
-                  medications: text.split('\n').filter(m => m.trim())
+                  prescriptionMedications: text.split('\n').filter(m => m.trim())
                 })}
                 placeholder="Medication 1&#10;Medication 2"
               />
@@ -1727,6 +1727,39 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* OTC Medications Modal */}
+      <Modal visible={editingSection === 'otcMedications'} animationType="slide" onRequestClose={handleCancel}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Edit OTC Medications & Supplements</Text>
+            <TouchableOpacity onPress={handleCancel}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalContent}>
+            <Text style={styles.label}>OTC Medications & Supplements (one per line)</Text>
+            <TextInput
+              style={[styles.input, { minHeight: 120 }]}
+              multiline
+              value={editData.otcMedications?.join('\n') || ''}
+              onChangeText={(text) => setEditData({
+                ...editData,
+                otcMedications: text.split('\n').filter(m => m.trim())
+              })}
+              placeholder="Medication/Supplement 1&#10;Medication/Supplement 2"
+            />
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
+                <Text style={styles.buttonTextWhite}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
