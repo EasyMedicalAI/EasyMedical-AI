@@ -73,7 +73,7 @@ export default function SpecialtiesScreen() {
         <Text style={styles.appName}>EasyMedical</Text>
       </View>
       <View style={styles.header}>
-        <Text style={styles.title}>By Specialty</Text>
+        <Text style={styles.title}>My Health Records</Text>
         <Text style={styles.subtitle}>{specialties.length} specialties available</Text>
       </View>
 
