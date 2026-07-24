@@ -9,8 +9,8 @@ import {
   Modal,
   TextInput,
   Alert,
-  Picker,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
