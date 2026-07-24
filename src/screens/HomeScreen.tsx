@@ -47,6 +47,7 @@ export default function HomeScreen() {
   const [selectedBirthdayDay, setSelectedBirthdayDay] = useState(1);
   const [selectedBirthdayYear, setSelectedBirthdayYear] = useState(1990);
   const [selectedGender, setSelectedGender] = useState('Other');
+  const [customGender, setCustomGender] = useState('');
 
   if (loading) {
     return (
@@ -271,7 +272,14 @@ export default function HomeScreen() {
               </View>
               <TouchableOpacity onPress={() => {
                 setEditData(userData);
-                setSelectedGender(userData.gender || 'Other');
+                const currentGender = userData.gender || 'Other';
+                if (['Male', 'Female', 'Other'].includes(currentGender)) {
+                  setSelectedGender(currentGender);
+                  setCustomGender('');
+                } else {
+                  setSelectedGender('Other');
+                  setCustomGender(currentGender);
+                }
                 setEditingSection('gender');
               }}>
                 <Text style={styles.editLink}>Edit</Text>
@@ -808,6 +816,15 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+            {selectedGender === 'Other' && (
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter your gender"
+                placeholderTextColor="#999"
+                value={customGender}
+                onChangeText={setCustomGender}
+              />
+            )}
             <View style={styles.buttonContainer}>
               <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
                 <Text style={styles.buttonText}>Cancel</Text>
@@ -815,7 +832,9 @@ export default function HomeScreen() {
               <TouchableOpacity
                 style={styles.saveButton}
                 onPress={() => {
-                  updateUserData({ ...editData, gender: selectedGender });
+                  const genderToSave = selectedGender === 'Other' && customGender ? customGender : selectedGender;
+                  updateUserData({ ...editData, gender: genderToSave });
+                  setCustomGender('');
                   setEditingSection(null);
                 }}
               >
