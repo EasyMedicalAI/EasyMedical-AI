@@ -817,13 +817,17 @@ export default function HomeScreen() {
               ))}
             </View>
             {selectedGender === 'Other' && (
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter your gender"
-                placeholderTextColor="#999"
-                value={customGender}
-                onChangeText={setCustomGender}
-              />
+              <View style={styles.customGenderContainer}>
+                <Text style={styles.customGenderLabel}>Enter your gender:</Text>
+                <TextInput
+                  style={styles.customGenderInput}
+                  placeholder="e.g., Non-binary, Genderqueer"
+                  placeholderTextColor="#BBB"
+                  value={customGender}
+                  onChangeText={setCustomGender}
+                  autoFocus
+                />
+              </View>
             )}
             <View style={styles.buttonContainer}>
               <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
@@ -2122,5 +2126,29 @@ const styles = StyleSheet.create({
   pickerOptionTextSelected: {
     color: '#FFF',
     fontWeight: '600',
+  },
+  customGenderContainer: {
+    marginBottom: 24,
+    padding: 16,
+    backgroundColor: '#F0F7FF',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+  },
+  customGenderLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 12,
+  },
+  customGenderInput: {
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 16,
+    color: '#000',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    fontWeight: '500',
   },
 });
