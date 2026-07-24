@@ -59,6 +59,10 @@ export default function HomeScreen() {
   const [hospitalizationDate, setHospitalizationDate] = useState('');
   const [hospitalizationReason, setHospitalizationReason] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [showHistoryDatePicker, setShowHistoryDatePicker] = useState(false);
+  const [historyDateMonth, setHistoryDateMonth] = useState(0);
+  const [historyDateDay, setHistoryDateDay] = useState(1);
+  const [historyDateYear, setHistoryDateYear] = useState(new Date().getFullYear());
 
   if (loading) {
     return (
@@ -1165,13 +1169,27 @@ export default function HomeScreen() {
                   onChangeText={setSurgeryName}
                 />
                 <Text style={styles.label}>Date</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., January 15, 2020"
-                  placeholderTextColor="#999"
-                  value={surgeryDate}
-                  onChangeText={setSurgeryDate}
-                />
+                <TouchableOpacity
+                  style={styles.dateTimeButton}
+                  onPress={() => {
+                    if (surgeryDate) {
+                      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                      const parts = surgeryDate.split(' ');
+                      const monthStr = parts[0];
+                      const dayStr = parseInt(parts[1].replace(',', ''));
+                      const yearStr = parseInt(parts[2]);
+                      const monthIdx = months.indexOf(monthStr);
+                      setHistoryDateMonth(monthIdx >= 0 ? monthIdx : 0);
+                      setHistoryDateDay(dayStr || 1);
+                      setHistoryDateYear(yearStr || new Date().getFullYear());
+                    }
+                    setShowHistoryDatePicker(true);
+                  }}
+                >
+                  <Text style={styles.dateTimeButtonText}>
+                    {surgeryDate || 'Select date...'}
+                  </Text>
+                </TouchableOpacity>
               </>
             )}
             {editingHistoryType === 'family' && (
@@ -1231,13 +1249,27 @@ export default function HomeScreen() {
                   onChangeText={setHospitalizationReason}
                 />
                 <Text style={styles.label}>Date</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., March 2021"
-                  placeholderTextColor="#999"
-                  value={hospitalizationDate}
-                  onChangeText={setHospitalizationDate}
-                />
+                <TouchableOpacity
+                  style={styles.dateTimeButton}
+                  onPress={() => {
+                    if (hospitalizationDate) {
+                      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                      const parts = hospitalizationDate.split(' ');
+                      const monthStr = parts[0];
+                      const dayStr = parseInt(parts[1]?.replace(',', '') || '1');
+                      const yearStr = parseInt(parts[2] || String(new Date().getFullYear()));
+                      const monthIdx = months.indexOf(monthStr);
+                      setHistoryDateMonth(monthIdx >= 0 ? monthIdx : 0);
+                      setHistoryDateDay(dayStr || 1);
+                      setHistoryDateYear(yearStr || new Date().getFullYear());
+                    }
+                    setShowHistoryDatePicker(true);
+                  }}
+                >
+                  <Text style={styles.dateTimeButtonText}>
+                    {hospitalizationDate || 'Select date...'}
+                  </Text>
+                </TouchableOpacity>
               </>
             )}
             <View style={styles.buttonContainer}>
@@ -1254,6 +1286,88 @@ export default function HomeScreen() {
               </TouchableOpacity>
             )}
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* History Date Picker Modal */}
+      <Modal visible={showHistoryDatePicker} animationType="slide" onRequestClose={() => setShowHistoryDatePicker(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Date</Text>
+            <TouchableOpacity onPress={() => setShowHistoryDatePicker(false)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.datePickerContent}>
+            <View style={styles.pickerRow}>
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Month</Text>
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                  {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
+                    <TouchableOpacity
+                      key={month}
+                      style={[styles.pickerOption, historyDateMonth === idx && styles.pickerOptionSelected]}
+                      onPress={() => setHistoryDateMonth(idx)}
+                    >
+                      <Text style={[styles.pickerOptionText, historyDateMonth === idx && styles.pickerOptionTextSelected]}>
+                        {month}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Day</Text>
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                    <TouchableOpacity
+                      key={day}
+                      style={[styles.pickerOption, historyDateDay === day && styles.pickerOptionSelected]}
+                      onPress={() => setHistoryDateDay(day)}
+                    >
+                      <Text style={[styles.pickerOptionText, historyDateDay === day && styles.pickerOptionTextSelected]}>
+                        {day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Year</Text>
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                  {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                    <TouchableOpacity
+                      key={year}
+                      style={[styles.pickerOption, historyDateYear === year && styles.pickerOptionSelected]}
+                      onPress={() => setHistoryDateYear(year)}
+                    >
+                      <Text style={[styles.pickerOptionText, historyDateYear === year && styles.pickerOptionTextSelected]}>
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.datePickerDoneButton}
+              onPress={() => {
+                const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                const formattedDate = `${months[historyDateMonth]} ${historyDateDay}, ${historyDateYear}`;
+                if (editingHistoryType === 'surgical') {
+                  setSurgeryDate(formattedDate);
+                } else if (editingHistoryType === 'hospitalization') {
+                  setHospitalizationDate(formattedDate);
+                }
+                setShowHistoryDatePicker(false);
+              }}
+            >
+              <Text style={styles.datePickerDoneButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
 
