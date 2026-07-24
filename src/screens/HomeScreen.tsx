@@ -43,7 +43,9 @@ export default function HomeScreen() {
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [editingEmergencyContactId, setEditingEmergencyContactId] = useState<number | null>(null);
-  const [selectedAge, setSelectedAge] = useState(35);
+  const [selectedBirthdayMonth, setSelectedBirthdayMonth] = useState(0);
+  const [selectedBirthdayDay, setSelectedBirthdayDay] = useState(1);
+  const [selectedBirthdayYear, setSelectedBirthdayYear] = useState(1990);
   const [selectedGender, setSelectedGender] = useState('Other');
 
   if (loading) {
@@ -205,19 +207,29 @@ export default function HomeScreen() {
           <Text style={styles.sectionTitle}>Vitals & Metrics</Text>
 
           <View style={styles.card}>
-            {/* Age */}
+            {/* Birthday */}
             <View style={styles.vitalRow}>
               <View style={styles.vitalContent}>
                 <Text style={styles.vitalLabel}>
                   <Text style={styles.vitalEmoji}>🎂</Text>
-                  {' Age: '}
-                  <Text style={styles.vitalValue}>{userData.age || '—'}</Text>
+                  {' Birthday: '}
+                  <Text style={styles.vitalValue}>{userData.birthday || '—'}</Text>
                 </Text>
               </View>
               <TouchableOpacity onPress={() => {
                 setEditData(userData);
-                setSelectedAge(parseInt(userData.age) || 35);
-                setEditingSection('age');
+                if (userData.birthday) {
+                  const parts = userData.birthday.split(' ');
+                  const monthStr = parts[0];
+                  const dayStr = parseInt(parts[1]);
+                  const yearStr = parseInt(parts[2]);
+                  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                  const monthIdx = months.indexOf(monthStr);
+                  setSelectedBirthdayMonth(monthIdx >= 0 ? monthIdx : 0);
+                  setSelectedBirthdayDay(dayStr || 1);
+                  setSelectedBirthdayYear(yearStr || 1990);
+                }
+                setEditingSection('birthday');
               }}>
                 <Text style={styles.editLink}>Edit</Text>
               </TouchableOpacity>
@@ -656,24 +668,72 @@ export default function HomeScreen() {
 
       {/* EDIT MODALS */}
       {/* Blood Type Modal */}
-      {/* Age Modal */}
-      <Modal visible={editingSection === 'age'} animationType="slide" onRequestClose={handleCancel}>
+      {/* Birthday Modal */}
+      <Modal visible={editingSection === 'birthday'} animationType="slide" onRequestClose={handleCancel}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Enter Age</Text>
+            <Text style={styles.modalTitle}>Select Birthday</Text>
             <TouchableOpacity onPress={handleCancel}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.modalContent}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Age"
-              placeholderTextColor="#999"
-              keyboardType="number-pad"
-              value={String(selectedAge)}
-              onChangeText={(text) => setSelectedAge(parseInt(text) || 0)}
-            />
+            <View style={styles.datePickerContainer}>
+              {/* Month Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Month</Text>
+                <ScrollView style={styles.picker} scrollEnabled>
+                  {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
+                    <TouchableOpacity
+                      key={month}
+                      style={[styles.pickerOption, selectedBirthdayMonth === idx && styles.pickerOptionSelected]}
+                      onPress={() => setSelectedBirthdayMonth(idx)}
+                    >
+                      <Text style={[styles.pickerOptionText, selectedBirthdayMonth === idx && styles.pickerOptionTextSelected]}>
+                        {month}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Day Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Day</Text>
+                <ScrollView style={styles.picker} scrollEnabled>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                    <TouchableOpacity
+                      key={day}
+                      style={[styles.pickerOption, selectedBirthdayDay === day && styles.pickerOptionSelected]}
+                      onPress={() => setSelectedBirthdayDay(day)}
+                    >
+                      <Text style={[styles.pickerOptionText, selectedBirthdayDay === day && styles.pickerOptionTextSelected]}>
+                        {day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Year Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Year</Text>
+                <ScrollView style={styles.picker} scrollEnabled>
+                  {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map((year) => (
+                    <TouchableOpacity
+                      key={year}
+                      style={[styles.pickerOption, selectedBirthdayYear === year && styles.pickerOptionSelected]}
+                      onPress={() => setSelectedBirthdayYear(year)}
+                    >
+                      <Text style={[styles.pickerOptionText, selectedBirthdayYear === year && styles.pickerOptionTextSelected]}>
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
             <View style={styles.buttonContainer}>
               <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
                 <Text style={styles.buttonText}>Cancel</Text>
@@ -681,7 +741,9 @@ export default function HomeScreen() {
               <TouchableOpacity
                 style={styles.saveButton}
                 onPress={() => {
-                  updateUserData({ ...editData, age: String(selectedAge) });
+                  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                  const formattedBirthday = `${months[selectedBirthdayMonth]} ${selectedBirthdayDay}, ${selectedBirthdayYear}`;
+                  updateUserData({ ...editData, birthday: formattedBirthday });
                   setEditingSection(null);
                 }}
               >
@@ -1976,5 +2038,47 @@ const styles = StyleSheet.create({
   },
   genderButtonTextSelected: {
     color: '#FFF',
+  },
+  datePickerContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    marginBottom: 24,
+    height: 200,
+  },
+  pickerColumn: {
+    flex: 1,
+    marginHorizontal: 8,
+  },
+  pickerLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  picker: {
+    flex: 1,
+    borderRadius: 8,
+    backgroundColor: '#F5F5F5',
+  },
+  pickerOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerOptionSelected: {
+    backgroundColor: '#007AFF',
+    borderRadius: 6,
+  },
+  pickerOptionText: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  pickerOptionTextSelected: {
+    color: '#FFF',
+    fontWeight: '600',
   },
 });
