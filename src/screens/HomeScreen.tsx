@@ -10,18 +10,12 @@ import {
   TextInput,
   Alert,
   Image,
+  Platform,
 } from 'react-native';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
 import { claudeService } from '@/services/claudeService';
-
-let ImagePicker: any = null;
-try {
-  ImagePicker = require('expo-image-picker');
-} catch (e) {
-  console.warn('ImagePicker module error:', e);
-}
 
 export default function HomeScreen() {
   const { records, userData, loading, getAbnormalResults, updateUserData } = useRecords();
@@ -309,16 +303,11 @@ export default function HomeScreen() {
 
 
   const handleMedicationPhotoCapture = async () => {
-    if (!ImagePicker) {
-      Alert.alert('Camera', 'Camera not available on this device');
-      return;
-    }
-
     try {
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      const ImagePickerModule = require('expo-image-picker');
+      const result = await ImagePickerModule.launchCameraAsync({
+        mediaTypes: ImagePickerModule.MediaTypeOptions.Images,
         quality: 0.8,
-        base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -326,21 +315,16 @@ export default function HomeScreen() {
         setMedicationInputMode('photo');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to access camera: ' + String(error).substring(0, 100));
+      Alert.alert('Camera Not Available', 'Camera is not available in your current environment. Use "Type Details" instead to add medications manually.');
     }
   };
 
   const handleMedicationPhotoLibrary = async () => {
-    if (!ImagePicker) {
-      Alert.alert('Photo Library', 'Photo library not available on this device');
-      return;
-    }
-
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      const ImagePickerModule = require('expo-image-picker');
+      const result = await ImagePickerModule.launchImageLibraryAsync({
+        mediaTypes: ImagePickerModule.MediaTypeOptions.Images,
         quality: 0.8,
-        base64: true,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -348,7 +332,7 @@ export default function HomeScreen() {
         setMedicationInputMode('photo');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to access photo library: ' + String(error).substring(0, 100));
+      Alert.alert('Photo Library Not Available', 'Photo library is not available in your current environment. Use "Type Details" instead to add medications manually.');
     }
   };
 
@@ -2539,7 +2523,7 @@ export default function HomeScreen() {
                   <Text style={styles.methodButtonIcon}>📷</Text>
                   <View style={styles.methodButtonContent}>
                     <Text style={styles.methodButtonText}>Take Photo</Text>
-                    <Text style={styles.methodButtonDesc}>Photograph the pill bottle</Text>
+                    <Text style={styles.methodButtonDesc}>Photograph the pill bottle (real device)</Text>
                   </View>
                 </TouchableOpacity>
 
@@ -2547,7 +2531,7 @@ export default function HomeScreen() {
                   <Text style={styles.methodButtonIcon}>🖼️</Text>
                   <View style={styles.methodButtonContent}>
                     <Text style={styles.methodButtonText}>Choose Photo</Text>
-                    <Text style={styles.methodButtonDesc}>Select from photo library</Text>
+                    <Text style={styles.methodButtonDesc}>Select from photo library (real device)</Text>
                   </View>
                 </TouchableOpacity>
 
@@ -2555,7 +2539,7 @@ export default function HomeScreen() {
                   <Text style={styles.methodButtonIcon}>✍️</Text>
                   <View style={styles.methodButtonContent}>
                     <Text style={styles.methodButtonText}>Type Details</Text>
-                    <Text style={styles.methodButtonDesc}>Manually enter medication name</Text>
+                    <Text style={styles.methodButtonDesc}>Always available - enter medication name</Text>
                   </View>
                 </TouchableOpacity>
               </>
