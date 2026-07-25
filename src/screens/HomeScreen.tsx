@@ -14,8 +14,14 @@ import {
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
-import * as ImagePicker from 'expo-image-picker';
 import { claudeService } from '@/services/claudeService';
+
+let ImagePicker: any = null;
+try {
+  ImagePicker = require('expo-image-picker');
+} catch (e) {
+  console.warn('ImagePicker module error:', e);
+}
 
 export default function HomeScreen() {
   const { records, userData, loading, getAbnormalResults, updateUserData } = useRecords();
@@ -303,13 +309,12 @@ export default function HomeScreen() {
 
 
   const handleMedicationPhotoCapture = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission', 'Camera permission is required');
-        return;
-      }
+    if (!ImagePicker) {
+      Alert.alert('Camera', 'Camera not available on this device');
+      return;
+    }
 
+    try {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.8,
@@ -321,18 +326,17 @@ export default function HomeScreen() {
         setMedicationInputMode('photo');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to access camera');
+      Alert.alert('Error', 'Failed to access camera: ' + String(error).substring(0, 100));
     }
   };
 
   const handleMedicationPhotoLibrary = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission', 'Photo library permission is required');
-        return;
-      }
+    if (!ImagePicker) {
+      Alert.alert('Photo Library', 'Photo library not available on this device');
+      return;
+    }
 
+    try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 0.8,
@@ -344,7 +348,7 @@ export default function HomeScreen() {
         setMedicationInputMode('photo');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to access photo library');
+      Alert.alert('Error', 'Failed to access photo library: ' + String(error).substring(0, 100));
     }
   };
 
