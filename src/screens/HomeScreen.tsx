@@ -706,6 +706,17 @@ export default function HomeScreen() {
                         <TouchableOpacity onPress={() => setEditingPrescriptionMedIdx(null)}>
                           <Text style={styles.editLink}>✕</Text>
                         </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            const updated = (userData.prescriptionMedications || []).filter((_, i) => i !== idx);
+                            const updatedData = { ...editData, prescriptionMedications: updated };
+                            setEditData(updatedData);
+                            await updateUserData(updatedData);
+                            setEditingPrescriptionMedIdx(null);
+                          }}
+                        >
+                          <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
+                        </TouchableOpacity>
                       </>
                     ) : (
                       <TouchableOpacity onPress={() => {
@@ -764,6 +775,17 @@ export default function HomeScreen() {
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => setEditingOtcMedIdx(null)}>
                           <Text style={styles.editLink}>✕</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            const updated = (userData.otcMedications || []).filter((_, i) => i !== idx);
+                            const updatedData = { ...editData, otcMedications: updated };
+                            setEditData(updatedData);
+                            await updateUserData(updatedData);
+                            setEditingOtcMedIdx(null);
+                          }}
+                        >
+                          <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
                         </TouchableOpacity>
                       </>
                     ) : (
