@@ -93,6 +93,8 @@ export default function HomeScreen() {
   const [medicationPhotoUri, setMedicationPhotoUri] = useState<string | null>(null);
   const [analyzingMedication, setAnalyzingMedication] = useState(false);
   const [isCurrentHealthEditMode, setIsCurrentHealthEditMode] = useState(false);
+  const [isVitalsEditMode, setIsVitalsEditMode] = useState(false);
+  const [isHealthHistoryEditMode, setIsHealthHistoryEditMode] = useState(false);
 
   if (loading) {
     return (
@@ -508,7 +510,15 @@ export default function HomeScreen() {
 
         {/* VITALS & METRICS Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Vitals & Metrics</Text>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardIcon}>📊</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>Vitals & Metrics</Text>
+            </View>
+            <TouchableOpacity onPress={() => setIsVitalsEditMode(!isVitalsEditMode)}>
+              <Text style={styles.editButton}>{isVitalsEditMode ? 'Done' : 'Edit'}</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.card}>
             {/* Birthday */}
@@ -522,23 +532,25 @@ export default function HomeScreen() {
                   </Text>
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => {
-                setEditData(userData);
-                if (userData.birthday) {
-                  const parts = userData.birthday.split(' ');
-                  const monthStr = parts[0];
-                  const dayStr = parseInt(parts[1]);
-                  const yearStr = parseInt(parts[2]);
-                  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                  const monthIdx = months.indexOf(monthStr);
-                  setSelectedBirthdayMonth(monthIdx >= 0 ? monthIdx : 0);
-                  setSelectedBirthdayDay(dayStr || 1);
-                  setSelectedBirthdayYear(yearStr || 1990);
-                }
-                setEditingSection('birthday');
-              }}>
-                <Text style={styles.editLink}>Edit</Text>
-              </TouchableOpacity>
+              {isVitalsEditMode && (
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  if (userData.birthday) {
+                    const parts = userData.birthday.split(' ');
+                    const monthStr = parts[0];
+                    const dayStr = parseInt(parts[1]);
+                    const yearStr = parseInt(parts[2]);
+                    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+                    const monthIdx = months.indexOf(monthStr);
+                    setSelectedBirthdayMonth(monthIdx >= 0 ? monthIdx : 0);
+                    setSelectedBirthdayDay(dayStr || 1);
+                    setSelectedBirthdayYear(yearStr || 1990);
+                  }
+                  setEditingSection('birthday');
+                }}>
+                  <Text style={styles.editLink}>Edit</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.divider} />
@@ -552,20 +564,22 @@ export default function HomeScreen() {
                   <Text style={styles.vitalValue}>{userData.gender || '—'}</Text>
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => {
-                setEditData(userData);
-                const currentGender = userData.gender || 'Other';
-                if (['Male', 'Female', 'Other'].includes(currentGender)) {
-                  setSelectedGender(currentGender);
-                  setCustomGender('');
-                } else {
-                  setSelectedGender('Other');
-                  setCustomGender(currentGender);
-                }
-                setEditingSection('gender');
-              }}>
-                <Text style={styles.editLink}>Edit</Text>
-              </TouchableOpacity>
+              {isVitalsEditMode && (
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  const currentGender = userData.gender || 'Other';
+                  if (['Male', 'Female', 'Other'].includes(currentGender)) {
+                    setSelectedGender(currentGender);
+                    setCustomGender('');
+                  } else {
+                    setSelectedGender('Other');
+                    setCustomGender(currentGender);
+                  }
+                  setEditingSection('gender');
+                }}>
+                  <Text style={styles.editLink}>Edit</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.divider} />
@@ -581,12 +595,14 @@ export default function HomeScreen() {
                   </Text>
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => {
-                setEditData(userData);
-                setEditingSection('height');
-              }}>
-                <Text style={styles.editLink}>Edit</Text>
-              </TouchableOpacity>
+              {isVitalsEditMode && (
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  setEditingSection('height');
+                }}>
+                  <Text style={styles.editLink}>Edit</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.divider} />
@@ -602,12 +618,14 @@ export default function HomeScreen() {
                   </Text>
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => {
-                setEditData(userData);
-                setEditingSection('weight');
-              }}>
-                <Text style={styles.editLink}>Edit</Text>
-              </TouchableOpacity>
+              {isVitalsEditMode && (
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  setEditingSection('weight');
+                }}>
+                  <Text style={styles.editLink}>Edit</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.divider} />
@@ -621,12 +639,14 @@ export default function HomeScreen() {
                   <Text style={styles.vitalValue}>{userData.vitals?.bloodPressure}</Text>
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => {
-                setEditData(userData);
-                setEditingSection('bloodPressure');
-              }}>
-                <Text style={styles.editLink}>Edit</Text>
-              </TouchableOpacity>
+              {isVitalsEditMode && (
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  setEditingSection('bloodPressure');
+                }}>
+                  <Text style={styles.editLink}>Edit</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.divider} />
@@ -640,12 +660,14 @@ export default function HomeScreen() {
                   <Text style={styles.vitalValue}>{userData.bloodType}</Text>
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => {
-                setEditData(userData);
-                setEditingSection('bloodType');
-              }}>
-                <Text style={styles.editLink}>Edit</Text>
-              </TouchableOpacity>
+              {isVitalsEditMode && (
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  setEditingSection('bloodType');
+                }}>
+                  <Text style={styles.editLink}>Edit</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -1119,6 +1141,9 @@ export default function HomeScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>Health History</Text>
             </View>
+            <TouchableOpacity onPress={() => setIsHealthHistoryEditMode(!isHealthHistoryEditMode)}>
+              <Text style={styles.editButton}>{isHealthHistoryEditMode ? 'Done' : 'Edit'}</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.card}>
@@ -1126,15 +1151,17 @@ export default function HomeScreen() {
             <View style={styles.historyCategory}>
               <View style={styles.historyCategoryHeader}>
                 <Text style={styles.historyCategoryTitle}>🔧 Surgical History</Text>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingHistoryType('surgical');
-                  setEditingIndex(null);
-                  setSurgeryDate('');
-                  setSurgeryName('');
-                }}>
-                  <Text style={styles.addLink}>+ Add</Text>
-                </TouchableOpacity>
+                {isHealthHistoryEditMode && (
+                  <TouchableOpacity onPress={() => {
+                    setEditData(userData);
+                    setEditingHistoryType('surgical');
+                    setEditingIndex(null);
+                    setSurgeryDate('');
+                    setSurgeryName('');
+                  }}>
+                    <Text style={styles.addLink}>+ Add</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               {userData.surgicalHistory && userData.surgicalHistory.length > 0 ? (
                 userData.surgicalHistory.map((surgery, idx) => (
@@ -1143,15 +1170,17 @@ export default function HomeScreen() {
                       <Text style={styles.entryTitle}>{surgery.surgeryName}</Text>
                       <Text style={styles.entryMeta}>{surgery.date}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => {
-                      setEditData(userData);
-                      setEditingHistoryType('surgical');
-                      setEditingIndex(idx);
-                      setSurgeryDate(surgery.date);
-                      setSurgeryName(surgery.surgeryName);
-                    }}>
-                      <Text style={styles.editLink}>Edit</Text>
-                    </TouchableOpacity>
+                    {isHealthHistoryEditMode && (
+                      <TouchableOpacity onPress={() => {
+                        setEditData(userData);
+                        setEditingHistoryType('surgical');
+                        setEditingIndex(idx);
+                        setSurgeryDate(surgery.date);
+                        setSurgeryName(surgery.surgeryName);
+                      }}>
+                        <Text style={styles.editLink}>Edit</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))
               ) : (
@@ -1165,15 +1194,17 @@ export default function HomeScreen() {
             <View style={styles.historyCategory}>
               <View style={styles.historyCategoryHeader}>
                 <Text style={styles.historyCategoryTitle}>👨‍👩‍👧 Family History</Text>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingHistoryType('family');
-                  setEditingIndex(null);
-                  setFamilyMember('');
-                  setFamilyCondition('');
-                }}>
-                  <Text style={styles.addLink}>+ Add</Text>
-                </TouchableOpacity>
+                {isHealthHistoryEditMode && (
+                  <TouchableOpacity onPress={() => {
+                    setEditData(userData);
+                    setEditingHistoryType('family');
+                    setEditingIndex(null);
+                    setFamilyMember('');
+                    setFamilyCondition('');
+                  }}>
+                    <Text style={styles.addLink}>+ Add</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               {userData.familyHistory && userData.familyHistory.length > 0 ? (
                 Object.entries(
@@ -1191,15 +1222,17 @@ export default function HomeScreen() {
                       {conditions.map((item, condIdx) => (
                         <View key={item.idx} style={{ marginTop: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Text style={styles.entryMeta}>{condIdx + 1}. {item.condition}</Text>
-                          <TouchableOpacity onPress={() => {
-                            setEditData(userData);
-                            setEditingHistoryType('family');
-                            setEditingIndex(item.idx);
-                            setFamilyMember(item.familyMember);
-                            setFamilyCondition(item.condition);
-                          }}>
-                            <Text style={styles.editLink}>Edit</Text>
-                          </TouchableOpacity>
+                          {isHealthHistoryEditMode && (
+                            <TouchableOpacity onPress={() => {
+                              setEditData(userData);
+                              setEditingHistoryType('family');
+                              setEditingIndex(item.idx);
+                              setFamilyMember(item.familyMember);
+                              setFamilyCondition(item.condition);
+                            }}>
+                              <Text style={styles.editLink}>Edit</Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
                       ))}
                     </View>
@@ -1216,27 +1249,31 @@ export default function HomeScreen() {
             <View style={styles.historyCategory}>
               <View style={styles.historyCategoryHeader}>
                 <Text style={styles.historyCategoryTitle}>📋 Past Conditions</Text>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingHistoryType('conditions');
-                  setEditingIndex(null);
-                  setConditionName('');
-                }}>
-                  <Text style={styles.addLink}>+ Add</Text>
-                </TouchableOpacity>
+                {isHealthHistoryEditMode && (
+                  <TouchableOpacity onPress={() => {
+                    setEditData(userData);
+                    setEditingHistoryType('conditions');
+                    setEditingIndex(null);
+                    setConditionName('');
+                  }}>
+                    <Text style={styles.addLink}>+ Add</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               {userData.pastConditions && userData.pastConditions.length > 0 ? (
                 userData.pastConditions.map((condition, idx) => (
                   <View key={idx} style={styles.historyEntry}>
                     <Text style={styles.entryTitle}>{condition}</Text>
-                    <TouchableOpacity onPress={() => {
-                      setEditData(userData);
-                      setEditingHistoryType('conditions');
-                      setEditingIndex(idx);
-                      setConditionName(condition);
-                    }}>
-                      <Text style={styles.editLink}>Edit</Text>
-                    </TouchableOpacity>
+                    {isHealthHistoryEditMode && (
+                      <TouchableOpacity onPress={() => {
+                        setEditData(userData);
+                        setEditingHistoryType('conditions');
+                        setEditingIndex(idx);
+                        setConditionName(condition);
+                      }}>
+                        <Text style={styles.editLink}>Edit</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))
               ) : (
@@ -1250,15 +1287,17 @@ export default function HomeScreen() {
             <View style={styles.historyCategory}>
               <View style={styles.historyCategoryHeader}>
                 <Text style={styles.historyCategoryTitle}>🏥 Hospitalizations</Text>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingHistoryType('hospitalization');
-                  setEditingIndex(null);
-                  setHospitalizationDate('');
-                  setHospitalizationReason('');
-                }}>
-                  <Text style={styles.addLink}>+ Add</Text>
-                </TouchableOpacity>
+                {isHealthHistoryEditMode && (
+                  <TouchableOpacity onPress={() => {
+                    setEditData(userData);
+                    setEditingHistoryType('hospitalization');
+                    setEditingIndex(null);
+                    setHospitalizationDate('');
+                    setHospitalizationReason('');
+                  }}>
+                    <Text style={styles.addLink}>+ Add</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               {userData.hospitalizations && userData.hospitalizations.length > 0 ? (
                 userData.hospitalizations.map((hospitalization, idx) => (
@@ -1267,15 +1306,17 @@ export default function HomeScreen() {
                       <Text style={styles.entryTitle}>{hospitalization.reason}</Text>
                       <Text style={styles.entryMeta}>{hospitalization.date}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => {
-                      setEditData(userData);
-                      setEditingHistoryType('hospitalization');
-                      setEditingIndex(idx);
-                      setHospitalizationDate(hospitalization.date);
-                      setHospitalizationReason(hospitalization.reason);
-                    }}>
-                      <Text style={styles.editLink}>Edit</Text>
-                    </TouchableOpacity>
+                    {isHealthHistoryEditMode && (
+                      <TouchableOpacity onPress={() => {
+                        setEditData(userData);
+                        setEditingHistoryType('hospitalization');
+                        setEditingIndex(idx);
+                        setHospitalizationDate(hospitalization.date);
+                        setHospitalizationReason(hospitalization.reason);
+                      }}>
+                        <Text style={styles.editLink}>Edit</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))
               ) : (
