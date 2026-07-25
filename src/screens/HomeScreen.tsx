@@ -14,13 +14,7 @@ import {
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
-
-let ImagePicker: any;
-try {
-  ImagePicker = require('expo-image-picker');
-} catch (e) {
-  console.warn('ImagePicker not available');
-}
+import * as ImagePicker from 'expo-image-picker';
 
 export default function HomeScreen() {
   const { records, userData, loading, getAbnormalResults, updateUserData } = useRecords();
@@ -306,11 +300,6 @@ export default function HomeScreen() {
   };
 
   const handleMedicationPhotoCapture = async () => {
-    if (!ImagePicker) {
-      Alert.alert('Error', 'Camera not available');
-      return;
-    }
-
     try {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -322,16 +311,11 @@ export default function HomeScreen() {
         setMedicationInputMode('photo');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to access camera');
+      Alert.alert('Error', 'Failed to access camera: ' + String(error));
     }
   };
 
   const handleMedicationPhotoLibrary = async () => {
-    if (!ImagePicker) {
-      Alert.alert('Error', 'Photo library not available');
-      return;
-    }
-
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -343,7 +327,7 @@ export default function HomeScreen() {
         setMedicationInputMode('photo');
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to access photo library');
+      Alert.alert('Error', 'Failed to access photo library: ' + String(error));
     }
   };
 
