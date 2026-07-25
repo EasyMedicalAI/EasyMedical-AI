@@ -92,6 +92,7 @@ export default function HomeScreen() {
   const [medicationInputText, setMedicationInputText] = useState('');
   const [medicationPhotoUri, setMedicationPhotoUri] = useState<string | null>(null);
   const [analyzingMedication, setAnalyzingMedication] = useState(false);
+  const [isCurrentHealthEditMode, setIsCurrentHealthEditMode] = useState(false);
 
   if (loading) {
     return (
@@ -663,6 +664,9 @@ export default function HomeScreen() {
               <Text style={styles.cardTitle}>Current Health</Text>
               <Text style={styles.cardMeta}>Complete health profile</Text>
             </View>
+            <TouchableOpacity onPress={() => setIsCurrentHealthEditMode(!isCurrentHealthEditMode)}>
+              <Text style={styles.editButton}>{isCurrentHealthEditMode ? 'Done' : 'Edit'}</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.card}>
@@ -670,12 +674,14 @@ export default function HomeScreen() {
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>💊 Prescription Medications</Text>
-                <TouchableOpacity onPress={() => {
-                  setMedicationType('prescription');
-                  setMedicationInputMode('method');
-                }}>
-                  <Text style={styles.editLink}>+ Add</Text>
-                </TouchableOpacity>
+                {isCurrentHealthEditMode && (
+                  <TouchableOpacity onPress={() => {
+                    setMedicationType('prescription');
+                    setMedicationInputMode('method');
+                  }}>
+                    <Text style={styles.editLink}>+ Add</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) ? (
                 userData.prescriptionMedications.map((med, idx) => (
@@ -718,14 +724,14 @@ export default function HomeScreen() {
                           <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
                         </TouchableOpacity>
                       </>
-                    ) : (
+                    ) : isCurrentHealthEditMode ? (
                       <TouchableOpacity onPress={() => {
                         setEditingPrescriptionMedIdx(idx);
                         setEditingPrescriptionMedValue(med);
                       }}>
                         <Text style={styles.editLink}>Edit</Text>
                       </TouchableOpacity>
-                    )}
+                    ) : null}
                   </View>
                 ))
               ) : (
@@ -740,12 +746,14 @@ export default function HomeScreen() {
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>🌿 OTC Medications & Supplements</Text>
-                <TouchableOpacity onPress={() => {
-                  setMedicationType('otc');
-                  setMedicationInputMode('method');
-                }}>
-                  <Text style={styles.editLink}>+ Add</Text>
-                </TouchableOpacity>
+                {isCurrentHealthEditMode && (
+                  <TouchableOpacity onPress={() => {
+                    setMedicationType('otc');
+                    setMedicationInputMode('method');
+                  }}>
+                    <Text style={styles.editLink}>+ Add</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               {(userData.otcMedications && userData.otcMedications.length > 0) ? (
                 userData.otcMedications.map((med, idx) => (
@@ -788,14 +796,14 @@ export default function HomeScreen() {
                           <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
                         </TouchableOpacity>
                       </>
-                    ) : (
+                    ) : isCurrentHealthEditMode ? (
                       <TouchableOpacity onPress={() => {
                         setEditingOtcMedIdx(idx);
                         setEditingOtcMedValue(med);
                       }}>
                         <Text style={styles.editLink}>Edit</Text>
                       </TouchableOpacity>
-                    )}
+                    ) : null}
                   </View>
                 ))
               ) : (
@@ -810,9 +818,11 @@ export default function HomeScreen() {
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>⚕️ Conditions</Text>
-                <TouchableOpacity onPress={() => setAddingCondition(!addingCondition)}>
-                  <Text style={styles.editLink}>+ Add</Text>
-                </TouchableOpacity>
+                {isCurrentHealthEditMode && (
+                  <TouchableOpacity onPress={() => setAddingCondition(!addingCondition)}>
+                    <Text style={styles.editLink}>+ Add</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               {(userData.conditions && userData.conditions.length > 0) ? (
                 userData.conditions.map((condition, idx) => (
@@ -844,14 +854,14 @@ export default function HomeScreen() {
                           <Text style={styles.editLink}>✕</Text>
                         </TouchableOpacity>
                       </>
-                    ) : (
+                    ) : isCurrentHealthEditMode ? (
                       <TouchableOpacity onPress={() => {
                         setEditingConditionIdx(idx);
                         setEditingConditionValue(condition);
                       }}>
                         <Text style={styles.editLink}>Edit</Text>
                       </TouchableOpacity>
-                    )}
+                    ) : null}
                   </View>
                 ))
               ) : (
@@ -894,9 +904,11 @@ export default function HomeScreen() {
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>⚠️ Allergies</Text>
-                <TouchableOpacity onPress={() => setAddingAllergy(!addingAllergy)}>
-                  <Text style={styles.editLink}>+ Add</Text>
-                </TouchableOpacity>
+                {isCurrentHealthEditMode && (
+                  <TouchableOpacity onPress={() => setAddingAllergy(!addingAllergy)}>
+                    <Text style={styles.editLink}>+ Add</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               {(userData.allergies && userData.allergies.length > 0) ? (
                 userData.allergies.map((allergy, idx) => (
@@ -928,14 +940,14 @@ export default function HomeScreen() {
                           <Text style={styles.editLink}>✕</Text>
                         </TouchableOpacity>
                       </>
-                    ) : (
+                    ) : isCurrentHealthEditMode ? (
                       <TouchableOpacity onPress={() => {
                         setEditingAllergyIdx(idx);
                         setEditingAllergyValue(allergy);
                       }}>
                         <Text style={styles.editLink}>Edit</Text>
                       </TouchableOpacity>
-                    )}
+                    ) : null}
                   </View>
                 ))
               ) : (
@@ -978,9 +990,11 @@ export default function HomeScreen() {
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>💉 Vaccinations</Text>
-                <TouchableOpacity onPress={() => setAddingVaccine(!addingVaccine)}>
-                  <Text style={styles.editLink}>+ Add</Text>
-                </TouchableOpacity>
+                {isCurrentHealthEditMode && (
+                  <TouchableOpacity onPress={() => setAddingVaccine(!addingVaccine)}>
+                    <Text style={styles.editLink}>+ Add</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               {(userData.vaccines && userData.vaccines.length > 0) ? (
                 userData.vaccines.map((vaccine, idx) => (
@@ -1015,14 +1029,14 @@ export default function HomeScreen() {
                           <Text style={styles.editLink}>✕</Text>
                         </TouchableOpacity>
                       </>
-                    ) : (
+                    ) : isCurrentHealthEditMode ? (
                       <TouchableOpacity onPress={() => {
                         setEditingVaccineIdx(idx);
                         setEditingVaccineValue(vaccine.name);
                       }}>
                         <Text style={styles.editLink}>Edit</Text>
                       </TouchableOpacity>
-                    )}
+                    ) : null}
                   </View>
                 ))
               ) : (
