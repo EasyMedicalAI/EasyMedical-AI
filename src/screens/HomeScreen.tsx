@@ -853,6 +853,17 @@ export default function HomeScreen() {
                         <TouchableOpacity onPress={() => setEditingConditionIdx(null)}>
                           <Text style={styles.editLink}>✕</Text>
                         </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            const updated = (userData.conditions || []).filter((_, i) => i !== idx);
+                            const updatedData = { ...editData, conditions: updated };
+                            setEditData(updatedData);
+                            await updateUserData(updatedData);
+                            setEditingConditionIdx(null);
+                          }}
+                        >
+                          <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
+                        </TouchableOpacity>
                       </>
                     ) : isCurrentHealthEditMode ? (
                       <TouchableOpacity onPress={() => {
@@ -938,6 +949,17 @@ export default function HomeScreen() {
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => setEditingAllergyIdx(null)}>
                           <Text style={styles.editLink}>✕</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            const updated = (userData.allergies || []).filter((_, i) => i !== idx);
+                            const updatedData = { ...editData, allergies: updated };
+                            setEditData(updatedData);
+                            await updateUserData(updatedData);
+                            setEditingAllergyIdx(null);
+                          }}
+                        >
+                          <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
                         </TouchableOpacity>
                       </>
                     ) : isCurrentHealthEditMode ? (
@@ -1027,6 +1049,17 @@ export default function HomeScreen() {
                         </TouchableOpacity>
                         <TouchableOpacity onPress={() => setEditingVaccineIdx(null)}>
                           <Text style={styles.editLink}>✕</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={async () => {
+                            const updated = (userData.vaccines || []).filter((_, i) => i !== idx);
+                            const updatedData = { ...editData, vaccines: updated };
+                            setEditData(updatedData);
+                            await updateUserData(updatedData);
+                            setEditingVaccineIdx(null);
+                          }}
+                        >
+                          <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
                         </TouchableOpacity>
                       </>
                     ) : isCurrentHealthEditMode ? (
