@@ -735,9 +735,6 @@ export default function HomeScreen() {
                   <Text style={styles.healthItem}>• Metformin 500mg twice daily</Text>
                 </>
               )}
-                  </TouchableOpacity>
-                </View>
-              )}
             </View>
 
             {/* OTC Medications and Supplements */}
