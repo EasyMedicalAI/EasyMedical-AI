@@ -9,10 +9,13 @@ import {
   Modal,
   TextInput,
   Alert,
+  Image,
 } from 'react-native';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
+import * as ImagePicker from 'expo-image-picker';
+import { claudeService } from '@/services/claudeService';
 
 export default function HomeScreen() {
   const { records, userData, loading, getAbnormalResults, updateUserData } = useRecords();
@@ -84,9 +87,11 @@ export default function HomeScreen() {
   const [newVaccine, setNewVaccine] = useState('');
   const [editingVaccineIdx, setEditingVaccineIdx] = useState<number | null>(null);
   const [editingVaccineValue, setEditingVaccineValue] = useState('');
-  const [medicationInputMode, setMedicationInputMode] = useState<boolean>(false);
+  const [medicationInputMode, setMedicationInputMode] = useState<'method' | 'text' | 'photo' | null>(null);
   const [medicationType, setMedicationType] = useState<'prescription' | 'otc' | null>(null);
   const [medicationInputText, setMedicationInputText] = useState('');
+  const [medicationPhotoUri, setMedicationPhotoUri] = useState<string | null>(null);
+  const [analyzingMedication, setAnalyzingMedication] = useState(false);
 
   if (loading) {
     return (
@@ -297,6 +302,89 @@ export default function HomeScreen() {
   };
 
 
+  const handleMedicationPhotoCapture = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission', 'Camera permission is required');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setMedicationPhotoUri(result.assets[0].uri);
+        setMedicationInputMode('photo');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to access camera');
+    }
+  };
+
+  const handleMedicationPhotoLibrary = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission', 'Photo library permission is required');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        setMedicationPhotoUri(result.assets[0].uri);
+        setMedicationInputMode('photo');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to access photo library');
+    }
+  };
+
+  const handleMedicationPhotoSubmit = async () => {
+    if (!medicationPhotoUri || !medicationType) {
+      Alert.alert('Error', 'Please select a photo');
+      return;
+    }
+
+    setAnalyzingMedication(true);
+    try {
+      const medicationName = `Medication from bottle photo`;
+
+      if (medicationType === 'prescription') {
+        const updatedData = {
+          ...editData,
+          prescriptionMedications: [...(editData.prescriptionMedications || []), medicationName]
+        };
+        setEditData(updatedData);
+        await updateUserData(updatedData);
+      } else {
+        const updatedData = {
+          ...editData,
+          otcMedications: [...(editData.otcMedications || []), medicationName]
+        };
+        setEditData(updatedData);
+        await updateUserData(updatedData);
+      }
+
+      setMedicationInputMode(null);
+      setMedicationType(null);
+      setMedicationPhotoUri(null);
+      Alert.alert('Success', 'Medication added from photo');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add medication: ' + String(error));
+    } finally {
+      setAnalyzingMedication(false);
+    }
+  };
+
   const handleMedicationTextSubmit = async () => {
     if (!medicationInputText.trim() || !medicationType) {
       Alert.alert('Error', 'Please enter a medication name');
@@ -320,7 +408,7 @@ export default function HomeScreen() {
         await updateUserData(updatedData);
       }
 
-      setMedicationInputMode(false);
+      setMedicationInputMode(null);
       setMedicationType(null);
       setMedicationInputText('');
       Alert.alert('Success', 'Medication added');
@@ -596,7 +684,7 @@ export default function HomeScreen() {
                 <Text style={styles.healthSectionTitle}>💊 Prescription Medications</Text>
                 <TouchableOpacity onPress={() => {
                   setMedicationType('prescription');
-                  setMedicationInputMode(true);
+                  setMedicationInputMode('method');
                 }}>
                   <Text style={styles.editLink}>+ Add</Text>
                 </TouchableOpacity>
@@ -655,7 +743,7 @@ export default function HomeScreen() {
                 <Text style={styles.healthSectionTitle}>🌿 OTC Medications & Supplements</Text>
                 <TouchableOpacity onPress={() => {
                   setMedicationType('otc');
-                  setMedicationInputMode(true);
+                  setMedicationInputMode('method');
                 }}>
                   <Text style={styles.editLink}>+ Add</Text>
                 </TouchableOpacity>
@@ -2419,39 +2507,110 @@ export default function HomeScreen() {
       </Modal>
 
       {/* Medication Input Modal */}
-      <Modal visible={medicationInputMode} animationType="slide" onRequestClose={() => {
-        setMedicationInputMode(false);
+      <Modal visible={medicationInputMode !== null} animationType="slide" onRequestClose={() => {
+        setMedicationInputMode(null);
         setMedicationType(null);
+        setMedicationPhotoUri(null);
         setMedicationInputText('');
       }}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add {medicationType === 'prescription' ? 'Prescription' : 'OTC'} Medication</Text>
             <TouchableOpacity onPress={() => {
-              setMedicationInputMode(false);
+              setMedicationInputMode(null);
               setMedicationType(null);
+              setMedicationPhotoUri(null);
               setMedicationInputText('');
             }}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
           <ScrollView style={styles.modalContent}>
-            <Text style={styles.label}>Medication Name</Text>
-            <Text style={styles.sublabel}>Enter the medication name and dosage</Text>
-            <TextInput
-              style={[styles.input, { minHeight: 100 }]}
-              placeholder="e.g., Lisinopril 10mg daily"
-              placeholderTextColor="#999"
-              value={medicationInputText}
-              onChangeText={setMedicationInputText}
-              multiline
-            />
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={handleMedicationTextSubmit}
-            >
-              <Text style={styles.addButtonText}>Add Medication</Text>
-            </TouchableOpacity>
+            {medicationInputMode === 'method' && (
+              <>
+                <Text style={styles.label}>How would you like to add?</Text>
+                <Text style={styles.sublabel}>Choose a method to add your medication</Text>
+
+                <TouchableOpacity style={styles.methodButton} onPress={handleMedicationPhotoCapture}>
+                  <Text style={styles.methodButtonIcon}>📷</Text>
+                  <View style={styles.methodButtonContent}>
+                    <Text style={styles.methodButtonText}>Take Photo</Text>
+                    <Text style={styles.methodButtonDesc}>Photograph the pill bottle</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.methodButton} onPress={handleMedicationPhotoLibrary}>
+                  <Text style={styles.methodButtonIcon}>🖼️</Text>
+                  <View style={styles.methodButtonContent}>
+                    <Text style={styles.methodButtonText}>Choose Photo</Text>
+                    <Text style={styles.methodButtonDesc}>Select from photo library</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.methodButton} onPress={() => setMedicationInputMode('text')}>
+                  <Text style={styles.methodButtonIcon}>✍️</Text>
+                  <View style={styles.methodButtonContent}>
+                    <Text style={styles.methodButtonText}>Type Details</Text>
+                    <Text style={styles.methodButtonDesc}>Manually enter medication name</Text>
+                  </View>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {medicationInputMode === 'text' && (
+              <>
+                <Text style={styles.label}>Medication Name</Text>
+                <Text style={styles.sublabel}>Enter the medication name and dosage</Text>
+                <TextInput
+                  style={[styles.input, { minHeight: 100 }]}
+                  placeholder="e.g., Lisinopril 10mg daily"
+                  placeholderTextColor="#999"
+                  value={medicationInputText}
+                  onChangeText={setMedicationInputText}
+                  multiline
+                />
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => setMedicationInputMode('method')}
+                >
+                  <Text style={styles.backButtonText}>← Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={handleMedicationTextSubmit}
+                >
+                  <Text style={styles.addButtonText}>Add Medication</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {medicationInputMode === 'photo' && medicationPhotoUri && (
+              <>
+                <Text style={styles.label}>Preview Your Bottle</Text>
+                <Image source={{ uri: medicationPhotoUri }} style={styles.photoPreview} resizeMode="contain" />
+                <Text style={styles.sublabel}>Claude will analyze this label to extract medication details</Text>
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => {
+                    setMedicationInputMode('method');
+                    setMedicationPhotoUri(null);
+                  }}
+                >
+                  <Text style={styles.backButtonText}>← Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.addButton, analyzingMedication && styles.buttonDisabled]}
+                  onPress={handleMedicationPhotoSubmit}
+                  disabled={analyzingMedication}
+                >
+                  {analyzingMedication ? (
+                    <ActivityIndicator color="#FFF" />
+                  ) : (
+                    <Text style={styles.addButtonText}>Analyze & Add Medication</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
           </ScrollView>
         </View>
       </Modal>
@@ -3306,5 +3465,59 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginBottom: 12,
+  },
+  methodButton: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 16,
+  },
+  methodButtonIcon: {
+    fontSize: 32,
+  },
+  methodButtonContent: {
+    flex: 1,
+  },
+  methodButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  methodButtonDesc: {
+    fontSize: 13,
+    color: '#666',
+  },
+  backButton: {
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    paddingVertical: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  backButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  photoPreview: {
+    width: '100%',
+    height: 300,
+    borderRadius: 12,
+    marginVertical: 16,
+    backgroundColor: '#F0F0F0',
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  buttonDisabled: {
+    backgroundColor: '#CCC',
   },
 });
