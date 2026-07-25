@@ -1905,8 +1905,9 @@ export default function HomeScreen() {
 
             <TouchableOpacity
               style={styles.datePickerDoneButton}
-              onPress={() => {
-                setEditData({ ...editData, weight: `${selectedWeight} lbs` });
+              onPress={async () => {
+                const updatedData = { ...editData, weight: `${selectedWeight} lbs` };
+                await updateUserData(updatedData);
                 setEditingSection(null);
               }}
             >
