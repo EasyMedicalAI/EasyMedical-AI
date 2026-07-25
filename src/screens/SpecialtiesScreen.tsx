@@ -254,6 +254,17 @@ export default function SpecialtiesScreen() {
         ))}
       </View>
 
+      {/* Other Section */}
+      <View style={styles.otherSection}>
+        <Text style={styles.otherSectionTitle}>Other</Text>
+        <TouchableOpacity
+          style={styles.uploadSpecialtyButton}
+          onPress={() => setUploadingSpecialty('Other')}
+        >
+          <Text style={styles.uploadSpecialtyButtonText}>📄 Other</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Specialties Filter Header */}
       <View style={styles.filterHeader}>
         <Text style={styles.filterHeaderTitle}>Browse by Specialty</Text>
@@ -528,6 +539,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#333',
+  },
+  otherSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  otherSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 12,
   },
   filterHeader: {
     paddingHorizontal: 20,
