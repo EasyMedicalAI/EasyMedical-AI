@@ -22,7 +22,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false,
       "package": "com.jaffe06.EasyMedical"
     },
     "web": {
