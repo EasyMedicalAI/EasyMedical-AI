@@ -224,61 +224,72 @@ export default function SpecialtiesScreen() {
         <Text style={styles.subtitle}>{specialties.length} specialties available</Text>
       </View>
 
-      {/* My Team Section */}
+      {/* My Team Section - Now includes appointments */}
       <View style={styles.teamSection}>
         <Text style={styles.sectionTitle}>👥 My Team</Text>
-        {teamRecords.length > 0 ? (
-          Object.entries(teamBySpecialty).map(([specialty, docs]) => (
-            <View key={specialty} style={styles.teamSpecialtyGroup}>
-              <Text style={styles.teamSpecialtyName}>{specialty}</Text>
-              {docs.map(doc => (
-                <TouchableOpacity
-                  key={doc.id}
-                  style={styles.teamRecordItem}
-                  onPress={() => router.push(`/detail/${doc.id}`)}
-                >
-                  <View style={styles.teamRecordContent}>
-                    <Text style={styles.teamRecordProvider}>{doc.provider}</Text>
-                    <Text style={styles.teamRecordMeta}>{doc.summary}</Text>
-                  </View>
-                  <Text style={styles.recordArrow}>›</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ))
+        {teamRecords.length > 0 || epicAppointments.length > 0 ? (
+          <>
+            {/* Appointments grouped by specialty */}
+            {epicAppointments.length > 0 && (
+              epicAppointments.reduce((acc: Record<string, typeof epicAppointments>, apt) => {
+                const specialty = 'Cardiology'; // In real scenario, derive from provider
+                if (!acc[specialty]) acc[specialty] = [];
+                acc[specialty].push(apt);
+                return acc;
+              }, {}) as Record<string, typeof epicAppointments>
+            ) && Object.entries(
+              epicAppointments.reduce((acc: Record<string, typeof epicAppointments>, apt) => {
+                const specialty = 'Cardiology';
+                if (!acc[specialty]) acc[specialty] = [];
+                acc[specialty].push(apt);
+                return acc;
+              }, {} as Record<string, typeof epicAppointments>)
+            ).map(([specialty, apts]) => (
+              <View key={`apt-${specialty}`} style={styles.teamSpecialtyGroup}>
+                <Text style={styles.teamSpecialtyName}>{specialty}</Text>
+                {apts.map(apt => (
+                  <TouchableOpacity
+                    key={apt.id}
+                    style={styles.teamRecordItem}
+                    onPress={() => {
+                      setSelectedAppointment(apt);
+                      setShowAppointmentDetail(true);
+                    }}
+                  >
+                    <View style={styles.teamRecordContent}>
+                      <Text style={styles.teamRecordProvider}>{apt.provider}</Text>
+                      <Text style={styles.teamRecordMeta}>{apt.date} • {apt.time}</Text>
+                    </View>
+                    <Text style={styles.recordArrow}>›</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+
+            {/* Existing team records */}
+            {teamRecords.length > 0 && Object.entries(teamBySpecialty).map(([specialty, docs]) => (
+              <View key={specialty} style={styles.teamSpecialtyGroup}>
+                <Text style={styles.teamSpecialtyName}>{specialty}</Text>
+                {docs.map(doc => (
+                  <TouchableOpacity
+                    key={doc.id}
+                    style={styles.teamRecordItem}
+                    onPress={() => router.push(`/detail/${doc.id}`)}
+                  >
+                    <View style={styles.teamRecordContent}>
+                      <Text style={styles.teamRecordProvider}>{doc.provider}</Text>
+                      <Text style={styles.teamRecordMeta}>{doc.summary}</Text>
+                    </View>
+                    <Text style={styles.recordArrow}>›</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
+          </>
         ) : (
           <Text style={styles.teamEmptyText}>Mark doctors as your team to see them here</Text>
         )}
       </View>
-
-      {/* Epic Appointments Section */}
-      {epicAppointments.length > 0 && (
-        <View style={styles.appointmentsSection}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>📅 Your Appointments</Text>
-            <TouchableOpacity onPress={loadAppointments}>
-              <Text style={styles.refreshLink}>Sync</Text>
-            </TouchableOpacity>
-          </View>
-          {epicAppointments.map(apt => (
-            <TouchableOpacity
-              key={apt.id}
-              style={styles.appointmentItem}
-              onPress={() => {
-                setSelectedAppointment(apt);
-                setShowAppointmentDetail(true);
-              }}
-            >
-              <View style={styles.appointmentContent}>
-                <Text style={styles.appointmentDate}>{apt.date} • {apt.time}</Text>
-                <Text style={styles.appointmentProvider}>{apt.provider}</Text>
-                <Text style={styles.appointmentType}>{apt.description}</Text>
-              </View>
-              <Text style={styles.appointmentArrow}>›</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
 
       {/* Upload Records Section */}
       <View style={styles.uploadRecordsSection}>
@@ -440,13 +451,22 @@ export default function SpecialtiesScreen() {
             <TouchableOpacity onPress={() => setShowAppointmentDetail(false)}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
-            <Text style={styles.appointmentDetailTitle}>Appointment Summary</Text>
+            <Text style={styles.appointmentDetailTitle}>Appointment</Text>
             <View style={{ width: 40 }} />
           </View>
 
           <ScrollView style={styles.appointmentDetailContent}>
             {selectedAppointment && (
               <>
+                <View style={styles.summaryBox}>
+                  <Text style={styles.summaryText}>
+                    {selectedAppointment.description}
+                  </Text>
+                  <Text style={styles.summaryMeta}>
+                    with {selectedAppointment.provider}
+                  </Text>
+                </View>
+
                 <View style={styles.detailSection}>
                   <Text style={styles.detailLabel}>Date & Time</Text>
                   <Text style={styles.detailValue}>
@@ -455,35 +475,9 @@ export default function SpecialtiesScreen() {
                 </View>
 
                 <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Provider</Text>
+                  <Text style={styles.detailLabel}>Doctor</Text>
                   <Text style={styles.detailValue}>{selectedAppointment.provider}</Text>
                 </View>
-
-                <View style={styles.detailSection}>
-                  <Text style={styles.detailLabel}>Type of Visit</Text>
-                  <Text style={styles.detailValue}>{selectedAppointment.description}</Text>
-                </View>
-
-                <View style={styles.summaryBox}>
-                  <Text style={styles.summaryTitle}>Visit Summary</Text>
-                  <Text style={styles.summaryText}>
-                    {selectedAppointment.description} with {selectedAppointment.provider}
-                  </Text>
-                  <Text style={styles.summaryMeta}>
-                    Scheduled for {selectedAppointment.date}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.addRecordButton}
-                  onPress={() => {
-                    // Navigate to upload with pre-filled specialty based on provider
-                    setShowAppointmentDetail(false);
-                    setUploadingSpecialty('Primary Care');
-                  }}
-                >
-                  <Text style={styles.addRecordButtonText}>📝 Add Visit Notes</Text>
-                </TouchableOpacity>
               </>
             )}
           </ScrollView>
@@ -883,58 +877,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0',
     borderWidth: 1,
     borderColor: '#E0E0E0',
-  },
-  appointmentsSection: {
-    paddingHorizontal: 20,
-    marginVertical: 20,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  refreshLink: {
-    fontSize: 13,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  appointmentItem: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  appointmentContent: {
-    flex: 1,
-  },
-  appointmentDate: {
-    fontSize: 13,
-    color: '#007AFF',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  appointmentProvider: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 4,
-  },
-  appointmentType: {
-    fontSize: 13,
-    color: '#666',
-  },
-  appointmentArrow: {
-    fontSize: 18,
-    color: '#CCC',
-    marginLeft: 12,
   },
   appointmentDetailContainer: {
     flex: 1,
