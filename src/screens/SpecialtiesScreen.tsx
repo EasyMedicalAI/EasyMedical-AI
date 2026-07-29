@@ -35,6 +35,8 @@ export default function SpecialtiesScreen() {
   const [epicAppointments, setEpicAppointments] = useState<Appointment[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showAppointmentDetail, setShowAppointmentDetail] = useState(false);
+  const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
+  const [showDoctorAppointments, setShowDoctorAppointments] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -230,43 +232,67 @@ export default function SpecialtiesScreen() {
         {teamRecords.length > 0 || epicAppointments.length > 0 ? (
           <View style={styles.recordsCardsContainer}>
             {/* Cardiology - Example 1 with multiple doctors */}
-            <TouchableOpacity style={styles.recordCard}>
+            <View style={styles.recordCard}>
               <Text style={styles.recordSpecialty}>❤️ Cardiology</Text>
               <View style={styles.doctorsList}>
-                <View style={styles.doctorItem}>
+                <TouchableOpacity
+                  style={styles.doctorItem}
+                  onPress={() => {
+                    setSelectedDoctor('Dr. Sarah Johnson');
+                    setShowDoctorAppointments(true);
+                  }}
+                >
                   <Text style={styles.recordDoctor}>Dr. Sarah Johnson</Text>
                   {epicAppointments.length > 0 && (
                     <Text style={styles.recordDate}>{epicAppointments[0].date}</Text>
                   )}
-                </View>
-                <View style={styles.doctorItem}>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.doctorItem}
+                  onPress={() => {
+                    setSelectedDoctor('Dr. Robert Martinez');
+                    setShowDoctorAppointments(true);
+                  }}
+                >
                   <Text style={styles.recordDoctor}>Dr. Robert Martinez</Text>
                   <Text style={styles.recordDate}>Aug 10, 2025</Text>
-                </View>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+            </View>
 
             {/* Primary Care - Example 2 */}
-            <TouchableOpacity style={styles.recordCard}>
+            <View style={styles.recordCard}>
               <Text style={styles.recordSpecialty}>👨‍⚕️ Primary Care</Text>
               <View style={styles.doctorsList}>
-                <View style={styles.doctorItem}>
+                <TouchableOpacity
+                  style={styles.doctorItem}
+                  onPress={() => {
+                    setSelectedDoctor('Dr. Michael Chen');
+                    setShowDoctorAppointments(true);
+                  }}
+                >
                   <Text style={styles.recordDoctor}>Dr. Michael Chen</Text>
                   <Text style={styles.recordDate}>Jul 20, 2025</Text>
-                </View>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+            </View>
 
             {/* Dentistry - Example 3 */}
-            <TouchableOpacity style={styles.recordCard}>
+            <View style={styles.recordCard}>
               <Text style={styles.recordSpecialty}>🦷 Dentistry</Text>
               <View style={styles.doctorsList}>
-                <View style={styles.doctorItem}>
+                <TouchableOpacity
+                  style={styles.doctorItem}
+                  onPress={() => {
+                    setSelectedDoctor('Dr. Emily Rodriguez');
+                    setShowDoctorAppointments(true);
+                  }}
+                >
                   <Text style={styles.recordDoctor}>Dr. Emily Rodriguez</Text>
                   <Text style={styles.recordDate}>Jun 15, 2025</Text>
-                </View>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <Text style={styles.teamEmptyText}>No records yet. Upload your first record to get started.</Text>
@@ -460,6 +486,101 @@ export default function SpecialtiesScreen() {
                   <Text style={styles.detailLabel}>Doctor</Text>
                   <Text style={styles.detailValue}>{selectedAppointment.provider}</Text>
                 </View>
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Doctor's All Appointments Modal */}
+      <Modal
+        visible={showDoctorAppointments && selectedDoctor !== null}
+        animationType="slide"
+        onRequestClose={() => setShowDoctorAppointments(false)}
+      >
+        <View style={styles.appointmentDetailContainer}>
+          <View style={styles.appointmentDetailHeader}>
+            <TouchableOpacity onPress={() => setShowDoctorAppointments(false)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+            <Text style={styles.appointmentDetailTitle}>{selectedDoctor}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView style={styles.appointmentDetailContent}>
+            {selectedDoctor && (
+              <>
+                <Text style={styles.appointmentListTitle}>All Appointments</Text>
+
+                {/* Example appointments with this doctor */}
+                <TouchableOpacity
+                  style={styles.appointmentListItem}
+                  onPress={() => {
+                    setShowDoctorAppointments(false);
+                    setSelectedAppointment({
+                      id: '1',
+                      date: 'Aug 15, 2025',
+                      time: '10:00 AM',
+                      provider: selectedDoctor,
+                      description: 'Annual Physical Exam',
+                    });
+                    setShowAppointmentDetail(true);
+                  }}
+                >
+                  <View>
+                    <Text style={styles.appointmentItemDate}>Aug 15, 2025 • 10:00 AM</Text>
+                    <Text style={styles.appointmentItemTitle}>Annual Physical Exam</Text>
+                    <Text style={styles.appointmentItemSummary}>
+                      Comprehensive physical examination. Blood pressure normal, heart rate steady. All vitals within normal range.
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.appointmentListItem}
+                  onPress={() => {
+                    setShowDoctorAppointments(false);
+                    setSelectedAppointment({
+                      id: '2',
+                      date: 'Jul 10, 2025',
+                      time: '2:30 PM',
+                      provider: selectedDoctor,
+                      description: 'Follow-up Checkup',
+                    });
+                    setShowAppointmentDetail(true);
+                  }}
+                >
+                  <View>
+                    <Text style={styles.appointmentItemDate}>Jul 10, 2025 • 2:30 PM</Text>
+                    <Text style={styles.appointmentItemTitle}>Follow-up Checkup</Text>
+                    <Text style={styles.appointmentItemSummary}>
+                      Follow-up on previous concerns. Patient reports improvement. Continue current medication plan.
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.appointmentListItem}
+                  onPress={() => {
+                    setShowDoctorAppointments(false);
+                    setSelectedAppointment({
+                      id: '3',
+                      date: 'May 20, 2025',
+                      time: '11:15 AM',
+                      provider: selectedDoctor,
+                      description: 'Initial Consultation',
+                    });
+                    setShowAppointmentDetail(true);
+                  }}
+                >
+                  <View>
+                    <Text style={styles.appointmentItemDate}>May 20, 2025 • 11:15 AM</Text>
+                    <Text style={styles.appointmentItemTitle}>Initial Consultation</Text>
+                    <Text style={styles.appointmentItemSummary}>
+                      Patient intake and history review. Ordered lab work and imaging studies for further evaluation.
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               </>
             )}
           </ScrollView>
@@ -981,5 +1102,36 @@ const styles = StyleSheet.create({
   },
   doctorItemLast: {
     borderBottomWidth: 0,
+  },
+  appointmentListTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 16,
+  },
+  appointmentListItem: {
+    backgroundColor: '#F8F9FF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  appointmentItemDate: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  appointmentItemTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 8,
+  },
+  appointmentItemSummary: {
+    fontSize: 13,
+    color: '#666',
+    lineHeight: 18,
   },
 });
