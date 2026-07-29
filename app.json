@@ -1,5 +1,6 @@
 {
   "expo": {
+    "sdkVersion": "57.0.0",
     "name": "EasyMedical",
     "slug": "EasyMedical",
     "version": "1.0.0",
@@ -9,6 +10,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.jaffe06.EasyMedical",
+      "minimumOSVersion": "16.4",
       "infoPlist": {
         "NSHealthShareUsageDescription": "Access your health data from Apple Health",
         "NSHealthUpdateUsageDescription": "Read your health data",
