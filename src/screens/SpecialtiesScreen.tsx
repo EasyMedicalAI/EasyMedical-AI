@@ -224,20 +224,13 @@ export default function SpecialtiesScreen() {
         <Text style={styles.subtitle}>{specialties.length} specialties available</Text>
       </View>
 
-      {/* My Team Section - Now includes appointments */}
+      {/* My Records Section - Shows only specialties with records */}
       <View style={styles.teamSection}>
-        <Text style={styles.sectionTitle}>👥 My Team</Text>
+        <Text style={styles.sectionTitle}>📋 My Records</Text>
         {teamRecords.length > 0 || epicAppointments.length > 0 ? (
           <>
             {/* Appointments grouped by specialty */}
-            {epicAppointments.length > 0 && (
-              epicAppointments.reduce((acc: Record<string, typeof epicAppointments>, apt) => {
-                const specialty = 'Cardiology'; // In real scenario, derive from provider
-                if (!acc[specialty]) acc[specialty] = [];
-                acc[specialty].push(apt);
-                return acc;
-              }, {}) as Record<string, typeof epicAppointments>
-            ) && Object.entries(
+            {epicAppointments.length > 0 && Object.entries(
               epicAppointments.reduce((acc: Record<string, typeof epicAppointments>, apt) => {
                 const specialty = 'Cardiology';
                 if (!acc[specialty]) acc[specialty] = [];
@@ -266,7 +259,7 @@ export default function SpecialtiesScreen() {
               </View>
             ))}
 
-            {/* Existing team records */}
+            {/* Show only records that exist */}
             {teamRecords.length > 0 && Object.entries(teamBySpecialty).map(([specialty, docs]) => (
               <View key={specialty} style={styles.teamSpecialtyGroup}>
                 <Text style={styles.teamSpecialtyName}>{specialty}</Text>
@@ -287,7 +280,7 @@ export default function SpecialtiesScreen() {
             ))}
           </>
         ) : (
-          <Text style={styles.teamEmptyText}>Mark doctors as your team to see them here</Text>
+          <Text style={styles.teamEmptyText}>No records yet. Upload your first record to get started.</Text>
         )}
       </View>
 
