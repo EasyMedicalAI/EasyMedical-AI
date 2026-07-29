@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   View,
@@ -16,6 +16,7 @@ import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
 import { claudeService } from '@/services/claudeService';
+import { epicService, Medication, Appointment, Observation, Allergy, Condition } from '@/services/epicService';
 
 export default function HomeScreen() {
   const { records, userData, loading, getAbnormalResults, updateUserData } = useRecords();
@@ -95,6 +96,40 @@ export default function HomeScreen() {
   const [isCurrentHealthEditMode, setIsCurrentHealthEditMode] = useState(false);
   const [isVitalsEditMode, setIsVitalsEditMode] = useState(false);
   const [isHealthHistoryEditMode, setIsHealthHistoryEditMode] = useState(false);
+
+  // Epic FHIR data
+  const [epicMedications, setEpicMedications] = useState<Medication[]>([]);
+  const [epicAppointments, setEpicAppointments] = useState<Appointment[]>([]);
+  const [epicObservations, setEpicObservations] = useState<Observation[]>([]);
+  const [epicAllergies, setEpicAllergies] = useState<Allergy[]>([]);
+  const [epicConditions, setEpicConditions] = useState<Condition[]>([]);
+  const [epicLoading, setEpicLoading] = useState(false);
+
+  useEffect(() => {
+    loadEpicData();
+  }, []);
+
+  const loadEpicData = async () => {
+    setEpicLoading(true);
+    try {
+      const [meds, appts, obs, allergies, conditions] = await Promise.all([
+        epicService.getMedications(),
+        epicService.getAppointments(),
+        epicService.getObservations(),
+        epicService.getAllergies(),
+        epicService.getConditions(),
+      ]);
+      setEpicMedications(meds);
+      setEpicAppointments(appts);
+      setEpicObservations(obs);
+      setEpicAllergies(allergies);
+      setEpicConditions(conditions);
+    } catch (error) {
+      console.error('Failed to load Epic data:', error);
+    } finally {
+      setEpicLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -678,6 +713,34 @@ export default function HomeScreen() {
           <WearableVitals />
         </View>
 
+        {/* Epic Observations/Vitals from EHR */}
+        {epicObservations.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.cardTitleRow}>
+              <Text style={styles.cardIcon}>📊</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Epic EHR Vitals & Labs</Text>
+                <Text style={styles.cardMeta}>{epicObservations.length} recent</Text>
+              </View>
+              <TouchableOpacity onPress={loadEpicData}>
+                <Text style={styles.editLink}>Refresh</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.card}>
+              {epicObservations.map((obs) => (
+                <View key={obs.id} style={{ marginVertical: 8 }}>
+                  <Text style={styles.healthItem}>
+                    <Text style={{ fontWeight: '600' }}>{obs.code}</Text> • {obs.value} {obs.unit}
+                  </Text>
+                  <Text style={[styles.healthItem, { fontSize: 12, opacity: 0.7 }]}>
+                    Date: {obs.date}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* CURRENT HEALTH Section */}
         <View style={styles.section}>
           <View style={styles.cardTitleRow}>
@@ -835,6 +898,26 @@ export default function HomeScreen() {
                 </>
               )}
             </View>
+
+            {/* Epic Medications from EHR */}
+            {epicMedications.length > 0 && (
+              <View style={styles.healthSection}>
+                <View style={styles.healthSectionHeader}>
+                  <Text style={styles.healthSectionTitle}>🏥 Epic EHR Medications</Text>
+                  <TouchableOpacity onPress={loadEpicData}>
+                    <Text style={styles.editLink}>Refresh</Text>
+                  </TouchableOpacity>
+                </View>
+                {epicMedications.map((med) => (
+                  <View key={med.id}>
+                    <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{med.name}</Text></Text>
+                    <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
+                      {med.dosage}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
             {/* Conditions */}
             <View style={styles.healthSection}>
@@ -1029,6 +1112,26 @@ export default function HomeScreen() {
                 </View>
               )}
             </View>
+
+            {/* Epic Allergies from EHR */}
+            {epicAllergies.length > 0 && (
+              <View style={styles.healthSection}>
+                <View style={styles.healthSectionHeader}>
+                  <Text style={styles.healthSectionTitle}>🏥 Epic Allergies</Text>
+                  <TouchableOpacity onPress={loadEpicData}>
+                    <Text style={styles.editLink}>Refresh</Text>
+                  </TouchableOpacity>
+                </View>
+                {epicAllergies.map((allergy) => (
+                  <View key={allergy.id}>
+                    <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{allergy.allergen}</Text></Text>
+                    <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
+                      Reaction: {allergy.reaction}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
             {/* Vaccines */}
             <View style={styles.healthSection}>
@@ -1426,6 +1529,36 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Epic Appointments from EHR */}
+          {epicAppointments.length > 0 && (
+            <View style={styles.cardWrapper}>
+              <View style={styles.cardTitleRow}>
+                <Text style={styles.cardIcon}>🏥</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>Epic EHR Appointments</Text>
+                  <Text style={styles.cardMeta}>{epicAppointments.length} from Epic</Text>
+                </View>
+                <TouchableOpacity onPress={loadEpicData}>
+                  <Text style={styles.editLink}>Refresh</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.card}>
+                {epicAppointments.map((apt, idx) => (
+                  <View key={apt.id}>
+                    <View style={styles.appointmentItemRow}>
+                      <View style={styles.appointmentItem}>
+                        <Text style={styles.appointmentDate}>{apt.date} at {apt.time}</Text>
+                        <Text style={styles.appointmentDoctor}>{apt.provider}</Text>
+                        <Text style={styles.appointmentSpecialty}>{apt.description}</Text>
+                      </View>
+                    </View>
+                    {idx < epicAppointments.length - 1 && <View style={styles.divider} />}
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
           {/* Insurance */}
           <View style={styles.cardWrapper}>
