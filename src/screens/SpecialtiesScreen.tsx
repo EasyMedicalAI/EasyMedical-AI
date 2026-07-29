@@ -314,9 +314,9 @@ export default function SpecialtiesScreen() {
         <Text style={styles.uploadRecordsTitle}>Upload Records</Text>
       </View>
 
-      {/* Specialties for Upload */}
+      {/* Specialties for Upload - Always show all */}
       <View style={styles.uploadSpecialtiesContainer}>
-        {[...specialties].sort().map(specialty => (
+        {[...defaultSpecialties].sort().map(specialty => (
           <TouchableOpacity
             key={`upload-${specialty}`}
             style={styles.uploadSpecialtyButton}
