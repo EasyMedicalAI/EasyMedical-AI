@@ -229,35 +229,43 @@ export default function SpecialtiesScreen() {
         <Text style={styles.sectionTitle}>📋 My Records</Text>
         {teamRecords.length > 0 || epicAppointments.length > 0 ? (
           <View style={styles.recordsCardsContainer}>
-            {/* Cardiology - Example 1 */}
-            <TouchableOpacity
-              style={styles.recordCard}
-              onPress={() => {
-                if (epicAppointments.length > 0) {
-                  setSelectedAppointment(epicAppointments[0]);
-                  setShowAppointmentDetail(true);
-                }
-              }}
-            >
+            {/* Cardiology - Example 1 with multiple doctors */}
+            <TouchableOpacity style={styles.recordCard}>
               <Text style={styles.recordSpecialty}>❤️ Cardiology</Text>
-              <Text style={styles.recordDoctor}>Dr. Sarah Johnson</Text>
-              {epicAppointments.length > 0 && (
-                <Text style={styles.recordDate}>{epicAppointments[0].date}</Text>
-              )}
+              <View style={styles.doctorsList}>
+                <View style={styles.doctorItem}>
+                  <Text style={styles.recordDoctor}>Dr. Sarah Johnson</Text>
+                  {epicAppointments.length > 0 && (
+                    <Text style={styles.recordDate}>{epicAppointments[0].date}</Text>
+                  )}
+                </View>
+                <View style={styles.doctorItem}>
+                  <Text style={styles.recordDoctor}>Dr. Robert Martinez</Text>
+                  <Text style={styles.recordDate}>Aug 10, 2025</Text>
+                </View>
+              </View>
             </TouchableOpacity>
 
             {/* Primary Care - Example 2 */}
             <TouchableOpacity style={styles.recordCard}>
               <Text style={styles.recordSpecialty}>👨‍⚕️ Primary Care</Text>
-              <Text style={styles.recordDoctor}>Dr. Michael Chen</Text>
-              <Text style={styles.recordDate}>Jul 20, 2025</Text>
+              <View style={styles.doctorsList}>
+                <View style={styles.doctorItem}>
+                  <Text style={styles.recordDoctor}>Dr. Michael Chen</Text>
+                  <Text style={styles.recordDate}>Jul 20, 2025</Text>
+                </View>
+              </View>
             </TouchableOpacity>
 
             {/* Dentistry - Example 3 */}
             <TouchableOpacity style={styles.recordCard}>
               <Text style={styles.recordSpecialty}>🦷 Dentistry</Text>
-              <Text style={styles.recordDoctor}>Dr. Emily Rodriguez</Text>
-              <Text style={styles.recordDate}>Jun 15, 2025</Text>
+              <View style={styles.doctorsList}>
+                <View style={styles.doctorItem}>
+                  <Text style={styles.recordDoctor}>Dr. Emily Rodriguez</Text>
+                  <Text style={styles.recordDate}>Jun 15, 2025</Text>
+                </View>
+              </View>
             </TouchableOpacity>
           </View>
         ) : (
@@ -962,5 +970,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#999',
     fontWeight: '500',
+  },
+  doctorsList: {
+    gap: 12,
+  },
+  doctorItem: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  doctorItemLast: {
+    borderBottomWidth: 0,
   },
 });
