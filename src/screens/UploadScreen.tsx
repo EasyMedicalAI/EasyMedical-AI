@@ -10,7 +10,6 @@ import {
   Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { useRecords } from '@/context/RecordsContext';
 import { claudeService } from '@/services/claudeService';
 import { useRouter } from 'expo-router';
