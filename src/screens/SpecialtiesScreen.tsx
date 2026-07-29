@@ -32,6 +32,9 @@ export default function SpecialtiesScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMode, setUploadMode] = useState<'method' | 'text' | 'photo'>('method');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [doctorName, setDoctorName] = useState('');
+  const [appointmentDate, setAppointmentDate] = useState('');
+  const [appointmentSummary, setAppointmentSummary] = useState('');
   const [epicAppointments, setEpicAppointments] = useState<Appointment[]>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showAppointmentDetail, setShowAppointmentDetail] = useState(false);
@@ -164,34 +167,40 @@ export default function SpecialtiesScreen() {
   };
 
   const handleUploadRecord = async () => {
-    if (!uploadingSpecialty || !recordText.trim()) {
-      Alert.alert('Error', 'Please enter record information');
+    if (!uploadingSpecialty || !doctorName.trim() || !appointmentDate.trim() || !appointmentSummary.trim()) {
+      Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
     setIsUploading(true);
     try {
       const recordId = uuidv4();
-      const parsedRecord = await claudeService.parseRecordFromText(recordText, recordId);
 
       await addRecord({
         id: recordId,
-        uploadDate: parsedRecord.uploadDate || new Date().toISOString(),
-        originalText: parsedRecord.originalText,
+        uploadDate: new Date().toISOString(),
+        originalText: appointmentSummary,
         specialty: uploadingSpecialty,
-        provider: parsedRecord.provider || 'Unknown',
-        summary: parsedRecord.summary || 'Medical record',
-        extractedData: parsedRecord.extractedData || {},
+        provider: doctorName,
+        summary: appointmentSummary,
+        extractedData: {
+          doctorName: doctorName,
+          appointmentDate: appointmentDate,
+          visitSummary: appointmentSummary,
+        },
         processed: true,
         isTeamMember: true,
       });
 
       setUploadingSpecialty(null);
       setRecordText('');
+      setDoctorName('');
+      setAppointmentDate('');
+      setAppointmentSummary('');
       setUploadMode('method');
-      Alert.alert('Success', 'Record added to your team!');
+      Alert.alert('Success', 'Appointment saved!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to process record: ' + String(error));
+      Alert.alert('Error', 'Failed to save appointment: ' + String(error));
     } finally {
       setIsUploading(false);
     }
@@ -387,20 +396,48 @@ export default function SpecialtiesScreen() {
 
             {uploadMode === 'text' && (
               <>
-                <Text style={styles.label}>Medical Record Details</Text>
-                <Text style={styles.sublabel}>Paste or type medical record information, and Claude will extract key details</Text>
+                <Text style={styles.label}>Appointment Details</Text>
+                <Text style={styles.sublabel}>Enter information about your visit</Text>
+
+                <Text style={styles.fieldLabel}>Doctor's Name</Text>
                 <TextInput
-                  style={[styles.input, { minHeight: 200 }]}
-                  placeholder="Paste or type the medical record here..."
+                  style={styles.input}
+                  placeholder="e.g., Dr. Sarah Johnson"
                   placeholderTextColor="#999"
-                  value={recordText}
-                  onChangeText={setRecordText}
+                  value={doctorName}
+                  onChangeText={setDoctorName}
+                  editable={!isUploading}
+                />
+
+                <Text style={styles.fieldLabel}>Date of Appointment</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Aug 15, 2025"
+                  placeholderTextColor="#999"
+                  value={appointmentDate}
+                  onChangeText={setAppointmentDate}
+                  editable={!isUploading}
+                />
+
+                <Text style={styles.fieldLabel}>Summary of Visit</Text>
+                <TextInput
+                  style={[styles.input, { minHeight: 120 }]}
+                  placeholder="Describe what happened during the visit..."
+                  placeholderTextColor="#999"
+                  value={appointmentSummary}
+                  onChangeText={setAppointmentSummary}
                   multiline
                   editable={!isUploading}
                 />
+
                 <TouchableOpacity
                   style={styles.backButton}
-                  onPress={() => setUploadMode('method')}
+                  onPress={() => {
+                    setUploadMode('method');
+                    setDoctorName('');
+                    setAppointmentDate('');
+                    setAppointmentSummary('');
+                  }}
                 >
                   <Text style={styles.backButtonText}>← Back</Text>
                 </TouchableOpacity>
@@ -412,7 +449,7 @@ export default function SpecialtiesScreen() {
                   {isUploading ? (
                     <ActivityIndicator color="#FFF" />
                   ) : (
-                    <Text style={styles.addButtonText}>Add to My Team</Text>
+                    <Text style={styles.addButtonText}>Save Appointment</Text>
                   )}
                 </TouchableOpacity>
               </>
@@ -1134,5 +1171,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     lineHeight: 18,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 16,
+    marginBottom: 8,
   },
 });
