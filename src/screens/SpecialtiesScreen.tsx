@@ -228,57 +228,38 @@ export default function SpecialtiesScreen() {
       <View style={styles.teamSection}>
         <Text style={styles.sectionTitle}>📋 My Records</Text>
         {teamRecords.length > 0 || epicAppointments.length > 0 ? (
-          <>
-            {/* Appointments grouped by specialty */}
-            {epicAppointments.length > 0 && Object.entries(
-              epicAppointments.reduce((acc: Record<string, typeof epicAppointments>, apt) => {
-                const specialty = 'Cardiology';
-                if (!acc[specialty]) acc[specialty] = [];
-                acc[specialty].push(apt);
-                return acc;
-              }, {} as Record<string, typeof epicAppointments>)
-            ).map(([specialty, apts]) => (
-              <View key={`apt-${specialty}`} style={styles.teamSpecialtyGroup}>
-                <Text style={styles.teamSpecialtyName}>{specialty}</Text>
-                {apts.map(apt => (
-                  <TouchableOpacity
-                    key={apt.id}
-                    style={styles.teamRecordItem}
-                    onPress={() => {
-                      setSelectedAppointment(apt);
-                      setShowAppointmentDetail(true);
-                    }}
-                  >
-                    <View style={styles.teamRecordContent}>
-                      <Text style={styles.teamRecordProvider}>{apt.provider}</Text>
-                      <Text style={styles.teamRecordMeta}>{apt.date} • {apt.time}</Text>
-                    </View>
-                    <Text style={styles.recordArrow}>›</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
+          <View style={styles.recordsCardsContainer}>
+            {/* Cardiology - Example 1 */}
+            <TouchableOpacity
+              style={styles.recordCard}
+              onPress={() => {
+                if (epicAppointments.length > 0) {
+                  setSelectedAppointment(epicAppointments[0]);
+                  setShowAppointmentDetail(true);
+                }
+              }}
+            >
+              <Text style={styles.recordSpecialty}>❤️ Cardiology</Text>
+              <Text style={styles.recordDoctor}>Dr. Sarah Johnson</Text>
+              {epicAppointments.length > 0 && (
+                <Text style={styles.recordDate}>{epicAppointments[0].date}</Text>
+              )}
+            </TouchableOpacity>
 
-            {/* Show only records that exist */}
-            {teamRecords.length > 0 && Object.entries(teamBySpecialty).map(([specialty, docs]) => (
-              <View key={specialty} style={styles.teamSpecialtyGroup}>
-                <Text style={styles.teamSpecialtyName}>{specialty}</Text>
-                {docs.map(doc => (
-                  <TouchableOpacity
-                    key={doc.id}
-                    style={styles.teamRecordItem}
-                    onPress={() => router.push(`/detail/${doc.id}`)}
-                  >
-                    <View style={styles.teamRecordContent}>
-                      <Text style={styles.teamRecordProvider}>{doc.provider}</Text>
-                      <Text style={styles.teamRecordMeta}>{doc.summary}</Text>
-                    </View>
-                    <Text style={styles.recordArrow}>›</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ))}
-          </>
+            {/* Primary Care - Example 2 */}
+            <TouchableOpacity style={styles.recordCard}>
+              <Text style={styles.recordSpecialty}>👨‍⚕️ Primary Care</Text>
+              <Text style={styles.recordDoctor}>Dr. Michael Chen</Text>
+              <Text style={styles.recordDate}>Jul 20, 2025</Text>
+            </TouchableOpacity>
+
+            {/* Dentistry - Example 3 */}
+            <TouchableOpacity style={styles.recordCard}>
+              <Text style={styles.recordSpecialty}>🦷 Dentistry</Text>
+              <Text style={styles.recordDoctor}>Dr. Emily Rodriguez</Text>
+              <Text style={styles.recordDate}>Jun 15, 2025</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <Text style={styles.teamEmptyText}>No records yet. Upload your first record to get started.</Text>
         )}
@@ -950,5 +931,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
+  },
+  recordsCardsContainer: {
+    gap: 12,
+  },
+  recordCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  recordSpecialty: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 8,
+  },
+  recordDoctor: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 8,
+  },
+  recordDate: {
+    fontSize: 13,
+    color: '#999',
+    fontWeight: '500',
   },
 });
