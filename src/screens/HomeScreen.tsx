@@ -2034,8 +2034,10 @@ export default function HomeScreen() {
 
             <TouchableOpacity
               style={styles.datePickerDoneButton}
-              onPress={() => {
-                setEditData({ ...editData, height: `${selectedFeet}'${selectedInches}"` });
+              onPress={async () => {
+                const updatedData = { ...editData, height: `${selectedFeet}'${selectedInches}"` };
+                setEditData(updatedData);
+                await updateUserData(updatedData);
                 setEditingSection(null);
               }}
             >
