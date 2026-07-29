@@ -10,7 +10,7 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.jaffe06.EasyMedical",
-      "minimumOSVersion": "16.4",
+      "minimumOSVersion": "17.0",
       "infoPlist": {
         "NSHealthShareUsageDescription": "Access your health data from Apple Health",
         "NSHealthUpdateUsageDescription": "Read your health data",
