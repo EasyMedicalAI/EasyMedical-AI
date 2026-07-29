@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   View,
@@ -15,6 +15,7 @@ import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import { v4 as uuidv4 } from 'uuid';
 import { claudeService } from '@/services/claudeService';
+import { epicService, Appointment } from '@/services/epicService';
 
 let ImagePicker: any;
 try {
@@ -31,7 +32,23 @@ export default function SpecialtiesScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMode, setUploadMode] = useState<'method' | 'text' | 'photo'>('method');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [epicAppointments, setEpicAppointments] = useState<Appointment[]>([]);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [showAppointmentDetail, setShowAppointmentDetail] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    loadAppointments();
+  }, []);
+
+  const loadAppointments = async () => {
+    try {
+      const appointments = await epicService.getAppointments();
+      setEpicAppointments(appointments);
+    } catch (error) {
+      console.error('Failed to load appointments:', error);
+    }
+  };
 
   const defaultSpecialties = [
     'Cardiology',
@@ -234,6 +251,35 @@ export default function SpecialtiesScreen() {
         )}
       </View>
 
+      {/* Epic Appointments Section */}
+      {epicAppointments.length > 0 && (
+        <View style={styles.appointmentsSection}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>📅 Your Appointments</Text>
+            <TouchableOpacity onPress={loadAppointments}>
+              <Text style={styles.refreshLink}>Sync</Text>
+            </TouchableOpacity>
+          </View>
+          {epicAppointments.map(apt => (
+            <TouchableOpacity
+              key={apt.id}
+              style={styles.appointmentItem}
+              onPress={() => {
+                setSelectedAppointment(apt);
+                setShowAppointmentDetail(true);
+              }}
+            >
+              <View style={styles.appointmentContent}>
+                <Text style={styles.appointmentDate}>{apt.date} • {apt.time}</Text>
+                <Text style={styles.appointmentProvider}>{apt.provider}</Text>
+                <Text style={styles.appointmentType}>{apt.description}</Text>
+              </View>
+              <Text style={styles.appointmentArrow}>›</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {/* Upload Records Section */}
       <View style={styles.uploadRecordsSection}>
         <Text style={styles.uploadRecordsTitle}>Upload Records</Text>
@@ -376,6 +422,67 @@ export default function SpecialtiesScreen() {
                   ) : (
                     <Text style={styles.addButtonText}>Add to My Team</Text>
                   )}
+                </TouchableOpacity>
+              </>
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Appointment Detail Modal */}
+      <Modal
+        visible={showAppointmentDetail && selectedAppointment !== null}
+        animationType="slide"
+        onRequestClose={() => setShowAppointmentDetail(false)}
+      >
+        <View style={styles.appointmentDetailContainer}>
+          <View style={styles.appointmentDetailHeader}>
+            <TouchableOpacity onPress={() => setShowAppointmentDetail(false)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+            <Text style={styles.appointmentDetailTitle}>Appointment Summary</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView style={styles.appointmentDetailContent}>
+            {selectedAppointment && (
+              <>
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Date & Time</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedAppointment.date} at {selectedAppointment.time}
+                  </Text>
+                </View>
+
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Provider</Text>
+                  <Text style={styles.detailValue}>{selectedAppointment.provider}</Text>
+                </View>
+
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>Type of Visit</Text>
+                  <Text style={styles.detailValue}>{selectedAppointment.description}</Text>
+                </View>
+
+                <View style={styles.summaryBox}>
+                  <Text style={styles.summaryTitle}>Visit Summary</Text>
+                  <Text style={styles.summaryText}>
+                    {selectedAppointment.description} with {selectedAppointment.provider}
+                  </Text>
+                  <Text style={styles.summaryMeta}>
+                    Scheduled for {selectedAppointment.date}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={styles.addRecordButton}
+                  onPress={() => {
+                    // Navigate to upload with pre-filled specialty based on provider
+                    setShowAppointmentDetail(false);
+                    setUploadingSpecialty('Primary Care');
+                  }}
+                >
+                  <Text style={styles.addRecordButtonText}>📝 Add Visit Notes</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -776,5 +883,137 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0',
     borderWidth: 1,
     borderColor: '#E0E0E0',
+  },
+  appointmentsSection: {
+    paddingHorizontal: 20,
+    marginVertical: 20,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  refreshLink: {
+    fontSize: 13,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  appointmentItem: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  appointmentContent: {
+    flex: 1,
+  },
+  appointmentDate: {
+    fontSize: 13,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  appointmentProvider: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  appointmentType: {
+    fontSize: 13,
+    color: '#666',
+  },
+  appointmentArrow: {
+    fontSize: 18,
+    color: '#CCC',
+    marginLeft: 12,
+  },
+  appointmentDetailContainer: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    paddingTop: 50,
+  },
+  appointmentDetailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  appointmentDetailTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+  },
+  closeButton: {
+    fontSize: 20,
+    color: '#999',
+    fontWeight: '600',
+  },
+  appointmentDetailContent: {
+    flex: 1,
+    padding: 20,
+  },
+  detailSection: {
+    marginBottom: 20,
+  },
+  detailLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  detailValue: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#000',
+  },
+  summaryBox: {
+    backgroundColor: '#F8F9FF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  summaryTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 8,
+  },
+  summaryText: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  summaryMeta: {
+    fontSize: 12,
+    color: '#999',
+  },
+  addRecordButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  addRecordButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
   },
 });
