@@ -1,6 +1,6 @@
 // Service to fetch patient data from Epic FHIR backend
 
-const BACKEND_URL = 'http://192.168.86.23:3000'; // Backend on Mac network
+const BACKEND_URL = 'http://localhost:3000';
 
 export interface Patient {
   id: string;

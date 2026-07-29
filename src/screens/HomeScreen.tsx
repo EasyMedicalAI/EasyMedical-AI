@@ -713,33 +713,6 @@ export default function HomeScreen() {
           <WearableVitals />
         </View>
 
-        {/* Epic Observations/Vitals from EHR */}
-        {epicObservations.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.cardTitleRow}>
-              <Text style={styles.cardIcon}>📊</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Epic EHR Vitals & Labs</Text>
-                <Text style={styles.cardMeta}>{epicObservations.length} recent</Text>
-              </View>
-              <TouchableOpacity onPress={loadEpicData}>
-                <Text style={styles.editLink}>Refresh</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.card}>
-              {epicObservations.map((obs) => (
-                <View key={obs.id} style={{ marginVertical: 8 }}>
-                  <Text style={styles.healthItem}>
-                    <Text style={{ fontWeight: '600' }}>{obs.code}</Text> • {obs.value} {obs.unit}
-                  </Text>
-                  <Text style={[styles.healthItem, { fontSize: 12, opacity: 0.7 }]}>
-                    Date: {obs.date}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
 
         {/* CURRENT HEALTH Section */}
         <View style={styles.section}>
@@ -768,57 +741,69 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-              {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) ? (
-                userData.prescriptionMedications.map((med, idx) => (
-                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
-                    {editingPrescriptionMedIdx === idx ? (
-                      <TextInput
-                        style={[styles.input, { flex: 1, height: 36 }]}
-                        value={editingPrescriptionMedValue}
-                        onChangeText={setEditingPrescriptionMedValue}
-                      />
-                    ) : (
-                      <Text style={[styles.healthItem, { flex: 1 }]}>• {med}</Text>
-                    )}
-                    {editingPrescriptionMedIdx === idx ? (
-                      <>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            const updated = [...(userData.prescriptionMedications || [])];
-                            updated[idx] = editingPrescriptionMedValue;
-                            const updatedData = { ...editData, prescriptionMedications: updated };
-                            setEditData(updatedData);
-                            await updateUserData(updatedData);
-                            setEditingPrescriptionMedIdx(null);
-                          }}
-                        >
-                          <Text style={styles.editLink}>✓</Text>
+              {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) || epicMedications.length > 0 ? (
+                <>
+                  {/* Manual medications */}
+                  {userData.prescriptionMedications && userData.prescriptionMedications.map((med, idx) => (
+                    <View key={`manual-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
+                      {editingPrescriptionMedIdx === idx ? (
+                        <TextInput
+                          style={[styles.input, { flex: 1, height: 36 }]}
+                          value={editingPrescriptionMedValue}
+                          onChangeText={setEditingPrescriptionMedValue}
+                        />
+                      ) : (
+                        <Text style={[styles.healthItem, { flex: 1 }]}>• {med}</Text>
+                      )}
+                      {editingPrescriptionMedIdx === idx ? (
+                        <>
+                          <TouchableOpacity
+                            onPress={async () => {
+                              const updated = [...(userData.prescriptionMedications || [])];
+                              updated[idx] = editingPrescriptionMedValue;
+                              const updatedData = { ...editData, prescriptionMedications: updated };
+                              setEditData(updatedData);
+                              await updateUserData(updatedData);
+                              setEditingPrescriptionMedIdx(null);
+                            }}
+                          >
+                            <Text style={styles.editLink}>✓</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => setEditingPrescriptionMedIdx(null)}>
+                            <Text style={styles.editLink}>✕</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={async () => {
+                              const updated = (userData.prescriptionMedications || []).filter((_, i) => i !== idx);
+                              const updatedData = { ...editData, prescriptionMedications: updated };
+                              setEditData(updatedData);
+                              await updateUserData(updatedData);
+                              setEditingPrescriptionMedIdx(null);
+                            }}
+                          >
+                            <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : isCurrentHealthEditMode ? (
+                        <TouchableOpacity onPress={() => {
+                          setEditingPrescriptionMedIdx(idx);
+                          setEditingPrescriptionMedValue(med);
+                        }}>
+                          <Text style={styles.editLink}>Edit</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => setEditingPrescriptionMedIdx(null)}>
-                          <Text style={styles.editLink}>✕</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            const updated = (userData.prescriptionMedications || []).filter((_, i) => i !== idx);
-                            const updatedData = { ...editData, prescriptionMedications: updated };
-                            setEditData(updatedData);
-                            await updateUserData(updatedData);
-                            setEditingPrescriptionMedIdx(null);
-                          }}
-                        >
-                          <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : isCurrentHealthEditMode ? (
-                      <TouchableOpacity onPress={() => {
-                        setEditingPrescriptionMedIdx(idx);
-                        setEditingPrescriptionMedValue(med);
-                      }}>
-                        <Text style={styles.editLink}>Edit</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ))
+                      ) : null}
+                    </View>
+                  ))}
+                  {/* Epic medications */}
+                  {epicMedications.map((med) => (
+                    <View key={med.id} style={{ marginVertical: 4 }}>
+                      <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{med.name}</Text></Text>
+                      <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
+                        {med.dosage}
+                      </Text>
+                    </View>
+                  ))}
+                </>
               ) : (
                 <>
                   <Text style={styles.healthItem}>• Lisinopril 10mg daily</Text>
@@ -899,25 +884,6 @@ export default function HomeScreen() {
               )}
             </View>
 
-            {/* Epic Medications from EHR */}
-            {epicMedications.length > 0 && (
-              <View style={styles.healthSection}>
-                <View style={styles.healthSectionHeader}>
-                  <Text style={styles.healthSectionTitle}>🏥 Epic EHR Medications</Text>
-                  <TouchableOpacity onPress={loadEpicData}>
-                    <Text style={styles.editLink}>Refresh</Text>
-                  </TouchableOpacity>
-                </View>
-                {epicMedications.map((med) => (
-                  <View key={med.id}>
-                    <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{med.name}</Text></Text>
-                    <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
-                      {med.dosage}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
 
             {/* Conditions */}
             <View style={styles.healthSection}>
@@ -1026,57 +992,69 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 )}
               </View>
-              {(userData.allergies && userData.allergies.length > 0) ? (
-                userData.allergies.map((allergy, idx) => (
-                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
-                    {editingAllergyIdx === idx ? (
-                      <TextInput
-                        style={[styles.input, { flex: 1, height: 36 }]}
-                        value={editingAllergyValue}
-                        onChangeText={setEditingAllergyValue}
-                      />
-                    ) : (
-                      <Text style={[styles.healthItem, { flex: 1 }]}>• {allergy}</Text>
-                    )}
-                    {editingAllergyIdx === idx ? (
-                      <>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            const updated = [...(userData.allergies || [])];
-                            updated[idx] = editingAllergyValue;
-                            const updatedData = { ...editData, allergies: updated };
-                            setEditData(updatedData);
-                            await updateUserData(updatedData);
-                            setEditingAllergyIdx(null);
-                          }}
-                        >
-                          <Text style={styles.editLink}>✓</Text>
+              {(userData.allergies && userData.allergies.length > 0) || epicAllergies.length > 0 ? (
+                <>
+                  {/* Manual allergies */}
+                  {userData.allergies && userData.allergies.map((allergy, idx) => (
+                    <View key={`manual-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
+                      {editingAllergyIdx === idx ? (
+                        <TextInput
+                          style={[styles.input, { flex: 1, height: 36 }]}
+                          value={editingAllergyValue}
+                          onChangeText={setEditingAllergyValue}
+                        />
+                      ) : (
+                        <Text style={[styles.healthItem, { flex: 1 }]}>• {allergy}</Text>
+                      )}
+                      {editingAllergyIdx === idx ? (
+                        <>
+                          <TouchableOpacity
+                            onPress={async () => {
+                              const updated = [...(userData.allergies || [])];
+                              updated[idx] = editingAllergyValue;
+                              const updatedData = { ...editData, allergies: updated };
+                              setEditData(updatedData);
+                              await updateUserData(updatedData);
+                              setEditingAllergyIdx(null);
+                            }}
+                          >
+                            <Text style={styles.editLink}>✓</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => setEditingAllergyIdx(null)}>
+                            <Text style={styles.editLink}>✕</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={async () => {
+                              const updated = (userData.allergies || []).filter((_, i) => i !== idx);
+                              const updatedData = { ...editData, allergies: updated };
+                              setEditData(updatedData);
+                              await updateUserData(updatedData);
+                              setEditingAllergyIdx(null);
+                            }}
+                          >
+                            <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : isCurrentHealthEditMode ? (
+                        <TouchableOpacity onPress={() => {
+                          setEditingAllergyIdx(idx);
+                          setEditingAllergyValue(allergy);
+                        }}>
+                          <Text style={styles.editLink}>Edit</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => setEditingAllergyIdx(null)}>
-                          <Text style={styles.editLink}>✕</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            const updated = (userData.allergies || []).filter((_, i) => i !== idx);
-                            const updatedData = { ...editData, allergies: updated };
-                            setEditData(updatedData);
-                            await updateUserData(updatedData);
-                            setEditingAllergyIdx(null);
-                          }}
-                        >
-                          <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : isCurrentHealthEditMode ? (
-                      <TouchableOpacity onPress={() => {
-                        setEditingAllergyIdx(idx);
-                        setEditingAllergyValue(allergy);
-                      }}>
-                        <Text style={styles.editLink}>Edit</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ))
+                      ) : null}
+                    </View>
+                  ))}
+                  {/* Epic allergies */}
+                  {epicAllergies.map((allergy) => (
+                    <View key={allergy.id} style={{ marginVertical: 4 }}>
+                      <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{allergy.allergen}</Text></Text>
+                      <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
+                        Reaction: {allergy.reaction}
+                      </Text>
+                    </View>
+                  ))}
+                </>
               ) : (
                 <>
                   <Text style={styles.healthItem}>• Penicillin</Text>
@@ -1113,25 +1091,6 @@ export default function HomeScreen() {
               )}
             </View>
 
-            {/* Epic Allergies from EHR */}
-            {epicAllergies.length > 0 && (
-              <View style={styles.healthSection}>
-                <View style={styles.healthSectionHeader}>
-                  <Text style={styles.healthSectionTitle}>🏥 Epic Allergies</Text>
-                  <TouchableOpacity onPress={loadEpicData}>
-                    <Text style={styles.editLink}>Refresh</Text>
-                  </TouchableOpacity>
-                </View>
-                {epicAllergies.map((allergy) => (
-                  <View key={allergy.id}>
-                    <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{allergy.allergen}</Text></Text>
-                    <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
-                      Reaction: {allergy.reaction}
-                    </Text>
-                  </View>
-                ))}
-              </View>
-            )}
 
             {/* Vaccines */}
             <View style={styles.healthSection}>
@@ -1476,35 +1435,56 @@ export default function HomeScreen() {
               <Text style={styles.cardIcon}>📅</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>Upcoming Appointments</Text>
-                <Text style={styles.cardMeta}>{userData.appointments?.length || 0} scheduled</Text>
+                <Text style={styles.cardMeta}>{(userData.appointments?.length || 0) + epicAppointments.length} total</Text>
               </View>
+              {epicAppointments.length > 0 && (
+                <TouchableOpacity onPress={loadEpicData}>
+                  <Text style={styles.editLink}>Sync</Text>
+                </TouchableOpacity>
+              )}
             </View>
             <View style={styles.card}>
-              {userData.appointments && userData.appointments.length > 0 ? (
-                [...userData.appointments]
-                  .sort((a, b) => parseAppointmentDate(a.dateTime).getTime() - parseAppointmentDate(b.dateTime).getTime())
-                  .map((apt, idx) => (
+              {(userData.appointments && userData.appointments.length > 0) || epicAppointments.length > 0 ? (
+                <>
+                  {/* Manual appointments */}
+                  {userData.appointments && [...userData.appointments]
+                    .sort((a, b) => parseAppointmentDate(a.dateTime).getTime() - parseAppointmentDate(b.dateTime).getTime())
+                    .map((apt, idx) => (
+                      <View key={apt.id}>
+                        <View style={styles.appointmentItemRow}>
+                          <View style={styles.appointmentItem}>
+                            <Text style={styles.appointmentDate}>{apt.dateTime}</Text>
+                            <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
+                            <Text style={styles.appointmentSpecialty}>{apt.specialty}</Text>
+                          </View>
+                          <TouchableOpacity onPress={() => {
+                            setEditData(userData);
+                            setEditingSection('appointments');
+                            setEditingAppointmentId(apt.id);
+                            setAppointmentDateTime(apt.dateTime);
+                            setAppointmentDoctorName(apt.doctorName);
+                            setAppointmentSpecialty(apt.specialty);
+                          }}>
+                            <Text style={styles.editLink}>Edit</Text>
+                          </TouchableOpacity>
+                        </View>
+                        {idx < (userData.appointments?.length || 0) - 1 && <View style={styles.divider} />}
+                      </View>
+                    ))}
+                  {/* Epic appointments */}
+                  {epicAppointments.map((apt, idx) => (
                     <View key={apt.id}>
                       <View style={styles.appointmentItemRow}>
                         <View style={styles.appointmentItem}>
-                          <Text style={styles.appointmentDate}>{apt.dateTime}</Text>
-                          <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
-                          <Text style={styles.appointmentSpecialty}>{apt.specialty}</Text>
+                          <Text style={styles.appointmentDate}>{apt.date} at {apt.time}</Text>
+                          <Text style={styles.appointmentDoctor}>{apt.provider}</Text>
+                          <Text style={styles.appointmentSpecialty}>{apt.description}</Text>
                         </View>
-                        <TouchableOpacity onPress={() => {
-                          setEditData(userData);
-                          setEditingSection('appointments');
-                          setEditingAppointmentId(apt.id);
-                          setAppointmentDateTime(apt.dateTime);
-                          setAppointmentDoctorName(apt.doctorName);
-                          setAppointmentSpecialty(apt.specialty);
-                        }}>
-                          <Text style={styles.editLink}>Edit</Text>
-                        </TouchableOpacity>
                       </View>
-                      {idx < userData.appointments.length - 1 && <View style={styles.divider} />}
+                      {idx < epicAppointments.length - 1 && <View style={styles.divider} />}
                     </View>
-                  ))
+                  ))}
+                </>
               ) : (
                 <Text style={styles.emptyText}>No upcoming appointments</Text>
               )}
@@ -1530,35 +1510,6 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* Epic Appointments from EHR */}
-          {epicAppointments.length > 0 && (
-            <View style={styles.cardWrapper}>
-              <View style={styles.cardTitleRow}>
-                <Text style={styles.cardIcon}>🏥</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>Epic EHR Appointments</Text>
-                  <Text style={styles.cardMeta}>{epicAppointments.length} from Epic</Text>
-                </View>
-                <TouchableOpacity onPress={loadEpicData}>
-                  <Text style={styles.editLink}>Refresh</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.card}>
-                {epicAppointments.map((apt, idx) => (
-                  <View key={apt.id}>
-                    <View style={styles.appointmentItemRow}>
-                      <View style={styles.appointmentItem}>
-                        <Text style={styles.appointmentDate}>{apt.date} at {apt.time}</Text>
-                        <Text style={styles.appointmentDoctor}>{apt.provider}</Text>
-                        <Text style={styles.appointmentSpecialty}>{apt.description}</Text>
-                      </View>
-                    </View>
-                    {idx < epicAppointments.length - 1 && <View style={styles.divider} />}
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
 
           {/* Insurance */}
           <View style={styles.cardWrapper}>
