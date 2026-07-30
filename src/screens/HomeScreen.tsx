@@ -1500,14 +1500,15 @@ export default function HomeScreen() {
         </View>
 
         {/* SCREENINGS Card */}
-        <View style={styles.cardWrapper}>
-          <View style={styles.cardTitleRow}>
-            <Text style={styles.cardIcon}>🏥</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>Health Screenings</Text>
+        <View style={styles.section}>
+          <View style={styles.cardWrapper}>
+            <View style={styles.cardTitleRow}>
+              <Text style={styles.cardIcon}>🏥</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Health Screenings</Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.card}>
+            <View style={styles.card}>
             {/* Screening Completed Section */}
             <View style={styles.screeningSection}>
               <View style={styles.screeningSectionHeader}>
@@ -1591,6 +1592,7 @@ export default function HomeScreen() {
               </View>
             </View>
           </View>
+        </View>
         </View>
 
         {/* LABS & RESULTS Section */}
