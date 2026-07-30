@@ -311,22 +311,6 @@ export default function SpecialtiesScreen() {
         )}
       </View>
 
-      {/* Quick Upload Actions */}
-      <View style={styles.quickUploadSection}>
-        <TouchableOpacity
-          style={styles.quickUploadButton}
-          onPress={() => setUploadingSpecialty('Lab')}
-        >
-          <Text style={styles.quickUploadButtonText}>🔬 Upload Labs</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.quickUploadButton}
-          onPress={() => setUploadingSpecialty('Imaging')}
-        >
-          <Text style={styles.quickUploadButtonText}>📷 Upload Imaging</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Upload Records Section */}
       <View style={styles.uploadRecordsSection}>
         <Text style={styles.uploadRecordsTitle}>Upload Records</Text>
@@ -345,6 +329,22 @@ export default function SpecialtiesScreen() {
             </Text>
           </TouchableOpacity>
         ))}
+      </View>
+
+      {/* Quick Upload Actions */}
+      <View style={styles.quickUploadSection}>
+        <TouchableOpacity
+          style={styles.quickUploadButton}
+          onPress={() => setUploadingSpecialty('Lab')}
+        >
+          <Text style={styles.quickUploadButtonText}>🔬 Upload Labs</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickUploadButton}
+          onPress={() => setUploadingSpecialty('Imaging')}
+        >
+          <Text style={styles.quickUploadButtonText}>📷 Upload Imaging</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.spacing} />
