@@ -59,6 +59,7 @@ export interface UserHealthData {
   lastVisitDate?: string;
   pharmacy?: {
     name: string;
+    address?: string;
     phone: string;
   };
 }

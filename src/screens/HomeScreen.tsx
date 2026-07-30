@@ -49,6 +49,9 @@ export default function HomeScreen() {
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [editingEmergencyContactId, setEditingEmergencyContactId] = useState<number | null>(null);
+  const [pharmacyName, setPharmacyName] = useState('');
+  const [pharmacyAddress, setPharmacyAddress] = useState('');
+  const [pharmacyPhone, setPharmacyPhone] = useState('');
   const [selectedBirthdayMonth, setSelectedBirthdayMonth] = useState(0);
   const [selectedBirthdayDay, setSelectedBirthdayDay] = useState(1);
   const [selectedBirthdayYear, setSelectedBirthdayYear] = useState(1990);
@@ -264,6 +267,18 @@ export default function HomeScreen() {
         setEmergencyContactName('');
         setEmergencyContactRelationship('');
         setEmergencyContactPhone('');
+      } else if (editingSection === 'pharmacy' && pharmacyName && pharmacyPhone) {
+        await updateUserData({
+          ...editData,
+          pharmacy: {
+            name: pharmacyName,
+            address: pharmacyAddress,
+            phone: pharmacyPhone,
+          },
+        });
+        setPharmacyName('');
+        setPharmacyAddress('');
+        setPharmacyPhone('');
       } else if (editingHistoryType === 'surgical' && surgeryName) {
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const formattedDate = `${months[historyDateMonth]} ${historyDateYear}`;
@@ -1593,6 +1608,85 @@ export default function HomeScreen() {
             </View>
           </View>
 
+          {/* Pharmacy */}
+          <View style={styles.cardWrapper}>
+            <View style={styles.cardTitleRow}>
+              <Text style={styles.cardIcon}>💊</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Pharmacy</Text>
+              </View>
+            </View>
+            <View style={styles.card}>
+              {userData.pharmacy ? (
+                <>
+                  <View style={styles.infoRowWithEdit}>
+                    <View style={styles.infoColumn}>
+                      <Text style={styles.infoLabel}>Name</Text>
+                      <Text style={styles.infoValue}>{userData.pharmacy.name}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => {
+                      setEditData(userData);
+                      setEditingSection('pharmacy');
+                      setPharmacyName(userData.pharmacy?.name || '');
+                      setPharmacyAddress(userData.pharmacy?.address || '');
+                      setPharmacyPhone(userData.pharmacy?.phone || '');
+                    }}>
+                      <Text style={styles.editLink}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {userData.pharmacy.address && (
+                    <>
+                      <View style={styles.divider} />
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Address</Text>
+                        <Text style={styles.infoValue}>{userData.pharmacy.address}</Text>
+                      </View>
+                    </>
+                  )}
+                  {userData.pharmacy.phone && (
+                    <>
+                      <View style={styles.divider} />
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Phone</Text>
+                        <Text style={styles.infoValueMono}>{userData.pharmacy.phone}</Text>
+                      </View>
+                    </>
+                  )}
+                </>
+              ) : (
+                <>
+                  <View style={styles.infoRowWithEdit}>
+                    <View style={styles.infoColumn}>
+                      <Text style={styles.infoLabel}>Name</Text>
+                      <Text style={styles.infoValue}>—</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => {
+                      setEditData(userData);
+                      setEditingSection('pharmacy');
+                      setPharmacyName('');
+                      setPharmacyAddress('');
+                      setPharmacyPhone('');
+                    }}>
+                      <Text style={styles.editLink}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => {
+                  setEditData(userData);
+                  setEditingSection('pharmacy');
+                  setPharmacyName(userData.pharmacy?.name || '');
+                  setPharmacyAddress(userData.pharmacy?.address || '');
+                  setPharmacyPhone(userData.pharmacy?.phone || '');
+                }}
+              >
+                <Text style={styles.addButtonText}>{userData.pharmacy ? '+ Edit Pharmacy' : '+ Add Pharmacy'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Emergency Contacts */}
           <View style={styles.cardWrapper}>
             <View style={styles.cardTitleRow}>
@@ -2457,6 +2551,48 @@ export default function HomeScreen() {
                 <Text style={styles.deleteButtonText}>Delete Insurance</Text>
               </TouchableOpacity>
             )}
+          </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal visible={editingSection === 'pharmacy'} animationType="slide" onRequestClose={handleCancel}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Add Pharmacy</Text>
+            <TouchableOpacity onPress={handleCancel}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            <Text style={styles.label}>Pharmacy Name</Text>
+            <TextInput
+              style={styles.input}
+              value={pharmacyName}
+              onChangeText={setPharmacyName}
+              placeholder="e.g., CVS Pharmacy"
+            />
+            <Text style={styles.label}>Address</Text>
+            <TextInput
+              style={styles.input}
+              value={pharmacyAddress}
+              onChangeText={setPharmacyAddress}
+              placeholder="e.g., 123 Main St, Springfield, IL 62701"
+            />
+            <Text style={styles.label}>Phone Number</Text>
+            <TextInput
+              style={styles.input}
+              value={pharmacyPhone}
+              onChangeText={setPharmacyPhone}
+              placeholder="e.g., (555) 123-4567"
+            />
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
+                <Text style={styles.buttonTextWhite}>Save</Text>
+              </TouchableOpacity>
+            </View>
           </ScrollView>
         </View>
       </Modal>
