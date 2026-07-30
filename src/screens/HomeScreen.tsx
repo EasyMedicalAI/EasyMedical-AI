@@ -1559,7 +1559,7 @@ export default function HomeScreen() {
 
             {/* Recommended Screenings Section */}
             <View style={styles.screeningSection}>
-              <Text style={styles.screeningSectionTitle}>📋 Recommended Screenings (USPSTF)</Text>
+              <Text style={styles.screeningSectionTitle}>Recommended Screenings (USPSTF)</Text>
               <Text style={styles.recommendedSubtitle}>Age-appropriate screenings based on your profile</Text>
               <View style={styles.recommendedList}>
                 {getRecommendedScreenings().map((screening, idx) => {
