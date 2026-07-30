@@ -193,6 +193,75 @@ export default function HomeScreen() {
     return new Date(yearStr, monthIdx, dayStr, hour, minute);
   };
 
+  const getRecommendedScreenings = (): string[] => {
+    const age = calculateAge(userData.birthday || '');
+    const gender = userData.gender?.toLowerCase() || '';
+    const recommendations: string[] = [];
+
+    // Universal screenings
+    recommendations.push('Blood Pressure Check');
+    recommendations.push('Cholesterol Screening');
+
+    // Age 18-39
+    if (age >= 18 && age < 40) {
+      recommendations.push('Diabetes Screening (if risk factors)');
+    }
+
+    // Age 40-49
+    if (age >= 40 && age < 50) {
+      recommendations.push('Blood Glucose/Diabetes Screening');
+      recommendations.push('Cardiovascular Risk Assessment');
+    }
+
+    // Age 50+
+    if (age >= 50) {
+      recommendations.push('Colorectal Cancer Screening');
+      recommendations.push('Diabetes Screening');
+    }
+
+    // Cervical cancer screening (women 21-65)
+    if (gender.includes('female') || gender.includes('woman')) {
+      if (age >= 21 && age <= 65) {
+        recommendations.push('Cervical Cancer Screening (Pap Smear)');
+      }
+      // Breast cancer screening (women 40+)
+      if (age >= 40) {
+        recommendations.push('Breast Cancer Screening (Mammogram)');
+      }
+      // Bone density screening (women 65+)
+      if (age >= 65) {
+        recommendations.push('Bone Density Screening (DEXA)');
+      }
+    }
+
+    // Prostate cancer screening (men 50-70, shared decision)
+    if (gender.includes('male') || gender.includes('man')) {
+      if (age >= 50 && age <= 70) {
+        recommendations.push('Prostate Cancer Screening (PSA)');
+      }
+    }
+
+    // Abdominal aortic aneurysm (men 65-75 with smoking history)
+    if ((gender.includes('male') || gender.includes('man')) && age >= 65 && age <= 75) {
+      recommendations.push('Abdominal Aortic Aneurysm (AAA) Screening');
+    }
+
+    // Osteoporosis screening (women 65+, men 70+)
+    if (gender.includes('female') && age >= 65) {
+      recommendations.push('Osteoporosis Screening');
+    }
+    if (gender.includes('male') && age >= 70) {
+      recommendations.push('Osteoporosis Screening');
+    }
+
+    // Lung cancer screening (50-80 with smoking history)
+    if (age >= 50 && age <= 80) {
+      recommendations.push('Lung Cancer Screening (if smoker)');
+    }
+
+    return recommendations;
+  };
+
   const handleSaveEdit = async () => {
     try {
       if (editingSection === 'appointments' && appointmentDateTime && appointmentDoctorName && appointmentSpecialty) {
@@ -1506,6 +1575,40 @@ export default function HomeScreen() {
             >
               <Text style={styles.addButtonText}>+ Add Screening</Text>
             </TouchableOpacity>
+
+            {/* Recommended Screenings */}
+            <View style={styles.recommendedSection}>
+              <Text style={styles.recommendedTitle}>📋 Recommended Screenings (USPSTF)</Text>
+              <Text style={styles.recommendedSubtitle}>Age-appropriate screenings based on your profile</Text>
+              <View style={styles.recommendedList}>
+                {getRecommendedScreenings().map((screening, idx) => {
+                  const isCompleted = userData.screenings?.some(s =>
+                    s.type.toLowerCase().includes(screening.toLowerCase().split('(')[0].trim().toLowerCase())
+                  );
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.recommendedItem, isCompleted && styles.completedItem]}
+                      onPress={() => {
+                        if (!isCompleted) {
+                          setEditData(userData);
+                          setEditingSection('screenings');
+                          setEditingScreeningId(null);
+                          setScreeningType(screening);
+                          setScreeningDate('');
+                          setScreeningNotes('');
+                        }
+                      }}
+                    >
+                      <Text style={styles.recommendedCheckbox}>{isCompleted ? '✓' : '○'}</Text>
+                      <Text style={[styles.recommendedText, isCompleted && styles.completedText]}>
+                        {screening}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
           </View>
         </View>
 
@@ -3993,5 +4096,55 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     backgroundColor: '#CCC',
+  },
+  recommendedSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopColor: '#E0E0E0',
+    borderTopWidth: 1,
+  },
+  recommendedTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  recommendedSubtitle: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 12,
+  },
+  recommendedList: {
+    gap: 8,
+  },
+  recommendedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#F8F8F8',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  completedItem: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#4CAF50',
+  },
+  recommendedCheckbox: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginRight: 10,
+    minWidth: 16,
+  },
+  recommendedText: {
+    fontSize: 13,
+    color: '#333',
+    flex: 1,
+  },
+  completedText: {
+    color: '#666',
+    textDecorationLine: 'line-through',
   },
 });
