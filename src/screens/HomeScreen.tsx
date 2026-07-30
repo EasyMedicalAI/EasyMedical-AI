@@ -113,8 +113,22 @@ export default function HomeScreen() {
   const [epicLoading, setEpicLoading] = useState(false);
 
   useEffect(() => {
-    loadEpicData();
+    initializeEpic();
   }, []);
+
+  const initializeEpic = async () => {
+    try {
+      // Initialize Epic service with stored access token
+      await epicService.initializeWithStoredToken();
+      // Try to load Epic data if connected
+      const connected = await epicService.isConnected();
+      if (connected) {
+        await loadEpicData();
+      }
+    } catch (error) {
+      console.error('Error initializing Epic:', error);
+    }
+  };
 
   const loadEpicData = async () => {
     setEpicLoading(true);
@@ -257,6 +271,36 @@ export default function HomeScreen() {
     // Lung cancer screening (50-80 with smoking history)
     if (age >= 50 && age <= 80) {
       recommendations.push('Lung Cancer Screening (if smoker)');
+    }
+
+    return recommendations;
+  };
+
+  const getRecommendedVaccines = (): string[] => {
+    const age = calculateAge(userData.birthday || '');
+    const recommendations: string[] = [];
+
+    // Universal recommendations
+    recommendations.push('Influenza (Flu) Vaccine - Annual');
+    recommendations.push('COVID-19 Vaccine - Updated');
+
+    // Age 19-59
+    if (age >= 19 && age < 60) {
+      recommendations.push('Tdap/Td - Every 10 years');
+      recommendations.push('Pneumococcal Vaccine (if risk factors)');
+    }
+
+    // Age 60+
+    if (age >= 60) {
+      recommendations.push('Shingles (Shingrix) Vaccine');
+      recommendations.push('Pneumococcal Vaccine (PPSV23/PCV20)');
+      recommendations.push('Tdap/Td - Every 10 years');
+      recommendations.push('RSV Vaccine (age 60+)');
+    }
+
+    // Age 50+
+    if (age >= 50) {
+      recommendations.push('Mpox Vaccine (if indicated)');
     }
 
     return recommendations;
@@ -1203,107 +1247,6 @@ export default function HomeScreen() {
             </View>
 
 
-            {/* Vaccines */}
-            <View style={styles.healthSection}>
-              <View style={styles.healthSectionHeader}>
-                <Text style={styles.healthSectionTitle}>💉 Vaccinations</Text>
-                {isCurrentHealthEditMode && (
-                  <TouchableOpacity onPress={() => setAddingVaccine(!addingVaccine)}>
-                    <Text style={styles.editLink}>+ Add</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-              {(userData.vaccines && userData.vaccines.length > 0) ? (
-                userData.vaccines.map((vaccine, idx) => (
-                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 6 }}>
-                    {editingVaccineIdx === idx ? (
-                      <TextInput
-                        style={[styles.input, { flex: 1, height: 36 }]}
-                        value={editingVaccineValue}
-                        onChangeText={setEditingVaccineValue}
-                      />
-                    ) : (
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.healthItem}>• {vaccine.name}</Text>
-                        <Text style={styles.healthItemMeta}>  {new Date(vaccine.date).toLocaleDateString()}</Text>
-                      </View>
-                    )}
-                    {editingVaccineIdx === idx ? (
-                      <>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            const updated = [...(userData.vaccines || [])];
-                            updated[idx] = { ...vaccine, name: editingVaccineValue };
-                            const updatedData = { ...editData, vaccines: updated };
-                            setEditData(updatedData);
-                            await updateUserData(updatedData);
-                            setEditingVaccineIdx(null);
-                          }}
-                        >
-                          <Text style={styles.editLink}>✓</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => setEditingVaccineIdx(null)}>
-                          <Text style={styles.editLink}>✕</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            const updated = (userData.vaccines || []).filter((_, i) => i !== idx);
-                            const updatedData = { ...editData, vaccines: updated };
-                            setEditData(updatedData);
-                            await updateUserData(updatedData);
-                            setEditingVaccineIdx(null);
-                          }}
-                        >
-                          <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : isCurrentHealthEditMode ? (
-                      <TouchableOpacity onPress={() => {
-                        setEditingVaccineIdx(idx);
-                        setEditingVaccineValue(vaccine.name);
-                      }}>
-                        <Text style={styles.editLink}>Edit</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ))
-              ) : (
-                <>
-                  <Text style={styles.healthItem}>• COVID-19 (Booster)</Text>
-                  <Text style={styles.healthItemMeta}>  1/15/2024</Text>
-                  <Text style={styles.healthItem}>• Flu Shot</Text>
-                  <Text style={styles.healthItemMeta}>  9/20/2024</Text>
-                </>
-              )}
-              {addingVaccine && (
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
-                  <TextInput
-                    style={[styles.input, { flex: 1, height: 40 }]}
-                    placeholder="Enter vaccine name"
-                    placeholderTextColor="#999"
-                    value={newVaccine}
-                    onChangeText={setNewVaccine}
-                  />
-                  <TouchableOpacity
-                    style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
-                    onPress={async () => {
-                      if (newVaccine.trim()) {
-                        const updatedData = {
-                          ...editData,
-                          vaccines: [...(editData.vaccines || []), { name: newVaccine.trim(), date: new Date().toISOString() }]
-                        };
-                        setEditData(updatedData);
-                        await updateUserData(updatedData);
-                        setNewVaccine('');
-                        setAddingVaccine(false);
-                      }
-                    }}
-                  >
-                    <Text style={{ color: '#FFF', fontWeight: '600' }}>Add</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
           </View>
         </View>
 
@@ -1585,6 +1528,81 @@ export default function HomeScreen() {
                       <Text style={styles.recommendedCheckbox}>{isCompleted ? '✓' : '○'}</Text>
                       <Text style={[styles.recommendedText, isCompleted && styles.completedText]}>
                         {screening}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        </View>
+        </View>
+
+        {/* VACCINES Card */}
+        <View style={styles.section}>
+          <View style={styles.cardWrapper}>
+            <View style={styles.cardTitleRow}>
+              <Text style={styles.cardIcon}>💉</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Vaccines</Text>
+              </View>
+            </View>
+            <View style={styles.card}>
+            {/* Vaccines Completed Section */}
+            <View style={styles.screeningSection}>
+              <View style={styles.screeningSectionHeader}>
+                <Text style={styles.screeningSectionTitle}>Vaccines Completed</Text>
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  setEditingSection('vaccines');
+                  setEditingScreeningId(null);
+                  setScreeningType('');
+                  setScreeningDate('');
+                  setScreeningNotes('');
+                }}>
+                  <Text style={styles.addButtonSmall}>+ Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              {userData.vaccines && userData.vaccines.length > 0 ? (
+                <View>
+                  {userData.vaccines.map((vaccine, idx) => (
+                    <View key={idx}>
+                      <View style={styles.completedScreeningItem}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.completedScreeningType}>{vaccine.name}</Text>
+                          <Text style={styles.completedScreeningDate}>{vaccine.date}</Text>
+                          {vaccine.nextDue && <Text style={styles.completedScreeningNotes}>Next due: {vaccine.nextDue}</Text>}
+                        </View>
+                      </View>
+                      {idx < userData.vaccines.length - 1 && <View style={styles.divider} />}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.emptyScreeningText}>No vaccines recorded</Text>
+              )}
+            </View>
+
+            <View style={styles.sectionDivider} />
+
+            {/* Recommended Vaccines Section */}
+            <View style={styles.screeningSection}>
+              <Text style={styles.screeningSectionTitle}>Recommended Vaccines</Text>
+              <Text style={styles.recommendedSubtitle}>Age-appropriate vaccines for your profile</Text>
+              <View style={styles.recommendedList}>
+                {getRecommendedVaccines().map((vaccine, idx) => {
+                  const isCompleted = userData.vaccines?.some(v =>
+                    v.name.toLowerCase().includes(vaccine.toLowerCase().split('(')[0].split('-')[0].trim().toLowerCase())
+                  );
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.recommendedItem, isCompleted && styles.completedItem]}
+                    >
+                      <Text style={styles.recommendedCheckbox}>{isCompleted ? '✓' : '○'}</Text>
+                      <Text style={[styles.recommendedText, isCompleted && styles.completedText]}>
+                        {vaccine}
                       </Text>
                     </TouchableOpacity>
                   );
