@@ -535,7 +535,7 @@ export default function HomeScreen() {
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.topBar}>
           <View />
-          <Text style={styles.appName}>EasyMedical</Text>
+          <Text style={styles.appName}>EasyMedical AI</Text>
         </View>
 
         {/* Your Health Snapshot Title */}

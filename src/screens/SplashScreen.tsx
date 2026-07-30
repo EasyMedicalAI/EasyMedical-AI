@@ -55,7 +55,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
         </View>
 
         {/* App Name */}
-        <Text style={styles.appName}>EasyMedical</Text>
+        <Text style={styles.appName}>EasyMedical AI</Text>
 
         {/* Tagline */}
         <Text style={styles.tagline}>Your central medical hub</Text>

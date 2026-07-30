@@ -51,7 +51,7 @@ export default function HomeScreen() {
       <ScrollView style={styles.container}>
         <View style={styles.topBar}>
           <View />
-          <Text style={styles.appName}>EasyMedical</Text>
+          <Text style={styles.appName}>EasyMedical AI</Text>
         </View>
 
         <TouchableOpacity

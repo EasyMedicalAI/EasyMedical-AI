@@ -228,7 +228,7 @@ export default function SpecialtiesScreen() {
     <ScrollView style={styles.container}>
       <View style={styles.topBar}>
         <View />
-        <Text style={styles.appName}>EasyMedical</Text>
+        <Text style={styles.appName}>EasyMedical AI</Text>
       </View>
       <View style={styles.header}>
         <Text style={styles.title}>My Health Records</Text>

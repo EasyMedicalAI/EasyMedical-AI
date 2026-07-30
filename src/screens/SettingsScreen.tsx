@@ -73,7 +73,7 @@ export default function SettingsScreen() {
     <ScrollView style={styles.container}>
       <View style={styles.topBar}>
         <View />
-        <Text style={styles.appName}>EasyMedical</Text>
+        <Text style={styles.appName}>EasyMedical AI</Text>
       </View>
       <View style={styles.header}>
         <Text style={styles.title}>Settings</Text>
@@ -151,7 +151,7 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>About</Text>
         <View style={styles.card}>
           <Text style={styles.aboutText}>
-            EasyMedical helps you organize and understand your medical records in one place.
+            EasyMedical AI helps you organize and understand your medical records in one place.
           </Text>
           <Text style={styles.aboutSubtext}>
             All records are stored securely on your device.
@@ -203,7 +203,7 @@ export default function SettingsScreen() {
               <View style={styles.securityBox}>
                 <Text style={styles.securityTitle}>🔒 Your Privacy</Text>
                 <Text style={styles.securityText}>
-                  Your patient ID is stored securely on your device. EasyMedical never stores your login credentials.
+                  Your patient ID is stored securely on your device. EasyMedical AI never stores your login credentials.
                 </Text>
               </View>
             </View>
