@@ -1,6 +1,20 @@
 // Service to fetch patient data from Epic FHIR backend
+// Epic Sandbox: https://fhir.epic.com/interconnect-fhir-oauth
 
-const BACKEND_URL = 'http://localhost:3000';
+// Configuration for Epic FHIR Sandbox
+const FHIR_SERVER_URL = 'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4';
+const OAUTH_AUTHORIZE_URL = 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize';
+const OAUTH_TOKEN_URL = 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token';
+
+// Note: You'll need to register your app with Epic to get these credentials
+// Register at: https://fhir.epic.com/interconnect-fhir-oauth/
+// For testing, use the publicly available sandbox patient
+const OAUTH_CLIENT_ID = process.env.REACT_APP_EPIC_CLIENT_ID || 'YOUR_CLIENT_ID';
+const OAUTH_CLIENT_SECRET = process.env.REACT_APP_EPIC_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
+const OAUTH_REDIRECT_URI = process.env.REACT_APP_EPIC_REDIRECT_URI || 'http://localhost:8081/callback';
+
+// For Epic Sandbox testing, use this public test patient
+const DEFAULT_TEST_PATIENT_ID = 'erXuFYUfucBZaryVksYEcMg3';
 
 export interface Patient {
   id: string;
@@ -47,15 +61,32 @@ export interface Condition {
 }
 
 class EpicService {
-  private patientId = 'DEMO123'; // Default demo patient
+  private patientId = DEFAULT_TEST_PATIENT_ID; // Default Epic sandbox test patient
+  private accessToken: string | null = null;
 
   setPatientId(id: string) {
     this.patientId = id;
   }
 
+  setAccessToken(token: string) {
+    this.accessToken = token;
+  }
+
+  private getAuthHeaders() {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/fhir+json',
+    };
+    if (this.accessToken) {
+      headers['Authorization'] = `Bearer ${this.accessToken}`;
+    }
+    return headers;
+  }
+
   async getPatient(): Promise<Patient> {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/patient/${this.patientId}`);
+      const response = await fetch(`${FHIR_SERVER_URL}/Patient/${this.patientId}`, {
+        headers: this.getAuthHeaders(),
+      });
       const data = await response.json();
 
       return {
@@ -72,7 +103,10 @@ class EpicService {
 
   async getMedications(): Promise<Medication[]> {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/medications/${this.patientId}`);
+      const response = await fetch(
+        `${FHIR_SERVER_URL}/MedicationRequest?patient=${this.patientId}&status=active`,
+        { headers: this.getAuthHeaders() }
+      );
       const data = await response.json();
 
       return data.entry?.map((entry: any) => ({
@@ -80,7 +114,7 @@ class EpicService {
         name: entry.resource.medicationCodeableConcept?.coding?.[0]?.display || 'Unknown',
         dosage: entry.resource.dosageInstruction?.[0]?.text || 'No dosage info',
         date: entry.resource.authoredOn || '',
-        status: entry.resource.status || 'unknown',
+        status: entry.resource.status || 'active',
       })) || [];
     } catch (error) {
       console.error('Error fetching medications:', error);
@@ -90,7 +124,10 @@ class EpicService {
 
   async getAppointments(): Promise<Appointment[]> {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/appointments/${this.patientId}`);
+      const response = await fetch(
+        `${FHIR_SERVER_URL}/Appointment?patient=${this.patientId}`,
+        { headers: this.getAuthHeaders() }
+      );
       const data = await response.json();
 
       return data.entry?.map((entry: any) => {
@@ -111,7 +148,10 @@ class EpicService {
 
   async getObservations(): Promise<Observation[]> {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/observations/${this.patientId}`);
+      const response = await fetch(
+        `${FHIR_SERVER_URL}/Observation?patient=${this.patientId}`,
+        { headers: this.getAuthHeaders() }
+      );
       const data = await response.json();
 
       return data.entry?.map((entry: any) => {
@@ -142,7 +182,10 @@ class EpicService {
 
   async getAllergies(): Promise<Allergy[]> {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/allergies/${this.patientId}`);
+      const response = await fetch(
+        `${FHIR_SERVER_URL}/AllergyIntolerance?patient=${this.patientId}`,
+        { headers: this.getAuthHeaders() }
+      );
       const data = await response.json();
 
       return data.entry?.map((entry: any) => ({
@@ -158,7 +201,10 @@ class EpicService {
 
   async getConditions(): Promise<Condition[]> {
     try {
-      const response = await fetch(`${BACKEND_URL}/api/conditions/${this.patientId}`);
+      const response = await fetch(
+        `${FHIR_SERVER_URL}/Condition?patient=${this.patientId}`,
+        { headers: this.getAuthHeaders() }
+      );
       const data = await response.json();
 
       return data.entry?.map((entry: any) => ({
