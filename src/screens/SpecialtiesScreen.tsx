@@ -330,18 +330,6 @@ export default function SpecialtiesScreen() {
         ))}
       </View>
 
-      {/* Other Section */}
-      <View style={styles.otherSection}>
-        <Text style={styles.otherSectionTitle}>Other</Text>
-        <TouchableOpacity
-          style={styles.uploadSpecialtyButton}
-          onPress={() => setUploadingSpecialty('Other')}
-        >
-          <Text style={styles.uploadSpecialtyButtonText}>📄 Other</Text>
-        </TouchableOpacity>
-      </View>
-
-
       <View style={styles.spacing} />
 
       {/* Upload Modal */}
