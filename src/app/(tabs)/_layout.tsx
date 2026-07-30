@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'expo-router';
 import HomeScreen from '@/screens/HomeScreen';
 import SpecialtiesScreen from '@/screens/SpecialtiesScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
+import ChatbotScreen from '@/screens/ChatbotScreen';
 
 export default function TabLayout() {
   const router = useRouter();
@@ -16,6 +17,8 @@ export default function TabLayout() {
         return <HomeScreen />;
       case 'records':
         return <SpecialtiesScreen />;
+      case 'chatbot':
+        return <ChatbotScreen />;
       case 'settings':
         return <SettingsScreen />;
       default:
@@ -40,6 +43,12 @@ export default function TabLayout() {
           label="Records"
           active={activeTab === 'records'}
           onPress={() => setActiveTab('records')}
+        />
+        <TabButton
+          icon="🤖"
+          label="Chatbot"
+          active={activeTab === 'chatbot'}
+          onPress={() => setActiveTab('chatbot')}
         />
         <TabButton
           icon="⚙️"
@@ -90,22 +99,22 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     paddingBottom: 8,
     paddingTop: 8,
-    height: 60,
+    height: 70,
     justifyContent: 'space-around',
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   activeTabButton: {},
   tabIcon: {
-    fontSize: 20,
+    fontSize: 18,
     marginBottom: 2,
   },
   tabLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#999',
     fontWeight: '500',
   },
