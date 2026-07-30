@@ -72,6 +72,7 @@ export default function SpecialtiesScreen() {
     'Oncology',
     'Primary Care',
     'Lab',
+    'Imaging',
     'Dentistry',
     'Other',
   ];
@@ -308,6 +309,22 @@ export default function SpecialtiesScreen() {
         ) : (
           <Text style={styles.teamEmptyText}>No records yet. Upload your first record to get started.</Text>
         )}
+      </View>
+
+      {/* Quick Upload Actions */}
+      <View style={styles.quickUploadSection}>
+        <TouchableOpacity
+          style={styles.quickUploadButton}
+          onPress={() => setUploadingSpecialty('Lab')}
+        >
+          <Text style={styles.quickUploadButtonText}>🔬 Upload Labs</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.quickUploadButton}
+          onPress={() => setUploadingSpecialty('Imaging')}
+        >
+          <Text style={styles.quickUploadButtonText}>📷 Upload Imaging</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Upload Records Section */}
@@ -627,6 +644,7 @@ function getSpecialtyEmoji(specialty: string): string {
     ophthalmology: '👁️',
     oncology: '🏥',
     lab: '🔬',
+    imaging: '📷',
     pharmacy: '💊',
     'primary care': '👨‍⚕️',
     dentistry: '🦷',
@@ -676,6 +694,23 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#666',
+  },
+  quickUploadSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 10,
+  },
+  quickUploadButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+  },
+  quickUploadButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
   },
   uploadRecordsSection: {
     paddingHorizontal: 20,
