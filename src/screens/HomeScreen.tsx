@@ -1505,51 +1505,13 @@ export default function HomeScreen() {
             <Text style={styles.cardIcon}>🏥</Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>Health Screenings</Text>
-              <Text style={styles.cardMeta}>{userData.screenings?.length || 0} screenings</Text>
             </View>
           </View>
           <View style={styles.card}>
-            {userData.screenings && userData.screenings.length > 0 ? (
-              userData.screenings.map((screening, idx) => (
-                <View key={idx}>
-                  <View style={styles.infoRowWithEdit}>
-                    <View style={styles.infoColumn}>
-                      <Text style={styles.infoLabel}>Screening Type</Text>
-                      <Text style={styles.infoValue}>{screening.type}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => {
-                      setEditData(userData);
-                      setEditingSection('screenings');
-                      setEditingScreeningId(idx);
-                      setScreeningType(screening.type);
-                      setScreeningDate(screening.date);
-                      setScreeningNotes(screening.notes || '');
-                    }}>
-                      <Text style={styles.editLink}>Edit</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Date</Text>
-                    <Text style={styles.infoValueMono}>{screening.date}</Text>
-                  </View>
-                  {screening.notes && (
-                    <>
-                      <View style={styles.divider} />
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Notes</Text>
-                        <Text style={styles.infoValue}>{screening.notes}</Text>
-                      </View>
-                    </>
-                  )}
-                  {idx < userData.screenings.length - 1 && <View style={styles.divider} />}
-                </View>
-              ))
-            ) : (
-              <View style={styles.infoRowWithEdit}>
-                <View style={styles.infoColumn}>
-                  <Text style={styles.infoLabel}>Screening Type</Text>
-                  <Text style={styles.infoValue}>—</Text>
-                </View>
+            {/* Screening Completed Section */}
+            <View style={styles.screeningSection}>
+              <View style={styles.screeningSectionHeader}>
+                <Text style={styles.screeningSectionTitle}>Screening Completed</Text>
                 <TouchableOpacity onPress={() => {
                   setEditData(userData);
                   setEditingSection('screenings');
@@ -1558,27 +1520,46 @@ export default function HomeScreen() {
                   setScreeningDate('');
                   setScreeningNotes('');
                 }}>
-                  <Text style={styles.editLink}>Edit</Text>
+                  <Text style={styles.addButtonSmall}>+ Add</Text>
                 </TouchableOpacity>
               </View>
-            )}
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => {
-                setEditData(userData);
-                setEditingSection('screenings');
-                setEditingScreeningId(null);
-                setScreeningType('');
-                setScreeningDate('');
-                setScreeningNotes('');
-              }}
-            >
-              <Text style={styles.addButtonText}>+ Add Screening</Text>
-            </TouchableOpacity>
 
-            {/* Recommended Screenings */}
-            <View style={styles.recommendedSection}>
-              <Text style={styles.recommendedTitle}>📋 Recommended Screenings (USPSTF)</Text>
+              {userData.screenings && userData.screenings.length > 0 ? (
+                <View>
+                  {userData.screenings.map((screening, idx) => (
+                    <View key={idx}>
+                      <TouchableOpacity
+                        style={styles.completedScreeningItem}
+                        onPress={() => {
+                          setEditData(userData);
+                          setEditingSection('screenings');
+                          setEditingScreeningId(idx);
+                          setScreeningType(screening.type);
+                          setScreeningDate(screening.date);
+                          setScreeningNotes(screening.notes || '');
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.completedScreeningType}>{screening.type}</Text>
+                          <Text style={styles.completedScreeningDate}>{screening.date}</Text>
+                          {screening.notes && <Text style={styles.completedScreeningNotes}>{screening.notes}</Text>}
+                        </View>
+                        <Text style={styles.editLink}>Edit</Text>
+                      </TouchableOpacity>
+                      {idx < userData.screenings.length - 1 && <View style={styles.divider} />}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.emptyScreeningText}>No screenings added yet</Text>
+              )}
+            </View>
+
+            <View style={styles.sectionDivider} />
+
+            {/* Recommended Screenings Section */}
+            <View style={styles.screeningSection}>
+              <Text style={styles.screeningSectionTitle}>📋 Recommended Screenings (USPSTF)</Text>
               <Text style={styles.recommendedSubtitle}>Age-appropriate screenings based on your profile</Text>
               <View style={styles.recommendedList}>
                 {getRecommendedScreenings().map((screening, idx) => {
@@ -4146,5 +4127,58 @@ const styles = StyleSheet.create({
   completedText: {
     color: '#666',
     textDecorationLine: 'line-through',
+  },
+  screeningSection: {
+    marginBottom: 0,
+  },
+  screeningSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  screeningSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+  },
+  addButtonSmall: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  completedScreeningItem: {
+    paddingVertical: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  completedScreeningType: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 3,
+  },
+  completedScreeningDate: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 2,
+  },
+  completedScreeningNotes: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 3,
+    fontStyle: 'italic',
+  },
+  emptyScreeningText: {
+    fontSize: 13,
+    color: '#999',
+    fontStyle: 'italic',
+    paddingVertical: 12,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: '#F0F0F0',
+    marginVertical: 16,
   },
 });
