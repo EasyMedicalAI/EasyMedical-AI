@@ -62,6 +62,11 @@ export interface UserHealthData {
     address?: string;
     phone: string;
   };
+  screenings?: Array<{
+    type: string;
+    date: string;
+    notes?: string;
+  }>;
 }
 
 export interface MedicalHub {

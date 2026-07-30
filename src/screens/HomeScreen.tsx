@@ -52,6 +52,10 @@ export default function HomeScreen() {
   const [pharmacyName, setPharmacyName] = useState('');
   const [pharmacyAddress, setPharmacyAddress] = useState('');
   const [pharmacyPhone, setPharmacyPhone] = useState('');
+  const [screeningType, setScreeningType] = useState('');
+  const [screeningDate, setScreeningDate] = useState('');
+  const [screeningNotes, setScreeningNotes] = useState('');
+  const [editingScreeningId, setEditingScreeningId] = useState<number | null>(null);
   const [selectedBirthdayMonth, setSelectedBirthdayMonth] = useState(0);
   const [selectedBirthdayDay, setSelectedBirthdayDay] = useState(1);
   const [selectedBirthdayYear, setSelectedBirthdayYear] = useState(1990);
@@ -279,6 +283,29 @@ export default function HomeScreen() {
         setPharmacyName('');
         setPharmacyAddress('');
         setPharmacyPhone('');
+      } else if (editingSection === 'screenings' && screeningType && screeningDate) {
+        let updatedScreenings;
+
+        if (editingScreeningId !== null) {
+          updatedScreenings = (editData.screenings || []).map((screening, idx) =>
+            idx === editingScreeningId
+              ? { type: screeningType, date: screeningDate, notes: screeningNotes }
+              : screening
+          );
+          setEditingScreeningId(null);
+        } else {
+          const newScreening = {
+            type: screeningType,
+            date: screeningDate,
+            notes: screeningNotes,
+          };
+          updatedScreenings = [...(editData.screenings || []), newScreening];
+        }
+
+        await updateUserData({ ...editData, screenings: updatedScreenings });
+        setScreeningType('');
+        setScreeningDate('');
+        setScreeningNotes('');
       } else if (editingHistoryType === 'surgical' && surgeryName) {
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         const formattedDate = `${months[historyDateMonth]} ${historyDateYear}`;
@@ -1400,6 +1427,85 @@ export default function HomeScreen() {
                 <Text style={styles.emptyText}>No hospitalizations added</Text>
               )}
             </View>
+          </View>
+        </View>
+
+        {/* SCREENINGS Card */}
+        <View style={styles.cardWrapper}>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardIcon}>🏥</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>Health Screenings</Text>
+              <Text style={styles.cardMeta}>{userData.screenings?.length || 0} screenings</Text>
+            </View>
+          </View>
+          <View style={styles.card}>
+            {userData.screenings && userData.screenings.length > 0 ? (
+              userData.screenings.map((screening, idx) => (
+                <View key={idx}>
+                  <View style={styles.infoRowWithEdit}>
+                    <View style={styles.infoColumn}>
+                      <Text style={styles.infoLabel}>Screening Type</Text>
+                      <Text style={styles.infoValue}>{screening.type}</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => {
+                      setEditData(userData);
+                      setEditingSection('screenings');
+                      setEditingScreeningId(idx);
+                      setScreeningType(screening.type);
+                      setScreeningDate(screening.date);
+                      setScreeningNotes(screening.notes || '');
+                    }}>
+                      <Text style={styles.editLink}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.infoRow}>
+                    <Text style={styles.infoLabel}>Date</Text>
+                    <Text style={styles.infoValueMono}>{screening.date}</Text>
+                  </View>
+                  {screening.notes && (
+                    <>
+                      <View style={styles.divider} />
+                      <View style={styles.infoRow}>
+                        <Text style={styles.infoLabel}>Notes</Text>
+                        <Text style={styles.infoValue}>{screening.notes}</Text>
+                      </View>
+                    </>
+                  )}
+                  {idx < userData.screenings.length - 1 && <View style={styles.divider} />}
+                </View>
+              ))
+            ) : (
+              <View style={styles.infoRowWithEdit}>
+                <View style={styles.infoColumn}>
+                  <Text style={styles.infoLabel}>Screening Type</Text>
+                  <Text style={styles.infoValue}>—</Text>
+                </View>
+                <TouchableOpacity onPress={() => {
+                  setEditData(userData);
+                  setEditingSection('screenings');
+                  setEditingScreeningId(null);
+                  setScreeningType('');
+                  setScreeningDate('');
+                  setScreeningNotes('');
+                }}>
+                  <Text style={styles.editLink}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={() => {
+                setEditData(userData);
+                setEditingSection('screenings');
+                setEditingScreeningId(null);
+                setScreeningType('');
+                setScreeningDate('');
+                setScreeningNotes('');
+              }}
+            >
+              <Text style={styles.addButtonText}>+ Add Screening</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -2593,6 +2699,54 @@ export default function HomeScreen() {
                 <Text style={styles.buttonTextWhite}>Save</Text>
               </TouchableOpacity>
             </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal visible={editingSection === 'screenings'} animationType="slide" onRequestClose={handleCancel}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{editingScreeningId !== null ? 'Edit Screening' : 'Add Screening'}</Text>
+            <TouchableOpacity onPress={handleCancel}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            <Text style={styles.label}>Screening Type</Text>
+            <TextInput
+              style={styles.input}
+              value={screeningType}
+              onChangeText={setScreeningType}
+              placeholder="e.g., Colonoscopy, Mammogram, Eye Exam, Dental, Blood Pressure"
+            />
+            <Text style={styles.label}>Date</Text>
+            <TextInput
+              style={styles.input}
+              value={screeningDate}
+              onChangeText={setScreeningDate}
+              placeholder="e.g., 03/15/2024"
+            />
+            <Text style={styles.label}>Notes (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={screeningNotes}
+              onChangeText={setScreeningNotes}
+              placeholder="e.g., Provider name, results, next due date"
+              multiline
+            />
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
+                <Text style={styles.buttonTextWhite}>Save</Text>
+              </TouchableOpacity>
+            </View>
+            {editingScreeningId !== null && (
+              <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+                <Text style={styles.deleteButtonText}>Delete Screening</Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         </View>
       </Modal>
