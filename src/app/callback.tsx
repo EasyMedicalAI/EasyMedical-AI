@@ -1,0 +1,106 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { useSearchParams, useRouter } from 'expo-router';
+import { epicService } from '@/services/epicService';
+
+export default function CallbackScreen() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    handleOAuthCallback();
+  }, []);
+
+  const handleOAuthCallback = async () => {
+    try {
+      // Extract code and state from URL parameters
+      const code = searchParams.get('code');
+      const state = searchParams.get('state');
+
+      if (!code) {
+        // Check if user denied access
+        const error = searchParams.get('error');
+        if (error) {
+          setError(`Authorization denied: ${error}`);
+        } else {
+          setError('No authorization code received');
+        }
+        setLoading(false);
+        return;
+      }
+
+      // Exchange code for access token
+      await epicService.exchangeCodeForToken(code, state);
+
+      // Success! Navigate to home
+      setLoading(false);
+      setTimeout(() => {
+        router.replace('/');
+      }, 1500);
+    } catch (err) {
+      console.error('OAuth callback error:', err);
+      setError(err instanceof Error ? err.message : 'Authentication failed');
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#007AFF" />
+        <Text style={styles.loadingText}>Connecting to Epic...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorTitle}>Connection Failed</Text>
+        <Text style={styles.errorText}>{error}</Text>
+        <Text style={styles.retryText}>Please try again from the Settings screen.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ActivityIndicator size="large" color="#007AFF" />
+      <Text style={styles.loadingText}>Redirecting...</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FF3B30',
+    marginBottom: 12,
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  retryText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+  },
+});

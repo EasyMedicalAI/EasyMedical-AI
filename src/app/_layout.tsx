@@ -2,16 +2,28 @@ import { RecordsProvider } from '@/context/RecordsContext';
 import TabLayout from './(tabs)/_layout';
 import SplashScreen from '@/screens/SplashScreen';
 import { useState, useEffect } from 'react';
+import { epicService } from '@/services/epicService';
 
 export default function RootLayout() {
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-    }, 3000);
+    const initializeApp = async () => {
+      // Initialize Epic service with stored access token
+      try {
+        await epicService.initializeWithStoredToken();
+      } catch (error) {
+        console.error('Error initializing Epic service:', error);
+      }
 
-    return () => clearTimeout(timer);
+      const timer = setTimeout(() => {
+        setShowSplash(false);
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    };
+
+    initializeApp();
   }, []);
 
   if (showSplash) {

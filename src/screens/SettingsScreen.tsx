@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   View,
@@ -9,23 +9,60 @@ import {
   TouchableOpacity,
   Modal,
   TextInput,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { useRecords } from '@/context/RecordsContext';
+import { epicService } from '@/services/epicService';
 
 export default function SettingsScreen() {
   const { records } = useRecords();
   const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [showEpicModal, setShowEpicModal] = useState(false);
-  const [epicPatientId, setEpicPatientId] = useState('DEMO123');
   const [epicConnected, setEpicConnected] = useState(false);
+  const [epicLoading, setEpicLoading] = useState(false);
 
-  const handleConnectEpic = () => {
-    if (epicPatientId.trim()) {
-      setEpicConnected(true);
-      setShowEpicModal(false);
-      Alert.alert('Success', `Connected to Epic account (Patient ID: ${epicPatientId})`);
-    } else {
-      Alert.alert('Error', 'Please enter a patient ID');
+  useEffect(() => {
+    checkEpicConnection();
+  }, []);
+
+  const checkEpicConnection = async () => {
+    const connected = await epicService.isConnected();
+    setEpicConnected(connected);
+  };
+
+  const handleConnectEpic = async () => {
+    try {
+      setEpicLoading(true);
+      const authUrl = await epicService.generateAuthorizationUrl();
+
+      if (Platform.OS === 'web') {
+        // For web, use window.open to open the OAuth URL
+        if (typeof window !== 'undefined') {
+          window.open(authUrl, '_blank');
+        }
+      } else {
+        // For native mobile, use WebBrowser
+        const result = await WebBrowser.openBrowserAsync(authUrl);
+
+        if (result.type === 'success') {
+          // Check connection status after browser closes
+          setTimeout(async () => {
+            const connected = await epicService.isConnected();
+            setEpicConnected(connected);
+            if (connected) {
+              Alert.alert('Success', 'Your Epic account has been connected successfully!');
+            }
+          }, 1000);
+        }
+      }
+    } catch (error) {
+      console.error('Error connecting to Epic:', error);
+      Alert.alert('Error', 'Failed to connect to Epic. Please try again.');
+    } finally {
+      setEpicLoading(false);
     }
   };
 
@@ -37,9 +74,9 @@ export default function SettingsScreen() {
         { text: 'Cancel', onPress: () => {} },
         {
           text: 'Disconnect',
-          onPress: () => {
+          onPress: async () => {
+            await epicService.disconnect();
             setEpicConnected(false);
-            setEpicPatientId('');
             Alert.alert('Disconnected', 'Your Epic account has been disconnected');
           },
           style: 'destructive',
@@ -120,7 +157,8 @@ export default function SettingsScreen() {
         <Text style={styles.sectionTitle}>Epic EHR Integration</Text>
         <TouchableOpacity
           style={[styles.card, epicConnected && styles.connectedCard]}
-          onPress={() => epicConnected ? handleDisconnectEpic() : setShowEpicModal(true)}
+          onPress={() => epicConnected ? handleDisconnectEpic() : handleConnectEpic()}
+          disabled={epicLoading}
         >
           <View style={styles.epicRow}>
             <View style={{ flex: 1 }}>
@@ -129,13 +167,17 @@ export default function SettingsScreen() {
               </Text>
               <Text style={styles.epicSubtitle}>
                 {epicConnected
-                  ? `Patient ID: ${epicPatientId}`
+                  ? 'Access your health data from Epic EHR'
                   : 'Access medications, appointments & health data'}
               </Text>
             </View>
-            <Text style={styles.statusBadge}>
-              {epicConnected ? '✓' : '+'}
-            </Text>
+            {epicLoading ? (
+              <ActivityIndicator size="small" color="#007AFF" />
+            ) : (
+              <Text style={styles.statusBadge}>
+                {epicConnected ? '✓' : '+'}
+              </Text>
+            )}
           </View>
         </TouchableOpacity>
       </View>
@@ -160,56 +202,6 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.spacing} />
-
-      {/* Epic Connection Modal */}
-      <Modal
-        visible={showEpicModal}
-        animationType="slide"
-        onRequestClose={() => setShowEpicModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowEpicModal(false)}>
-              <Text style={styles.closeButton}>Cancel</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>Connect Epic Account</Text>
-            <TouchableOpacity onPress={handleConnectEpic}>
-              <Text style={styles.connectButton}>Connect</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.modalContent}>
-            <View style={{ paddingHorizontal: 20 }}>
-              <Text style={styles.modalDescription}>
-                Enter your Epic patient ID to access your health records from Epic EHR systems.
-              </Text>
-
-              <Text style={styles.inputLabel}>Patient ID</Text>
-              <TextInput
-                style={styles.textInput}
-                placeholder="e.g., DEMO123"
-                placeholderTextColor="#CCC"
-                value={epicPatientId}
-                onChangeText={setEpicPatientId}
-              />
-
-              <View style={styles.infoBox}>
-                <Text style={styles.infoTitle}>ℹ️ How to find your Patient ID</Text>
-                <Text style={styles.infoText}>
-                  Your Patient ID can be found in your Epic patient portal or provided by your healthcare provider.
-                </Text>
-              </View>
-
-              <View style={styles.securityBox}>
-                <Text style={styles.securityTitle}>🔒 Your Privacy</Text>
-                <Text style={styles.securityText}>
-                  Your patient ID is stored securely on your device. EasyMedical AI never stores your login credentials.
-                </Text>
-              </View>
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
