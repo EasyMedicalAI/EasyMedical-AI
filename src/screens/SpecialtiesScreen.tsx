@@ -73,6 +73,7 @@ export default function SpecialtiesScreen() {
     'Primary Care',
     'Lab',
     'Dentistry',
+    'Other',
   ];
 
   const specialties = getUniqueSpecialties().length > 0 ? getUniqueSpecialties() : defaultSpecialties;
