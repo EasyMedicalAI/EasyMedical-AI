@@ -1595,45 +1595,6 @@ export default function HomeScreen() {
         </View>
         </View>
 
-        {/* LABS & RESULTS Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Labs & Results</Text>
-
-          <View style={styles.cardWrapper}>
-            <View style={styles.cardTitleRow}>
-              <Text style={styles.cardIcon}>🔬</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Recent Abnormal Results</Text>
-                <Text style={styles.cardMeta}>{abnormalResults.length} findings</Text>
-              </View>
-            </View>
-            {abnormalResults.length > 0 ? (
-              <View style={styles.card}>
-                {abnormalResults.slice(0, 3).map((result, idx) => (
-                  <TouchableOpacity
-                    key={result.id}
-                    style={styles.resultItem}
-                    onPress={() => router.push(`/detail/${result.id}`)}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.resultProvider}>{result.provider}</Text>
-                      <Text style={styles.resultSummary} numberOfLines={1}>{result.summary}</Text>
-                      <Text style={styles.resultDate}>
-                        {new Date(result.uploadDate).toLocaleDateString()}
-                      </Text>
-                    </View>
-                    <Text style={styles.arrow}>›</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.card}>
-                <Text style={styles.emptyText}>✓ No abnormal results</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
         {/* APPOINTMENTS & INSURANCE Section */}
         <View style={styles.section}>
           {/* Appointments */}
