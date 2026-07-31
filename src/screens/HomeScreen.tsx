@@ -716,7 +716,7 @@ export default function HomeScreen() {
               <View style={styles.vitalContent}>
                 <Text style={styles.vitalLabel}>
                   <Text style={styles.vitalEmoji}>🎂</Text>
-                  {' Birthday: '}
+                  <Text>{' Birthday: '}</Text>
                   <Text style={styles.vitalValue}>
                     {userData.birthday ? `${userData.birthday} (${calculateAge(userData.birthday)})` : '—'}
                   </Text>
@@ -750,7 +750,7 @@ export default function HomeScreen() {
               <View style={styles.vitalContent}>
                 <Text style={styles.vitalLabel}>
                   <Text style={styles.vitalEmoji}>👥</Text>
-                  {' Gender: '}
+                  <Text>{' Gender: '}</Text>
                   <Text style={styles.vitalValue}>{userData.gender || '—'}</Text>
                 </Text>
               </View>
@@ -779,7 +779,7 @@ export default function HomeScreen() {
               <View style={styles.vitalContent}>
                 <Text style={styles.vitalLabel}>
                   <Text style={styles.vitalEmoji}>📏</Text>
-                  {' Height: '}
+                  <Text>{' Height: '}</Text>
                   <Text style={styles.vitalValue}>
                     {userData.height?.includes("'") ? userData.height : (userData.height ? `${userData.height.replace(/\s/g, "'")}\"` : '0\'0"')}
                   </Text>
@@ -802,7 +802,7 @@ export default function HomeScreen() {
               <View style={styles.vitalContent}>
                 <Text style={styles.vitalLabel}>
                   <Text style={styles.vitalEmoji}>⚖️</Text>
-                  {' Weight: '}
+                  <Text>{' Weight: '}</Text>
                   <Text style={styles.vitalValue}>
                     {userData.weight?.includes('lbs') ? userData.weight : `${userData.weight} lbs`}
                   </Text>
@@ -825,7 +825,7 @@ export default function HomeScreen() {
               <View style={styles.vitalContent}>
                 <Text style={styles.vitalLabel}>
                   <Text style={styles.vitalEmoji}>💉</Text>
-                  {' Blood Pressure: '}
+                  <Text>{' Blood Pressure: '}</Text>
                   <Text style={styles.vitalValue}>{userData.vitals?.bloodPressure}</Text>
                 </Text>
               </View>
@@ -846,7 +846,7 @@ export default function HomeScreen() {
               <View style={styles.vitalContent}>
                 <Text style={styles.vitalLabel}>
                   <Text style={styles.vitalEmoji}>🩸</Text>
-                  {' Blood Type: '}
+                  <Text>{' Blood Type: '}</Text>
                   <Text style={styles.vitalValue}>{userData.bloodType}</Text>
                 </Text>
               </View>
