@@ -1,12 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Anthropic } from '@anthropic-ai/sdk';
 
 const QUESTIONS_KEY = '@chatbot_questions';
-const API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:3000';
 
 interface DailyQuestionCount {
   count: number;
   date: string;
+}
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 export const chatbotService = {
@@ -56,47 +60,36 @@ export const chatbotService = {
       throw new Error('Daily question limit (20) has been reached. Please try again tomorrow.');
     }
 
-    if (!API_KEY) {
-      throw new Error('API key not configured');
-    }
-
     try {
-      const client = new Anthropic({
-        apiKey: API_KEY,
-        dangerouslyAllowBrowser: true,
+      const messages: ChatMessage[] = [
+        {
+          role: 'user',
+          content: question,
+        },
+      ];
+
+      const response = await fetch(`${BACKEND_URL}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ messages }),
       });
 
-      const message = await client.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1024,
-        system: `You are a helpful health information assistant. Provide accurate, evidence-based health information to answer patient questions.
-
-IMPORTANT:
-- You provide educational health information only, not medical diagnosis or treatment advice
-- Always recommend consulting with a healthcare provider for medical concerns
-- Be clear about the limitations of AI-based health information
-- Do not replace professional medical advice`,
-        messages: [
-          {
-            role: 'user',
-            content: question,
-          },
-        ],
-      });
-
-      await this.incrementQuestionCount();
-
-      const content = message.content[0];
-      if (content.type === 'text') {
-        return content.text;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to get response from chatbot');
       }
 
-      throw new Error('Unexpected response format from Claude');
+      const data = await response.json();
+      await this.incrementQuestionCount();
+
+      return data.content;
     } catch (error) {
       if (error instanceof Error && error.message.includes('Daily question limit')) {
         throw error;
       }
-      console.error('Error calling Claude API:', error);
+      console.error('Error calling chatbot API:', error);
       throw new Error('Failed to get response from chatbot. Please try again.');
     }
   },
