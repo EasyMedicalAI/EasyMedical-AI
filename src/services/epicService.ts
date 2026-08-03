@@ -6,13 +6,8 @@ import Constants from 'expo-constants';
 
 // Configuration for Epic FHIR Sandbox
 const FHIR_SERVER_URL = 'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4';
-const OAUTH_AUTHORIZE_URL = 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/authorize';
-const OAUTH_TOKEN_URL = 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token';
-
-// Epic OAuth credentials (from app.json extra configuration)
-const OAUTH_CLIENT_ID = 'ffe4b7c9-5ddb-4301-b6f5-122956d6e8e9';
-const OAUTH_CLIENT_SECRET = 'YwP3NcjNH+S/BHgmBZXvQTl/QsJUXkSbuonJ3xY1yHRrMWv/ecb+aw8+eL3eRT91LANSxer5D4QkgnFt/Iw5rA==';
-const OAUTH_REDIRECT_URI = 'http://localhost:8081/callback';
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://easymedical-backend.vercel.app';
+const OAUTH_AUTHORIZE_URL = `${BACKEND_URL}/api/auth/epic/authorize`;
 
 // For Epic Sandbox testing, use this public test patient
 const DEFAULT_TEST_PATIENT_ID = 'erXuFYUfucBZaryVksYEcMg3';
@@ -222,66 +217,22 @@ class EpicService {
 
   // OAuth SMART on FHIR Flow Methods
 
-  // Generate authorization URL with state parameter for SMART on FHIR
+  // Generate authorization URL - backend handles OAuth flow
   async generateAuthorizationUrl(): Promise<string> {
-    const state = this.generateRandomString(32);
-    await AsyncStorage.setItem('oauth_state', state);
-
-    const params = new URLSearchParams({
-      client_id: OAUTH_CLIENT_ID,
-      response_type: 'code',
-      redirect_uri: OAUTH_REDIRECT_URI,
-      scope: 'openid fhirUser patient/Patient.read patient/MedicationRequest.read',
-      state: state,
-    });
-
-    return `${OAUTH_AUTHORIZE_URL}?${params.toString()}`;
+    return OAUTH_AUTHORIZE_URL;
   }
 
-  // Exchange authorization code for access token
-  async exchangeCodeForToken(code: string, state: string): Promise<string> {
+  // Handle OAuth callback from backend
+  async handleOAuthCallback(token: string): Promise<void> {
     try {
-      // Verify state matches (CSRF protection)
-      const storedState = await AsyncStorage.getItem('oauth_state');
-      if (storedState !== state) {
-        throw new Error('State mismatch - possible CSRF attack');
-      }
-
-      // Exchange code for token
-      const params = new URLSearchParams({
-        grant_type: 'authorization_code',
-        code: code,
-        redirect_uri: OAUTH_REDIRECT_URI,
-        client_id: OAUTH_CLIENT_ID,
-        client_secret: OAUTH_CLIENT_SECRET,
-      });
-
-      const response = await fetch(OAUTH_TOKEN_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params.toString(),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(`Token exchange failed: ${errorData.error_description || 'Unknown error'}`);
-      }
-
-      const data = await response.json();
-      const accessToken = data.access_token;
-
       // Save token and set in service
-      await this.saveAccessToken(accessToken);
-      this.setAccessToken(accessToken);
+      await this.saveAccessToken(token);
+      this.setAccessToken(token);
 
       // Save connected status
       await AsyncStorage.setItem('epic_connected', 'true');
-
-      return accessToken;
     } catch (error) {
-      console.error('Error exchanging code for token:', error);
+      console.error('Error handling OAuth callback:', error);
       throw error;
     }
   }
