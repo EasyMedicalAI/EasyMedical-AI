@@ -56,11 +56,6 @@ export const cameraService = {
 
   async takeCameraPhoto(): Promise<string | null> {
     try {
-      const hasPermission = await this.requestCameraPermission();
-      if (!hasPermission) {
-        throw new Error('Camera permission denied');
-      }
-
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: false,
         quality: 1,
