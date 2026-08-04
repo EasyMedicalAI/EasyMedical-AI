@@ -15,6 +15,7 @@ import {
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
+import CameraModal from '@/components/CameraModal';
 import { claudeService } from '@/services/claudeService';
 import { epicService, Medication, Appointment, Observation, Allergy, Condition } from '@/services/epicService';
 
@@ -103,6 +104,10 @@ export default function HomeScreen() {
   const [isCurrentHealthEditMode, setIsCurrentHealthEditMode] = useState(false);
   const [isVitalsEditMode, setIsVitalsEditMode] = useState(false);
   const [isHealthHistoryEditMode, setIsHealthHistoryEditMode] = useState(false);
+  const [cameraModalType, setCameraModalType] = useState<'medication' | 'document' | 'record' | null>(null);
+  const [medicationPhotos, setMedicationPhotos] = useState<string[]>([]);
+  const [documentPhotos, setDocumentPhotos] = useState<string[]>([]);
+  const [recordPhotos, setRecordPhotos] = useState<string[]>([]);
 
   // Epic FHIR data
   const [epicMedications, setEpicMedications] = useState<Medication[]>([]);
@@ -685,6 +690,39 @@ export default function HomeScreen() {
     }
   };
 
+  const handlePhotoSaved = (photoId: string, analysis: string, type: 'medication' | 'document' | 'record') => {
+    // Add photo ID to appropriate list
+    switch (type) {
+      case 'medication':
+        setMedicationPhotos([...medicationPhotos, photoId]);
+        // Optionally parse and add the medication data
+        if (analysis) {
+          try {
+            const jsonMatch = analysis.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const data = JSON.parse(jsonMatch[0]);
+              const medString = `${data.name}${data.dosage ? ' ' + data.dosage : ''}`;
+              setEditData({
+                ...editData,
+                prescriptionMedications: [...(editData.prescriptionMedications || []), medString],
+              });
+            }
+          } catch (e) {
+            console.log('Could not parse medication data');
+          }
+        }
+        break;
+      case 'document':
+        setDocumentPhotos([...documentPhotos, photoId]);
+        break;
+      case 'record':
+        setRecordPhotos([...recordPhotos, photoId]);
+        break;
+    }
+    setCameraModalType(null);
+    Alert.alert('Success', 'Photo saved and analyzed successfully!');
+  };
+
   return (
     <>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -888,12 +926,17 @@ export default function HomeScreen() {
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>💊 Prescription Medications</Text>
                 {isCurrentHealthEditMode && (
-                  <TouchableOpacity onPress={() => {
-                    setMedicationType('prescription');
-                    setMedicationInputMode('method');
-                  }}>
-                    <Text style={styles.editLink}>+ Add</Text>
-                  </TouchableOpacity>
+                  <View style={styles.buttonGroup}>
+                    <TouchableOpacity onPress={() => setCameraModalType('medication')}>
+                      <Text style={styles.editLink}>📷 Scan</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => {
+                      setMedicationType('prescription');
+                      setMedicationInputMode('method');
+                    }}>
+                      <Text style={styles.editLink}>+ Add</Text>
+                    </TouchableOpacity>
+                  </View>
                 )}
               </View>
               {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) || epicMedications.length > 0 ? (
@@ -960,10 +1003,7 @@ export default function HomeScreen() {
                   ))}
                 </>
               ) : (
-                <>
-                  <Text style={styles.healthItem}>• Lisinopril 10mg daily</Text>
-                  <Text style={styles.healthItem}>• Metformin 500mg twice daily</Text>
-                </>
+                <Text style={styles.emptyText}>No prescription medications added</Text>
               )}
             </View>
 
@@ -1032,10 +1072,7 @@ export default function HomeScreen() {
                   </View>
                 ))
               ) : (
-                <>
-                  <Text style={styles.healthItem}>• Vitamin D 2000 IU daily</Text>
-                  <Text style={styles.healthItem}>• Omega-3 supplements</Text>
-                </>
+                <Text style={styles.emptyText}>No OTC medications added</Text>
               )}
             </View>
 
@@ -1102,10 +1139,7 @@ export default function HomeScreen() {
                   </View>
                 ))
               ) : (
-                <>
-                  <Text style={styles.healthItem}>• Hypertension</Text>
-                  <Text style={styles.healthItem}>• Type 2 Diabetes</Text>
-                </>
+                <Text style={styles.emptyText}>No conditions added</Text>
               )}
               {addingCondition && (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
@@ -1211,10 +1245,7 @@ export default function HomeScreen() {
                   ))}
                 </>
               ) : (
-                <>
-                  <Text style={styles.healthItem}>• Penicillin</Text>
-                  <Text style={styles.healthItem}>• Sulfa drugs</Text>
-                </>
+                <Text style={styles.emptyText}>No allergies added</Text>
               )}
               {addingAllergy && (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
@@ -3153,6 +3184,26 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Camera Modals */}
+      <CameraModal
+        visible={cameraModalType === 'medication'}
+        type="medication"
+        onClose={() => setCameraModalType(null)}
+        onPhotoSaved={(photoId, analysis) => handlePhotoSaved(photoId, analysis, 'medication')}
+      />
+      <CameraModal
+        visible={cameraModalType === 'document'}
+        type="document"
+        onClose={() => setCameraModalType(null)}
+        onPhotoSaved={(photoId, analysis) => handlePhotoSaved(photoId, analysis, 'document')}
+      />
+      <CameraModal
+        visible={cameraModalType === 'record'}
+        type="record"
+        onClose={() => setCameraModalType(null)}
+        onPhotoSaved={(photoId, analysis) => handlePhotoSaved(photoId, analysis, 'record')}
+      />
     </>
   );
 }
@@ -3520,6 +3571,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
+  },
+  buttonGroup: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
   },
   healthSectionTitle: {
     fontSize: 13,

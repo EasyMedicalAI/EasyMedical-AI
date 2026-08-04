@@ -8,6 +8,8 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { chatbotService } from '@/services/chatbotService';
 
@@ -96,11 +98,20 @@ export default function ChatbotScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+    >
+      <View style={styles.topBar}>
+        <View />
+        <Text style={styles.appName}>EasyMedical AI</Text>
+      </View>
+
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Health Chatbot</Text>
-        <View style={styles.limitBadge}>
-          <Text style={styles.limitText}>{questionCount}/20</Text>
+        <View>
+          <Text style={styles.headerTitle}>Your Health Chatbot</Text>
+          <Text style={styles.questionsRemaining}>Questions remaining: {20 - questionCount}</Text>
         </View>
       </View>
 
@@ -134,6 +145,31 @@ export default function ChatbotScreen() {
             </View>
           </View>
         ))}
+
+        {messages.length === 1 && !loading && (
+          <View style={styles.sampleQuestionsContainer}>
+            <Text style={styles.sampleQuestionsLabel}>Try asking:</Text>
+            <TouchableOpacity
+              style={styles.sampleQuestion}
+              onPress={() => setInputText('What are the symptoms of diabetes?')}
+            >
+              <Text style={styles.sampleQuestionText}>What are the symptoms of diabetes?</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sampleQuestion}
+              onPress={() => setInputText('How can I manage high blood pressure?')}
+            >
+              <Text style={styles.sampleQuestionText}>How can I manage high blood pressure?</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.sampleQuestion}
+              onPress={() => setInputText('What foods are good for heart health?')}
+            >
+              <Text style={styles.sampleQuestionText}>What foods are good for heart health?</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {loading && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#007AFF" />
@@ -167,7 +203,7 @@ export default function ChatbotScreen() {
           <Text style={styles.sendButtonText}>Send</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -176,10 +212,25 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
+  topBar: {
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  appName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   header: {
     backgroundColor: '#FFF',
     paddingTop: 16,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingBottom: 12,
     borderBottomColor: '#F0F0F0',
     borderBottomWidth: 1,
@@ -188,9 +239,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 28,
+    fontWeight: '700',
     color: '#000',
+  },
+  questionsRemaining: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 4,
   },
   limitBadge: {
     backgroundColor: '#E8F4FF',
@@ -290,5 +346,29 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '600',
     fontSize: 15,
+  },
+  sampleQuestionsContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+    gap: 12,
+  },
+  sampleQuestionsLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  sampleQuestion: {
+    backgroundColor: '#F0F0F0',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+  },
+  sampleQuestionText: {
+    fontSize: 14,
+    color: '#000',
+    lineHeight: 20,
   },
 });

@@ -5,7 +5,6 @@ import {
   Text,
   StyleSheet,
   Alert,
-  Switch,
   TouchableOpacity,
   Modal,
   TextInput,
@@ -19,7 +18,6 @@ import { epicService } from '@/services/epicService';
 
 export default function SettingsScreen() {
   const { records } = useRecords();
-  const [cloudSyncEnabled, setCloudSyncEnabled] = useState(false);
   const [showEpicModal, setShowEpicModal] = useState(false);
   const [epicConnected, setEpicConnected] = useState(false);
   const [epicLoading, setEpicLoading] = useState(false);
@@ -130,25 +128,6 @@ export default function SettingsScreen() {
           <View style={styles.infoRow}>
             <Text style={styles.label}>Storage</Text>
             <Text style={styles.value}>Local Device</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Features</Text>
-        <View style={styles.card}>
-          <View style={styles.featureRow}>
-            <View>
-              <Text style={styles.featureTitle}>Cloud Backup (Coming Soon)</Text>
-              <Text style={styles.featureSubtitle}>
-                Sync your records across devices
-              </Text>
-            </View>
-            <Switch
-              value={cloudSyncEnabled}
-              onValueChange={setCloudSyncEnabled}
-              disabled={true}
-            />
           </View>
         </View>
       </View>
@@ -273,22 +252,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#000',
     fontWeight: '600',
-  },
-  featureRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  featureTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 4,
-  },
-  featureSubtitle: {
-    fontSize: 12,
-    color: '#999',
   },
   deleteText: {
     fontSize: 15,

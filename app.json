@@ -13,6 +13,9 @@
       "infoPlist": {
         "NSHealthShareUsageDescription": "Access your health data from Apple Health",
         "NSHealthUpdateUsageDescription": "Read your health data",
+        "NSCameraUsageDescription": "Take photos of medications, medical documents, and health records for analysis",
+        "NSPhotoLibraryUsageDescription": "Select photos of medications, medical documents, and health records from your library",
+        "NSPhotoLibraryAddUsageDescription": "Save analyzed photos to your library",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
@@ -48,7 +51,10 @@
       "router": {},
       "eas": {
         "projectId": "0862fdc3-a677-4c32-a1ec-54ec8257e4f3"
-      }
+      },
+      "epicClientId": "ffe4b7c9-5ddb-4301-b6f5-122956d6e8e9",
+      "epicClientSecret": "YwP3NcjNH+S/BHgmBZXvQTl/QsJUXkSbuonJ3xY1yHRrMWv/ecb+aw8+eL3eRT91LANSxer5D4QkgnFt/Iw5rA==",
+      "epicRedirectUri": "http://localhost:8081/callback"
     }
   }
 }
