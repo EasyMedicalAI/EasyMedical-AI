@@ -28,9 +28,10 @@ export default function HomeScreen() {
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
   const [appointmentDateTime, setAppointmentDateTime] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(7); // Aug (0-indexed)
-  const [selectedDay, setSelectedDay] = useState(15);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  // Initialize with today's date
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth()); // Today's month (0-indexed)
+  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate()); // Today's day
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear()); // Today's year
   const [selectedHour, setSelectedHour] = useState(2);
   const [selectedMinute, setSelectedMinute] = useState(0);
   const [selectedPeriod, setSelectedPeriod] = useState('PM');
