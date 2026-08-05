@@ -12,6 +12,7 @@ import {
   Image,
   Platform,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
@@ -504,6 +505,14 @@ export default function HomeScreen() {
   const handleMedicationPhotoCapture = async () => {
     try {
       const ImagePickerModule = require('expo-image-picker');
+
+      // Request camera permission
+      const { status } = await ImagePickerModule.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera permission is required to take photos');
+        return;
+      }
+
       const result = await ImagePickerModule.launchCameraAsync({
         mediaTypes: ImagePickerModule.MediaTypeOptions.Images,
         quality: 0.8,
@@ -521,6 +530,14 @@ export default function HomeScreen() {
   const handleMedicationPhotoLibrary = async () => {
     try {
       const ImagePickerModule = require('expo-image-picker');
+
+      // Request photo library permission
+      const { status } = await ImagePickerModule.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Photo library permission is required to select photos');
+        return;
+      }
+
       const result = await ImagePickerModule.launchImageLibraryAsync({
         mediaTypes: ImagePickerModule.MediaTypeOptions.Images,
         quality: 0.8,
@@ -543,7 +560,16 @@ export default function HomeScreen() {
 
     setAnalyzingMedication(true);
     try {
-      const medicationName = `Medication from bottle photo`;
+      // Convert photo to base64 for analysis
+      const base64 = await FileSystem.readAsStringAsync(medicationPhotoUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // Analyze the medication bottle using Claude vision
+      const analysis = await claudeService.parseRecordFromImage(base64, 'temp-id');
+
+      // Extract medication name from analysis
+      const medicationName = analysis.reasonForVisit || `Medication from bottle photo`;
 
       if (medicationType === 'prescription') {
         const updatedData = {
@@ -564,9 +590,9 @@ export default function HomeScreen() {
       setMedicationInputMode(null);
       setMedicationType(null);
       setMedicationPhotoUri(null);
-      Alert.alert('Success', 'Medication added from photo');
+      Alert.alert('Success', 'Medication analyzed and added successfully!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to add medication: ' + String(error));
+      Alert.alert('Error', 'Failed to analyze medication photo: ' + String(error));
     } finally {
       setAnalyzingMedication(false);
     }
