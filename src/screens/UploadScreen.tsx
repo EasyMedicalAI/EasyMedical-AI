@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useRecords } from '@/context/RecordsContext';
@@ -19,6 +20,12 @@ export default function UploadScreen() {
   const [activeTab, setActiveTab] = useState<'photo' | 'text' | 'gallery'>('photo');
   const [textInput, setTextInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  // Initialize with today's date
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth()); // Today's month
+  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate()); // Today's day
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear()); // Today's year
+  const [recordDate, setRecordDate] = useState('');
   const { addRecord } = useRecords();
   const router = useRouter();
 
@@ -28,6 +35,13 @@ export default function UploadScreen() {
 
   const handlePhotoLibrary = async () => {
     Alert.alert('Coming Soon', 'Gallery upload feature coming soon. Use text input for now!');
+  };
+
+  const handleDatePickerDone = () => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const formattedDate = `${months[selectedMonth]} ${selectedDay}, ${selectedYear}`;
+    setRecordDate(formattedDate);
+    setShowDatePicker(false);
   };
 
   const processImage = async (base64: string) => {
@@ -78,7 +92,7 @@ export default function UploadScreen() {
 
       await addRecord({
         id: recordId,
-        uploadDate: parsedRecord.uploadDate || new Date().toISOString(),
+        uploadDate: recordDate || parsedRecord.uploadDate || new Date().toISOString(),
         originalText: parsedRecord.originalText,
         specialty: parsedRecord.specialty || 'Unspecified',
         provider: parsedRecord.provider || 'Unknown',
@@ -88,6 +102,7 @@ export default function UploadScreen() {
       });
 
       setTextInput('');
+      setRecordDate('');
       Alert.alert('Success', 'Record uploaded and processed', [
         {
           text: 'View Record',
@@ -207,6 +222,15 @@ export default function UploadScreen() {
               onChangeText={setTextInput}
             />
             <TouchableOpacity
+              style={styles.dateButton}
+              onPress={() => setShowDatePicker(true)}
+            >
+              <Text style={styles.dateButtonLabel}>📅 Date of Appointment</Text>
+              <Text style={styles.dateButtonValue}>
+                {recordDate || 'Tap to select date (today)'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.actionButton}
               onPress={handleTextSubmit}
               disabled={loading}
@@ -216,6 +240,82 @@ export default function UploadScreen() {
           </View>
         </View>
       )}
+
+      {/* Date Picker Modal */}
+      <Modal visible={showDatePicker} animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select Date</Text>
+            <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.datePickerContent}>
+            <View style={styles.pickerRow}>
+              {/* Month Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Month</Text>
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.pickerOption, selectedMonth === idx && styles.pickerOptionSelected]}
+                      onPress={() => setSelectedMonth(idx)}
+                    >
+                      <Text style={[styles.pickerOptionText, selectedMonth === idx && styles.pickerOptionTextSelected]}>
+                        {month}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Day Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Day</Text>
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                    <TouchableOpacity
+                      key={day}
+                      style={[styles.pickerOption, selectedDay === day && styles.pickerOptionSelected]}
+                      onPress={() => setSelectedDay(day)}
+                    >
+                      <Text style={[styles.pickerOptionText, selectedDay === day && styles.pickerOptionTextSelected]}>
+                        {day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Year Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Year</Text>
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                  {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map((year) => (
+                    <TouchableOpacity
+                      key={year}
+                      style={[styles.pickerOption, selectedYear === year && styles.pickerOptionSelected]}
+                      onPress={() => setSelectedYear(year)}
+                    >
+                      <Text style={[styles.pickerOptionText, selectedYear === year && styles.pickerOptionTextSelected]}>
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.datePickerDoneButton}
+              onPress={handleDatePickerDone}
+            >
+              <Text style={styles.datePickerDoneButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -346,5 +446,114 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 14,
     color: '#666',
+  },
+  dateButton: {
+    width: '100%',
+    backgroundColor: '#F0F8FF',
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    padding: 14,
+    marginBottom: 20,
+    alignItems: 'flex-start',
+  },
+  dateButtonLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 6,
+  },
+  dateButtonValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    paddingTop: 50,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+  },
+  closeButton: {
+    fontSize: 24,
+    color: '#999',
+  },
+  datePickerContent: {
+    flex: 1,
+    flexDirection: 'column',
+    paddingHorizontal: 20,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
+    gap: 16,
+    marginTop: 20,
+  },
+  pickerColumn: {
+    flex: 1,
+    minHeight: 280,
+    maxHeight: 280,
+  },
+  pickerLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#007AFF',
+    marginBottom: 12,
+    paddingHorizontal: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  scrollPicker: {
+    height: 240,
+    backgroundColor: 'transparent',
+  },
+  pickerOption: {
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerOptionSelected: {
+    backgroundColor: '#F0F8FF',
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  pickerOptionText: {
+    fontSize: 16,
+    color: '#999',
+    fontWeight: '500',
+  },
+  pickerOptionTextSelected: {
+    color: '#007AFF',
+    fontWeight: '700',
+    fontSize: 17,
+  },
+  datePickerDoneButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 30,
+    marginTop: 20,
+  },
+  datePickerDoneButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
   },
 });
