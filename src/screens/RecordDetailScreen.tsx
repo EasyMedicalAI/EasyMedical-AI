@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ScrollView,
   View,
@@ -9,52 +9,28 @@ import {
   Alert,
   TextInput,
   Modal,
-  ActivityIndicator,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRecords } from '@/context/RecordsContext';
+import { MedicalRecord } from '@/types/medical';
 
-export default function RecordDetailScreen() {
-  const routeParams = useLocalSearchParams<{ id?: string }>();
-  const recordId = routeParams?.id || '';
-  const { records, deleteRecord, updateRecord, loading } = useRecords();
-  const router = useRouter();
+interface RecordDetailScreenProps {
+  record: MedicalRecord;
+  onBack?: () => void;
+}
+
+export default function RecordDetailScreen({ record, onBack }: RecordDetailScreenProps) {
+  const { deleteRecord, updateRecord } = useRecords();
   const [editingReason, setEditingReason] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [reasonText, setReasonText] = useState('');
   const [notesText, setNotesText] = useState('');
-  const [localLoading, setLocalLoading] = useState(true);
-
-  useEffect(() => {
-    // Give a moment for data to load
-    if (!loading && records.length > 0) {
-      setLocalLoading(false);
-    }
-  }, [loading, records]);
-
-  const record = useMemo(() => {
-    if (!recordId) return null;
-    return records.find(r => r.id === recordId);
-  }, [recordId, records]);
-
-  if (localLoading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.centerContent}>
-          <ActivityIndicator size="large" color="#007AFF" />
-          <Text style={styles.loadingText}>Loading record...</Text>
-        </View>
-      </View>
-    );
-  }
 
   if (!record) {
     return (
       <View style={styles.container}>
         <View style={styles.centerContent}>
           <Text style={styles.errorText}>Record not found</Text>
-          <Text style={styles.errorSubtext}>ID: {recordId}</Text>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.backButton} onPress={onBack}>
             <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>
         </View>
@@ -92,7 +68,7 @@ export default function RecordDetailScreen() {
         text: 'Delete',
         onPress: async () => {
           await deleteRecord(record.id);
-          router.back();
+          onBack?.();
         },
         style: 'destructive',
       },
@@ -102,7 +78,7 @@ export default function RecordDetailScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={onBack}>
           <Text style={styles.backArrow}>← Back</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleDelete}>

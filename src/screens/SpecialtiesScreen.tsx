@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { v4 as uuidv4 } from 'uuid';
 import { claudeService } from '@/services/claudeService';
 import { epicService, Appointment } from '@/services/epicService';
+import { MedicalRecord } from '@/types/medical';
 
 let ImagePicker: any;
 try {
@@ -24,7 +25,11 @@ try {
   console.warn('ImagePicker not available');
 }
 
-export default function SpecialtiesScreen() {
+interface SpecialtiesScreenProps {
+  onRecordSelected?: (record: MedicalRecord) => void;
+}
+
+export default function SpecialtiesScreen({ onRecordSelected }: SpecialtiesScreenProps) {
   const { records, loading, getUniqueSpecialties, addRecord } = useRecords();
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
@@ -304,7 +309,7 @@ export default function SpecialtiesScreen() {
                   <TouchableOpacity
                     key={record.id}
                     style={styles.myRecordsCard}
-                    onPress={() => router.push(`/detail/${record.id}`)}
+                    onPress={() => onRecordSelected?.(record)}
                   >
                     <View style={styles.recordCardHeader}>
                       <Text style={styles.recordCardDate}>
