@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import HomeScreen from '@/screens/HomeScreen';
-import SpecialtiesScreen from '@/screens/SpecialtiesScreen';
+import RecordsScreen from '@/screens/RecordsScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
 import ChatbotScreen from '@/screens/ChatbotScreen';
 
@@ -16,7 +16,7 @@ export default function TabLayout() {
       case 'home':
         return <HomeScreen />;
       case 'records':
-        return <SpecialtiesScreen />;
+        return <RecordsScreen />;
       case 'chatbot':
         return <ChatbotScreen />;
       case 'settings':

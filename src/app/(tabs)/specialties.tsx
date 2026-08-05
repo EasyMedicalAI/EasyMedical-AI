@@ -1,3 +1,3 @@
-import SpecialtiesScreen from '@/screens/SpecialtiesScreen';
+import RecordsScreen from '@/screens/RecordsScreen';
 
-export default SpecialtiesScreen;
+export default RecordsScreen;

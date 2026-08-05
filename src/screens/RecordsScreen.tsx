@@ -25,11 +25,11 @@ try {
   console.warn('ImagePicker not available');
 }
 
-interface SpecialtiesScreenProps {
+interface RecordsScreenProps {
   onRecordSelected?: (record: MedicalRecord) => void;
 }
 
-export default function SpecialtiesScreen({ onRecordSelected }: SpecialtiesScreenProps) {
+export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) {
   const { records, loading, getUniqueSpecialties, addRecord } = useRecords();
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
