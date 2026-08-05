@@ -11,6 +11,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import { v4 as uuidv4 } from 'uuid';
@@ -188,13 +189,20 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     setIsUploading(true);
     try {
       const recordId = uuidv4();
-      const photoDescription = `Medical record document - ${uploadingSpecialty}. Photo uploaded for analysis.`;
-      const parsedRecord = await claudeService.parseRecordFromText(photoDescription, recordId);
+
+      // Convert photo to base64 for analysis
+      const base64 = await FileSystem.readAsStringAsync(photoUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      // Analyze the photo using Claude vision
+      const parsedRecord = await claudeService.parseRecordFromImage(base64, recordId);
 
       await addRecord({
         id: recordId,
-        uploadDate: parsedRecord.uploadDate || new Date().toISOString(),
+        uploadDate: new Date().toISOString(),
         appointmentDate: parsedRecord.uploadDate || new Date().toISOString(),
+        imageUri: photoUri,
         originalText: parsedRecord.originalText,
         specialty: uploadingSpecialty,
         provider: parsedRecord.provider || 'Unknown',
@@ -210,9 +218,9 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       setUploadingSpecialty(null);
       setPhotoUri(null);
       setUploadMode('method');
-      Alert.alert('Success', 'Record added to your team!');
+      Alert.alert('Success', 'Record added from photo analysis!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to process record: ' + String(error));
+      Alert.alert('Error', 'Failed to process photo: ' + String(error));
     } finally {
       setIsUploading(false);
     }
