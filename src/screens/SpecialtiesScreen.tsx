@@ -40,6 +40,11 @@ export default function SpecialtiesScreen() {
   const [showAppointmentDetail, setShowAppointmentDetail] = useState(false);
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
   const [showDoctorAppointments, setShowDoctorAppointments] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  // Initialize with today's date
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth());
+  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
   const router = useRouter();
 
   useEffect(() => {
@@ -53,6 +58,13 @@ export default function SpecialtiesScreen() {
     } catch (error) {
       console.error('Failed to load appointments:', error);
     }
+  };
+
+  const handleDatePickerDone = () => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const formattedDate = `${months[selectedMonth]} ${selectedDay}, ${selectedYear}`;
+    setAppointmentDate(formattedDate);
+    setShowDatePicker(false);
   };
 
   const defaultSpecialties = [
@@ -416,14 +428,15 @@ export default function SpecialtiesScreen() {
                 />
 
                 <Text style={styles.fieldLabel}>Date of Appointment</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Aug 15, 2025"
-                  placeholderTextColor="#999"
-                  value={appointmentDate}
-                  onChangeText={setAppointmentDate}
-                  editable={!isUploading}
-                />
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={() => setShowDatePicker(true)}
+                  disabled={isUploading}
+                >
+                  <Text style={styles.datePickerButtonValue}>
+                    {appointmentDate || 'Tap to select date (today)'}
+                  </Text>
+                </TouchableOpacity>
 
                 <Text style={styles.fieldLabel}>Summary of Visit</Text>
                 <TextInput
@@ -628,6 +641,82 @@ export default function SpecialtiesScreen() {
               </>
             )}
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Date Picker Modal */}
+      <Modal visible={showDatePicker} animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.dateModalHeader}>
+            <Text style={styles.dateModalTitle}>Select Date</Text>
+            <TouchableOpacity onPress={() => setShowDatePicker(false)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.datePickerContent}>
+            <View style={styles.pickerRow}>
+              {/* Month Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Month</Text>
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.pickerOption, selectedMonth === idx && styles.pickerOptionSelected]}
+                      onPress={() => setSelectedMonth(idx)}
+                    >
+                      <Text style={[styles.pickerOptionText, selectedMonth === idx && styles.pickerOptionTextSelected]}>
+                        {month}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Day Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Day</Text>
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                    <TouchableOpacity
+                      key={day}
+                      style={[styles.pickerOption, selectedDay === day && styles.pickerOptionSelected]}
+                      onPress={() => setSelectedDay(day)}
+                    >
+                      <Text style={[styles.pickerOptionText, selectedDay === day && styles.pickerOptionTextSelected]}>
+                        {day}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* Year Picker */}
+              <View style={styles.pickerColumn}>
+                <Text style={styles.pickerLabel}>Year</Text>
+                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                  {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map((year) => (
+                    <TouchableOpacity
+                      key={year}
+                      style={[styles.pickerOption, selectedYear === year && styles.pickerOptionSelected]}
+                      onPress={() => setSelectedYear(year)}
+                    >
+                      <Text style={[styles.pickerOptionText, selectedYear === year && styles.pickerOptionTextSelected]}>
+                        {year}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.datePickerDoneButton}
+              onPress={handleDatePickerDone}
+            >
+              <Text style={styles.datePickerDoneButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </ScrollView>
@@ -1204,5 +1293,102 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 16,
     marginBottom: 8,
+  },
+  datePickerButton: {
+    backgroundColor: '#F0F8FF',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    padding: 14,
+    marginBottom: 20,
+  },
+  datePickerButtonValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    paddingTop: 50,
+  },
+  dateModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  dateModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+  },
+  datePickerContent: {
+    flex: 1,
+    flexDirection: 'column',
+    paddingHorizontal: 20,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    marginBottom: 20,
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
+    gap: 16,
+    marginTop: 20,
+  },
+  pickerColumn: {
+    flex: 1,
+    minHeight: 280,
+    maxHeight: 280,
+  },
+  pickerLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#007AFF',
+    marginBottom: 12,
+    paddingHorizontal: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.7,
+  },
+  scrollPicker: {
+    height: 240,
+    backgroundColor: 'transparent',
+  },
+  pickerOption: {
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerOptionSelected: {
+    backgroundColor: '#F0F8FF',
+    borderRadius: 12,
+    marginHorizontal: 4,
+  },
+  pickerOptionText: {
+    fontSize: 16,
+    color: '#999',
+    fontWeight: '500',
+  },
+  pickerOptionTextSelected: {
+    color: '#007AFF',
+    fontWeight: '700',
+    fontSize: 17,
+  },
+  datePickerDoneButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 30,
+    marginTop: 20,
+  },
+  datePickerDoneButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
   },
 });
