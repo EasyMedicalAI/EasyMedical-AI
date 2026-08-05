@@ -53,10 +53,14 @@ export default function UploadScreen() {
       await addRecord({
         id: recordId,
         uploadDate: parsedRecord.uploadDate || new Date().toISOString(),
+        appointmentDate: recordDate || parsedRecord.uploadDate || new Date().toISOString(),
         imageUri: parsedRecord.imageUri,
         specialty: parsedRecord.specialty || 'Unspecified',
         provider: parsedRecord.provider || 'Unknown',
         summary: parsedRecord.summary || 'Document uploaded',
+        reasonForVisit: parsedRecord.reasonForVisit,
+        findings: parsedRecord.findings,
+        nextSteps: parsedRecord.nextSteps,
         extractedData: parsedRecord.extractedData || {},
         processed: true,
       });
@@ -92,11 +96,15 @@ export default function UploadScreen() {
 
       await addRecord({
         id: recordId,
-        uploadDate: recordDate || parsedRecord.uploadDate || new Date().toISOString(),
+        uploadDate: new Date().toISOString(),
+        appointmentDate: recordDate || parsedRecord.uploadDate || new Date().toISOString(),
         originalText: parsedRecord.originalText,
         specialty: parsedRecord.specialty || 'Unspecified',
         provider: parsedRecord.provider || 'Unknown',
         summary: parsedRecord.summary || 'Document uploaded',
+        reasonForVisit: parsedRecord.reasonForVisit,
+        findings: parsedRecord.findings,
+        nextSteps: parsedRecord.nextSteps,
         extractedData: parsedRecord.extractedData || {},
         processed: true,
       });

@@ -67,6 +67,35 @@ export default function SpecialtiesScreen() {
     setShowDatePicker(false);
   };
 
+  const getOrganizedRecords = () => {
+    // Group records by specialty (only uploaded records)
+    const recordsBySpecialty: Record<string, typeof records> = {};
+
+    records.forEach(record => {
+      if (!recordsBySpecialty[record.specialty]) {
+        recordsBySpecialty[record.specialty] = [];
+      }
+      recordsBySpecialty[record.specialty].push(record);
+    });
+
+    // Sort each specialty's records by appointment date (newest first)
+    Object.keys(recordsBySpecialty).forEach(specialty => {
+      recordsBySpecialty[specialty].sort((a, b) => {
+        const dateA = new Date(a.appointmentDate || a.uploadDate).getTime();
+        const dateB = new Date(b.appointmentDate || b.uploadDate).getTime();
+        return dateB - dateA; // Newest first
+      });
+    });
+
+    // Return as sorted array (A-Z by specialty)
+    return Object.keys(recordsBySpecialty)
+      .sort()
+      .map(specialty => ({
+        specialty,
+        records: recordsBySpecialty[specialty],
+      }));
+  };
+
   const defaultSpecialties = [
     'Cardiology',
     'Dermatology',
@@ -160,10 +189,14 @@ export default function SpecialtiesScreen() {
       await addRecord({
         id: recordId,
         uploadDate: parsedRecord.uploadDate || new Date().toISOString(),
+        appointmentDate: parsedRecord.uploadDate || new Date().toISOString(),
         originalText: parsedRecord.originalText,
         specialty: uploadingSpecialty,
         provider: parsedRecord.provider || 'Unknown',
         summary: parsedRecord.summary || 'Medical record',
+        reasonForVisit: parsedRecord.reasonForVisit,
+        findings: parsedRecord.findings,
+        nextSteps: parsedRecord.nextSteps,
         extractedData: parsedRecord.extractedData || {},
         processed: true,
         isTeamMember: true,
@@ -190,13 +223,31 @@ export default function SpecialtiesScreen() {
     try {
       const recordId = uuidv4();
 
+      // Convert date string to ISO format for sorting
+      const months: Record<string, string> = {
+        'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04', 'May': '05', 'Jun': '06',
+        'Jul': '07', 'Aug': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+      };
+      let dateISO = new Date().toISOString();
+      if (appointmentDate) {
+        const parts = appointmentDate.match(/(\w+)\s+(\d+),\s+(\d+)/);
+        if (parts) {
+          const monthNum = months[parts[1]] || '01';
+          const dayNum = String(parseInt(parts[2])).padStart(2, '0');
+          const year = parts[3];
+          dateISO = `${year}-${monthNum}-${dayNum}T00:00:00.000Z`;
+        }
+      }
+
       await addRecord({
         id: recordId,
         uploadDate: new Date().toISOString(),
+        appointmentDate: dateISO,
         originalText: appointmentSummary,
         specialty: uploadingSpecialty,
         provider: doctorName,
         summary: appointmentSummary,
+        reasonForVisit: appointmentSummary,
         extractedData: {
           doctorName: doctorName,
           appointmentDate: appointmentDate,
@@ -228,16 +279,6 @@ export default function SpecialtiesScreen() {
     );
   }
 
-  // Get team records (records marked as part of user's team)
-  const teamRecords = records.filter(r => r.isTeamMember === true);
-  const teamBySpecialty: Record<string, typeof records> = {};
-  teamRecords.forEach(record => {
-    if (!teamBySpecialty[record.specialty]) {
-      teamBySpecialty[record.specialty] = [];
-    }
-    teamBySpecialty[record.specialty].push(record);
-  });
-
   return (
     <ScrollView style={styles.container}>
       <View style={styles.topBar}>
@@ -249,77 +290,42 @@ export default function SpecialtiesScreen() {
         <Text style={styles.subtitle}>{specialties.length} specialties available</Text>
       </View>
 
-      {/* My Records Section - Shows uploaded records + Epic appointments */}
-      <View style={styles.teamSection}>
-        <Text style={styles.sectionTitle}>📋 My Records</Text>
-        {(teamRecords.length > 0 || epicAppointments.length > 0) ? (
-          <View style={styles.recordsCardsContainer}>
-            {/* Group records by specialty */}
-            {Object.entries(teamBySpecialty).map(([specialty, docs]) => (
-              <View key={specialty} style={styles.recordCard}>
-                <Text style={styles.recordSpecialty}>
-                  {getSpecialtyEmoji(specialty)} {specialty}
-                </Text>
-                <View style={styles.doctorsList}>
-                  {/* Get unique providers for this specialty */}
-                  {Array.from(new Set(docs.map(doc => doc.provider))).map((provider, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={styles.doctorItem}
-                      onPress={() => {
-                        setSelectedDoctor(provider);
-                        setShowDoctorAppointments(true);
-                      }}
-                    >
-                      <Text style={styles.recordDoctor}>{provider}</Text>
-                      <Text style={styles.recordDate}>
-                        {docs.find(d => d.provider === provider)?.uploadDate?.split('T')[0]}
+      {/* My Records Section */}
+      <View style={styles.myRecordsSection}>
+        <Text style={styles.sectionTitle}>My Records</Text>
+        {records.length > 0 ? (
+          getOrganizedRecords().map(({ specialty, records: specialtyRecords }) => (
+            <View key={specialty} style={styles.specialtyGroup}>
+              <Text style={styles.specialtyGroupTitle}>
+                {getSpecialtyEmoji(specialty)} {specialty}
+              </Text>
+              <View style={styles.recordsCardList}>
+                {specialtyRecords.map(record => (
+                  <TouchableOpacity
+                    key={record.id}
+                    style={styles.myRecordsCard}
+                    onPress={() => router.push(`/detail/${record.id}`)}
+                  >
+                    <View style={styles.recordCardHeader}>
+                      <Text style={styles.recordCardDate}>
+                        {new Date(record.appointmentDate || record.uploadDate).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            ))}
-
-            {/* Add Epic appointments as additional specialties if not already shown */}
-            {epicAppointments.length > 0 && (
-              Object.entries(
-                epicAppointments.reduce((acc: Record<string, typeof epicAppointments>, apt) => {
-                  const specialty = 'Cardiology';
-                  if (!acc[specialty]) acc[specialty] = [];
-                  acc[specialty].push(apt);
-                  return acc;
-                }, {} as Record<string, typeof epicAppointments>)
-              ).map(([specialty, apts]) => (
-                !teamBySpecialty[specialty] && (
-                  <View key={`epic-${specialty}`} style={styles.recordCard}>
-                    <Text style={styles.recordSpecialty}>
-                      {getSpecialtyEmoji(specialty)} {specialty}
-                    </Text>
-                    <View style={styles.doctorsList}>
-                      {Array.from(new Set(apts.map(apt => apt.provider))).map((provider, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          style={styles.doctorItem}
-                          onPress={() => {
-                            setSelectedDoctor(provider);
-                            setShowDoctorAppointments(true);
-                          }}
-                        >
-                          <Text style={styles.recordDoctor}>{provider}</Text>
-                          <Text style={styles.recordDate}>
-                            {apts.find(a => a.provider === provider)?.date}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
                     </View>
-                  </View>
-                )
-              ))
-            )}
-          </View>
+                    <Text style={styles.recordCardReason}>
+                      {record.reasonForVisit || record.summary || 'No description'}
+                    </Text>
+                    <Text style={styles.recordCardProvider}>{record.provider}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          ))
         ) : (
-          <Text style={styles.teamEmptyText}>No records yet. Upload your first record to get started.</Text>
+          <Text style={styles.emptyRecordsText}>No records yet. Upload your first record to get started.</Text>
         )}
       </View>
 
@@ -1390,5 +1396,65 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
+  },
+  myRecordsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 16,
+  },
+  specialtyGroup: {
+    marginBottom: 20,
+  },
+  specialtyGroupTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  recordsCardList: {
+    gap: 10,
+  },
+  myRecordsCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 14,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  recordCardHeader: {
+    marginBottom: 8,
+  },
+  recordCardDate: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  recordCardReason: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#000',
+    marginBottom: 6,
+    lineHeight: 20,
+  },
+  recordCardProvider: {
+    fontSize: 12,
+    color: '#999',
+  },
+  emptyRecordsText: {
+    fontSize: 14,
+    color: '#999',
+    textAlign: 'center',
+    paddingVertical: 24,
   },
 });

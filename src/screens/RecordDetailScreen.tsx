@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   ScrollView,
   View,
@@ -7,24 +7,53 @@ import {
   StyleSheet,
   Image,
   Alert,
+  TextInput,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRecords } from '@/context/RecordsContext';
 
 export default function RecordDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const { records, deleteRecord } = useRecords();
+  const routeParams = useLocalSearchParams<{ id?: string }>();
+  const recordId = routeParams?.id || '';
+  const { records, deleteRecord, updateRecord, loading } = useRecords();
   const router = useRouter();
+  const [editingReason, setEditingReason] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [reasonText, setReasonText] = useState('');
+  const [notesText, setNotesText] = useState('');
+  const [localLoading, setLocalLoading] = useState(true);
+
+  useEffect(() => {
+    // Give a moment for data to load
+    if (!loading && records.length > 0) {
+      setLocalLoading(false);
+    }
+  }, [loading, records]);
 
   const record = useMemo(() => {
-    return records.find(r => r.id === id);
-  }, [id, records]);
+    if (!recordId) return null;
+    return records.find(r => r.id === recordId);
+  }, [recordId, records]);
+
+  if (localLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.centerContent}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Loading record...</Text>
+        </View>
+      </View>
+    );
+  }
 
   if (!record) {
     return (
       <View style={styles.container}>
         <View style={styles.centerContent}>
           <Text style={styles.errorText}>Record not found</Text>
+          <Text style={styles.errorSubtext}>ID: {recordId}</Text>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.backButtonText}>Go Back</Text>
           </TouchableOpacity>
@@ -32,6 +61,26 @@ export default function RecordDetailScreen() {
       </View>
     );
   }
+
+  const handleEditReason = () => {
+    setReasonText(record.reasonForVisit || '');
+    setEditingReason(true);
+  };
+
+  const handleSaveReason = async () => {
+    await updateRecord({ ...record, reasonForVisit: reasonText });
+    setEditingReason(false);
+  };
+
+  const handleEditNotes = () => {
+    setNotesText(record.notes || '');
+    setEditingNotes(true);
+  };
+
+  const handleSaveNotes = async () => {
+    await updateRecord({ ...record, notes: notesText });
+    setEditingNotes(false);
+  };
 
   const handleDelete = () => {
     Alert.alert('Delete Record', 'Are you sure you want to delete this record?', [
@@ -62,18 +111,13 @@ export default function RecordDetailScreen() {
       </View>
 
       <View style={styles.content}>
+        {/* Title Section */}
         <View style={styles.titleSection}>
-          <Text style={styles.provider}>{record.provider}</Text>
           <Text style={styles.specialty}>{record.specialty}</Text>
-          <Text style={styles.date}>
-            {new Date(record.uploadDate).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </Text>
+          <Text style={styles.provider}>{record.provider}</Text>
         </View>
 
+        {/* Image */}
         {record.imageUri && (
           <View style={styles.imageContainer}>
             <Image
@@ -84,71 +128,64 @@ export default function RecordDetailScreen() {
           </View>
         )}
 
+        {/* Summary Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Summary</Text>
           <Text style={styles.summaryText}>{record.summary}</Text>
         </View>
 
-        {record.extractedData.medications && record.extractedData.medications.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Medications</Text>
-            {record.extractedData.medications.map((med, idx) => (
-              <View key={idx} style={styles.listItem}>
-                <Text style={styles.bullet}>•</Text>
-                <Text style={styles.itemText}>{med}</Text>
-              </View>
-            ))}
+        {/* Formatted Data Table */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Record Details</Text>
+          <View style={styles.dataTable}>
+            <View style={styles.dataRow}>
+              <Text style={styles.dataLabel}>Date</Text>
+              <Text style={styles.dataValue}>
+                {new Date(record.appointmentDate || record.uploadDate).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}
+              </Text>
+            </View>
+            <View style={[styles.dataRow, styles.dataRowBorder]}>
+              <Text style={styles.dataLabel}>Provider</Text>
+              <Text style={styles.dataValue}>{record.provider}</Text>
+            </View>
+            <View style={[styles.dataRow, styles.dataRowBorder]}>
+              <Text style={styles.dataLabel}>Reason</Text>
+              <Text style={styles.dataValue}>{record.reasonForVisit || '—'}</Text>
+            </View>
+            <View style={[styles.dataRow, styles.dataRowBorder]}>
+              <Text style={styles.dataLabel}>Findings</Text>
+              <Text style={styles.dataValue}>{record.findings || '—'}</Text>
+            </View>
+            <View style={[styles.dataRow, styles.dataRowBorder]}>
+              <Text style={styles.dataLabel}>Next Steps</Text>
+              <Text style={styles.dataValue}>{record.nextSteps || '—'}</Text>
+            </View>
           </View>
-        )}
+          <TouchableOpacity style={styles.editButton} onPress={handleEditReason}>
+            <Text style={styles.editButtonText}>Edit Reason for Visit</Text>
+          </TouchableOpacity>
+        </View>
 
-        {record.extractedData.allergies && record.extractedData.allergies.length > 0 && (
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, styles.allergyTitle]}>⚠️ Allergies</Text>
-            {record.extractedData.allergies.map((allergy, idx) => (
-              <View key={idx} style={[styles.listItem, styles.allergyItem]}>
-                <Text style={styles.bullet}>⚠️</Text>
-                <Text style={styles.itemText}>{allergy}</Text>
-              </View>
-            ))}
+        {/* Notes Section */}
+        <View style={styles.section}>
+          <View style={styles.notesHeader}>
+            <Text style={styles.sectionTitle}>Notes</Text>
+            <TouchableOpacity onPress={handleEditNotes}>
+              <Text style={styles.editButtonText}>Edit</Text>
+            </TouchableOpacity>
           </View>
-        )}
-
-        {record.extractedData.conditions && record.extractedData.conditions.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Conditions</Text>
-            {record.extractedData.conditions.map((condition, idx) => (
-              <View key={idx} style={styles.listItem}>
-                <Text style={styles.bullet}>•</Text>
-                <Text style={styles.itemText}>{condition}</Text>
-              </View>
-            ))}
+          <View style={styles.notesBox}>
+            <Text style={styles.notesText}>
+              {record.notes || 'No notes added yet. Tap Edit to add notes.'}
+            </Text>
           </View>
-        )}
+        </View>
 
-        {record.extractedData.testResults && Object.keys(record.extractedData.testResults).length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Test Results</Text>
-            {Object.entries(record.extractedData.testResults).map(([testName, testValue], idx) => (
-              <View key={idx} style={styles.resultItem}>
-                <Text style={styles.resultName}>{testName}:</Text>
-                <Text style={styles.resultValue}>{testValue}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {record.extractedData.dates && Object.keys(record.extractedData.dates).length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Important Dates</Text>
-            {Object.entries(record.extractedData.dates).map(([dateType, dateValue], idx) => (
-              <View key={idx} style={styles.dateItem}>
-                <Text style={styles.dateType}>{dateType}:</Text>
-                <Text style={styles.dateValue}>{dateValue}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-
+        {/* Original Content if needed */}
         {record.originalText && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Original Text</Text>
@@ -158,6 +195,56 @@ export default function RecordDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* Edit Reason Modal */}
+      <Modal visible={editingReason} animationType="slide" onRequestClose={() => setEditingReason(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setEditingReason(false)}>
+              <Text style={styles.modalCloseButton}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Edit Reason for Visit</Text>
+            <TouchableOpacity onPress={handleSaveReason}>
+              <Text style={styles.modalSaveButton}>Save</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalContent}>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Enter reason for visit..."
+              placeholderTextColor="#999"
+              value={reasonText}
+              onChangeText={setReasonText}
+              multiline
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Notes Modal */}
+      <Modal visible={editingNotes} animationType="slide" onRequestClose={() => setEditingNotes(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setEditingNotes(false)}>
+              <Text style={styles.modalCloseButton}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Edit Notes</Text>
+            <TouchableOpacity onPress={handleSaveNotes}>
+              <Text style={styles.modalSaveButton}>Save</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.modalContent}>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Add your notes here..."
+              placeholderTextColor="#999"
+              value={notesText}
+              onChangeText={setNotesText}
+              multiline
+            />
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -200,6 +287,16 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 20,
   },
+  errorSubtext: {
+    fontSize: 12,
+    color: '#999',
+    marginBottom: 20,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 12,
+  },
   backButton: {
     backgroundColor: '#007AFF',
     paddingHorizontal: 24,
@@ -214,23 +311,20 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   titleSection: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   provider: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: '#000',
     marginBottom: 4,
   },
   specialty: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#007AFF',
     fontWeight: '600',
-    marginBottom: 4,
-  },
-  date: {
-    fontSize: 13,
-    color: '#999',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   imageContainer: {
     marginBottom: 20,
@@ -243,7 +337,7 @@ const styles = StyleSheet.create({
     height: 300,
   },
   section: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 16,
@@ -251,70 +345,74 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 12,
   },
-  allergyTitle: {
-    color: '#FF3333',
-  },
   summaryText: {
     fontSize: 15,
     lineHeight: 22,
     color: '#333',
   },
-  listItem: {
+  dataTable: {
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  dataRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FAFAFA',
   },
-  allergyItem: {
-    backgroundColor: '#FFF5F5',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  dataRowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+  },
+  dataLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  dataValue: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#000',
+    flex: 1,
+    textAlign: 'right',
+  },
+  editButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    backgroundColor: '#F0F8FF',
     borderRadius: 8,
-    marginBottom: 8,
+    marginTop: 8,
   },
-  bullet: {
-    fontSize: 16,
+  editButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#007AFF',
-    marginRight: 10,
-    width: 20,
   },
-  itemText: {
+  notesHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  notesBox: {
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    padding: 16,
+    minHeight: 100,
+    borderWidth: 1,
+    borderColor: '#F0F0F0',
+  },
+  notesText: {
     fontSize: 14,
     color: '#333',
-    flex: 1,
-  },
-  resultItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  resultName: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  resultValue: {
-    fontSize: 14,
-    color: '#000',
-    fontWeight: '600',
-  },
-  dateItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  dateType: {
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  dateValue: {
-    fontSize: 14,
-    color: '#000',
-    fontWeight: '600',
+    lineHeight: 20,
   },
   originalTextBox: {
     backgroundColor: '#FFF',
@@ -326,5 +424,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     lineHeight: 18,
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    paddingTop: 50,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  modalCloseButton: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#999',
+  },
+  modalSaveButton: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#000',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 20,
+  },
+  modalInput: {
+    flex: 1,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    padding: 16,
+    fontSize: 15,
+    color: '#000',
+    textAlignVertical: 'top',
   },
 });

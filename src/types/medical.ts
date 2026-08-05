@@ -10,11 +10,16 @@ export interface ExtractedData {
 export interface MedicalRecord {
   id: string;
   uploadDate: string;
+  appointmentDate?: string; // For organizing records by date
   imageUri?: string;
   originalText?: string;
   specialty: string;
   provider: string;
   summary: string;
+  reasonForVisit?: string; // Auto-extracted, user-editable
+  findings?: string; // Extracted findings/results
+  nextSteps?: string; // Extracted next steps/recommendations
+  notes?: string; // User-added notes
   extractedData: ExtractedData;
   processed: boolean;
 }
