@@ -145,6 +145,13 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     }
 
     try {
+      // Request camera permission
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera permission is required to take photos');
+        return;
+      }
+
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 1,
@@ -166,6 +173,13 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     }
 
     try {
+      // Request photo library permission
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Photo library permission is required to select photos');
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 1,
