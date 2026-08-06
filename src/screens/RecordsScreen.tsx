@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ScrollView,
   View,
@@ -100,6 +100,21 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   };
 
   const [scrollViewKey, setScrollViewKey] = useState(0);
+  const monthScrollRef = useRef(null);
+  const dayScrollRef = useRef(null);
+  const yearScrollRef = useRef(null);
+
+  // Scroll pickers to today's date when form opens
+  useEffect(() => {
+    if (uploadMode === 'text') {
+      setTimeout(() => {
+        const itemHeight = 32; // pickerOption height with padding (8+8+16)
+        monthScrollRef.current?.scrollTo({ y: selectedMonth * itemHeight, animated: false });
+        dayScrollRef.current?.scrollTo({ y: (selectedDay - 1) * itemHeight, animated: false });
+        yearScrollRef.current?.scrollTo({ y: (selectedYear - 1900) * itemHeight, animated: false });
+      }, 0);
+    }
+  }, [uploadMode, selectedMonth, selectedDay, selectedYear]);
 
   const handleDatePickerDone = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -543,7 +558,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                     {/* Month Picker */}
                     <View style={styles.pickerColumn}>
                       <Text style={styles.pickerLabel}>Month</Text>
-                      <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                      <ScrollView ref={monthScrollRef} style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
                         {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
                           <TouchableOpacity
                             key={idx}
@@ -561,7 +576,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                     {/* Day Picker */}
                     <View style={styles.pickerColumn}>
                       <Text style={styles.pickerLabel}>Day</Text>
-                      <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                      <ScrollView ref={dayScrollRef} style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
                         {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                           <TouchableOpacity
                             key={day}
@@ -579,7 +594,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                     {/* Year Picker */}
                     <View style={styles.pickerColumn}>
                       <Text style={styles.pickerLabel}>Year</Text>
-                      <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                      <ScrollView ref={yearScrollRef} style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
                         {Array.from({ length: new Date().getFullYear() - 1900 + 10 }, (_, i) => 1900 + i).map((year) => (
                           <TouchableOpacity
                             key={year}
