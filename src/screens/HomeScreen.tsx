@@ -101,6 +101,7 @@ export default function HomeScreen() {
   const [medicationType, setMedicationType] = useState<'prescription' | 'otc' | null>(null);
   const [medicationInputText, setMedicationInputText] = useState('');
   const [medicationPhotoUri, setMedicationPhotoUri] = useState<string | null>(null);
+  const [medicationPhotoMediaType, setMedicationPhotoMediaType] = useState<string>('image/jpeg');
   const [analyzingMedication, setAnalyzingMedication] = useState(false);
   const [isCurrentHealthEditMode, setIsCurrentHealthEditMode] = useState(false);
   const [isVitalsEditMode, setIsVitalsEditMode] = useState(false);
@@ -519,6 +520,7 @@ export default function HomeScreen() {
 
       if (!result.canceled && result.assets[0]) {
         setMedicationPhotoUri(result.assets[0].uri);
+        setMedicationPhotoMediaType(result.assets[0].type || 'image/jpeg');
         setMedicationInputMode('photo');
       }
     } catch (error) {
@@ -544,6 +546,7 @@ export default function HomeScreen() {
 
       if (!result.canceled && result.assets[0]) {
         setMedicationPhotoUri(result.assets[0].uri);
+        setMedicationPhotoMediaType(result.assets[0].type || 'image/jpeg');
         setMedicationInputMode('photo');
       }
     } catch (error) {
@@ -565,7 +568,7 @@ export default function HomeScreen() {
       });
 
       // Analyze the medication bottle using Claude vision
-      const analysis = await claudeService.parseRecordFromImage(base64, 'temp-id');
+      const analysis = await claudeService.parseRecordFromImage(base64, 'temp-id', medicationPhotoMediaType);
 
       // Extract medication details from analysis
       let medicationEntry = `Medication from bottle photo`;

@@ -32,11 +32,21 @@ export const claudeService = {
 
   async parseRecordFromImage(
     base64Image: string,
-    recordId: string
+    recordId: string,
+    mediaType: string = 'image/jpeg'
   ): Promise<Partial<MedicalRecord> & { medicationDetails: { name: string; dosage: string; frequency: string } }> {
     try {
       if (!ANTHROPIC_API_KEY) {
         throw new Error('ANTHROPIC_API_KEY not configured');
+      }
+
+      // Claude supports: image/jpeg, image/png, image/gif, image/webp
+      // Default to JPEG for unsupported formats like HEIC, HEIF
+      const supportedFormats = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      const finalMediaType = supportedFormats.includes(mediaType) ? mediaType : 'image/jpeg';
+
+      if (mediaType !== finalMediaType) {
+        console.warn(`Image format ${mediaType} not supported by Claude, using JPEG instead`);
       }
 
       // Call Claude API with vision to analyze the medication image
@@ -48,7 +58,7 @@ export const claudeService = {
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
+          model: 'claude-sonnet-5',
           max_tokens: 1024,
           messages: [
             {
@@ -58,7 +68,7 @@ export const claudeService = {
                   type: 'image',
                   source: {
                     type: 'base64',
-                    media_type: 'image/jpeg',
+                    media_type: finalMediaType,
                     data: base64Image,
                   },
                 },

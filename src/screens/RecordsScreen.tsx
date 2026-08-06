@@ -38,6 +38,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMode, setUploadMode] = useState<'method' | 'text' | 'photo'>('method');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [photoMediaType, setPhotoMediaType] = useState<string>('image/jpeg');
   const [doctorName, setDoctorName] = useState('');
   const [appointmentDate, setAppointmentDate] = useState('');
   const [appointmentSummary, setAppointmentSummary] = useState('');
@@ -159,6 +160,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
       if (!result.canceled && result.assets[0]) {
         setPhotoUri(result.assets[0].uri);
+        setPhotoMediaType(result.assets[0].type || 'image/jpeg');
         setUploadMode('photo');
       }
     } catch (error) {
@@ -187,6 +189,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
       if (!result.canceled && result.assets[0]) {
         setPhotoUri(result.assets[0].uri);
+        setPhotoMediaType(result.assets[0].type || 'image/jpeg');
         setUploadMode('photo');
       }
     } catch (error) {
@@ -210,7 +213,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       });
 
       // Analyze the photo using Claude vision
-      const parsedRecord = await claudeService.parseRecordFromImage(base64, recordId);
+      const parsedRecord = await claudeService.parseRecordFromImage(base64, recordId, photoMediaType);
 
       await addRecord({
         id: recordId,
