@@ -523,8 +523,12 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 <Text style={styles.fieldLabel}>Date of Appointment</Text>
                 <TouchableOpacity
                   style={styles.datePickerButton}
-                  onPress={() => setShowDatePicker(true)}
+                  onPress={() => {
+                    console.log('📅 Date picker button pressed');
+                    setShowDatePicker(true);
+                  }}
                   disabled={isUploading}
+                  activeOpacity={0.6}
                 >
                   <Text style={styles.datePickerButtonValue}>
                     {appointmentDate || 'Tap to select date (today)'}
