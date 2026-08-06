@@ -95,11 +95,15 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     }
   };
 
+  const [scrollViewKey, setScrollViewKey] = useState(0);
+
   const handleDatePickerDone = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const formattedDate = `${months[selectedMonth]} ${selectedDay}, ${selectedYear}`;
     setAppointmentDate(formattedDate);
     setShowDatePicker(false);
+    // Force re-render of the ScrollView
+    setScrollViewKey(prev => prev + 1);
   };
 
   const getOrganizedRecords = () => {
@@ -465,8 +469,8 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
             </TouchableOpacity>
           </View>
           <ScrollView
+            key={scrollViewKey}
             style={styles.modalContent}
-            nestedScrollEnabled={true}
             scrollEnabled={true}
             showsVerticalScrollIndicator={true}
           >
