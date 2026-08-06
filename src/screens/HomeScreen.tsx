@@ -573,9 +573,12 @@ export default function HomeScreen() {
       if (analysis.medicationDetails) {
         const { name, dosage, frequency } = analysis.medicationDetails;
         medicationEntry = `${name} ${dosage} - ${frequency}`;
+        console.log('Medication details extracted:', { name, dosage, frequency, medicationEntry });
       } else if (analysis.reasonForVisit) {
         medicationEntry = analysis.reasonForVisit;
+        console.log('Using reasonForVisit:', medicationEntry);
       }
+      console.log('Final medication entry:', medicationEntry);
 
       // Ask for confirmation before adding
       Alert.alert(
@@ -983,17 +986,12 @@ export default function HomeScreen() {
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>💊 Prescription Medications</Text>
                 {isCurrentHealthEditMode && (
-                  <View style={styles.buttonGroup}>
-                    <TouchableOpacity onPress={() => setCameraModalType('medication')}>
-                      <Text style={styles.editLink}>📷 Scan</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => {
-                      setMedicationType('prescription');
-                      setMedicationInputMode('method');
-                    }}>
-                      <Text style={styles.editLink}>+ Add</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity onPress={() => {
+                    setMedicationType('prescription');
+                    setMedicationInputMode('method');
+                  }}>
+                    <Text style={styles.editLink}>+ Add</Text>
+                  </TouchableOpacity>
                 )}
               </View>
               {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) || epicMedications.length > 0 ? (
