@@ -125,7 +125,6 @@ export default function HomeScreen() {
   const [newVaccine, setNewVaccine] = useState('');
   const [editingVaccineIdx, setEditingVaccineIdx] = useState<number | null>(null);
   const [editingVaccineValue, setEditingVaccineValue] = useState('');
-  const [addingVaccine, setAddingVaccine] = useState(false);
   const [newVaccineName, setNewVaccineName] = useState('');
   const [newVaccineDate, setNewVaccineDate] = useState('');
   const [newVaccineNextDue, setNewVaccineNextDue] = useState('');
