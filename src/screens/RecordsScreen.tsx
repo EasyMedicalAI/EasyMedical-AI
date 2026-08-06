@@ -464,7 +464,12 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
-          <ScrollView style={styles.modalContent}>
+          <ScrollView
+            style={styles.modalContent}
+            nestedScrollEnabled={true}
+            scrollEnabled={true}
+            showsVerticalScrollIndicator={true}
+          >
             {uploadMode === 'method' && (
               <>
                 <Text style={styles.label}>How would you like to upload?</Text>
