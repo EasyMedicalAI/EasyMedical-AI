@@ -501,7 +501,16 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                   </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.methodButton} onPress={() => setUploadMode('text')}>
+                <TouchableOpacity
+                  style={styles.methodButton}
+                  onPress={() => {
+                    setUploadMode('text');
+                    // Reset date to today
+                    setSelectedMonth(new Date().getMonth());
+                    setSelectedDay(new Date().getDate());
+                    setSelectedYear(new Date().getFullYear());
+                  }}
+                >
                   <Text style={styles.methodButtonIcon}>✍️</Text>
                   <View style={styles.methodButtonContent}>
                     <Text style={styles.methodButtonText}>Type Details</Text>
