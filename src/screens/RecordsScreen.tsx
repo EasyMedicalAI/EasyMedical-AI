@@ -527,19 +527,72 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 />
 
                 <Text style={styles.fieldLabel}>Date of Appointment</Text>
-                <TouchableOpacity
-                  style={styles.datePickerButton}
-                  onPress={() => {
-                    console.log('📅 Date picker button pressed');
-                    setShowDatePicker(true);
-                  }}
-                  disabled={isUploading}
-                  activeOpacity={0.6}
-                >
-                  <Text style={styles.datePickerButtonValue}>
-                    {appointmentDate || 'Tap to select date (today)'}
-                  </Text>
-                </TouchableOpacity>
+
+                {/* Inline Date Picker */}
+                <View style={styles.inlineDatePickerContainer}>
+                  <View style={styles.pickerRow}>
+                    {/* Month Picker */}
+                    <View style={styles.pickerColumn}>
+                      <Text style={styles.pickerLabel}>Month</Text>
+                      <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
+                          <TouchableOpacity
+                            key={idx}
+                            style={[styles.pickerOption, selectedMonth === idx && styles.pickerOptionSelected]}
+                            onPress={() => setSelectedMonth(idx)}
+                          >
+                            <Text style={[styles.pickerOptionText, selectedMonth === idx && styles.pickerOptionTextSelected]}>
+                              {month}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+
+                    {/* Day Picker */}
+                    <View style={styles.pickerColumn}>
+                      <Text style={styles.pickerLabel}>Day</Text>
+                      <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                        {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                          <TouchableOpacity
+                            key={day}
+                            style={[styles.pickerOption, selectedDay === day && styles.pickerOptionSelected]}
+                            onPress={() => setSelectedDay(day)}
+                          >
+                            <Text style={[styles.pickerOptionText, selectedDay === day && styles.pickerOptionTextSelected]}>
+                              {day}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+
+                    {/* Year Picker */}
+                    <View style={styles.pickerColumn}>
+                      <Text style={styles.pickerLabel}>Year</Text>
+                      <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                        {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map((year) => (
+                          <TouchableOpacity
+                            key={year}
+                            style={[styles.pickerOption, selectedYear === year && styles.pickerOptionSelected]}
+                            onPress={() => setSelectedYear(year)}
+                          >
+                            <Text style={[styles.pickerOptionText, selectedYear === year && styles.pickerOptionTextSelected]}>
+                              {year}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.datePickerDoneButton}
+                    onPress={handleDatePickerDone}
+                  >
+                    <Text style={styles.datePickerDoneButtonText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
 
                 <Text style={styles.fieldLabel}>Summary of Visit</Text>
                 <TextInput
@@ -1397,6 +1450,14 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginTop: 16,
     marginBottom: 8,
+  },
+  inlineDatePickerContainer: {
+    backgroundColor: '#F9F9F9',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
   },
   datePickerButton: {
     backgroundColor: '#F0F8FF',
