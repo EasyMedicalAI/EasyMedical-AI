@@ -125,6 +125,11 @@ export default function HomeScreen() {
   const [newVaccine, setNewVaccine] = useState('');
   const [editingVaccineIdx, setEditingVaccineIdx] = useState<number | null>(null);
   const [editingVaccineValue, setEditingVaccineValue] = useState('');
+  const [addingVaccine, setAddingVaccine] = useState(false);
+  const [newVaccineName, setNewVaccineName] = useState('');
+  const [newVaccineDate, setNewVaccineDate] = useState('');
+  const [newVaccineNextDue, setNewVaccineNextDue] = useState('');
+  const [editingVaccineId, setEditingVaccineId] = useState<number | null>(null);
   const [medicationInputMode, setMedicationInputMode] = useState<'method' | 'text' | 'photo' | null>(null);
   const [medicationType, setMedicationType] = useState<'prescription' | 'otc' | null>(null);
   const [medicationInputText, setMedicationInputText] = useState('');
@@ -2768,14 +2773,92 @@ export default function HomeScreen() {
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.modalContent}>
-            <Text style={styles.infoText}>Vaccination editing coming soon</Text>
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.saveButton} onPress={handleCancel}>
-                <Text style={styles.buttonTextWhite}>Back</Text>
+          <ScrollView style={styles.modalContent}>
+            {userData.vaccines && userData.vaccines.length > 0 ? (
+              <View>
+                {userData.vaccines.map((vaccine, idx) => (
+                  <View key={idx} style={{ marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.entryTitle}>{vaccine.name}</Text>
+                        <Text style={styles.entryMeta}>Date: {vaccine.date}</Text>
+                        {vaccine.nextDue && <Text style={styles.entryMeta}>Next due: {vaccine.nextDue}</Text>}
+                      </View>
+                      <TouchableOpacity
+                        onPress={async () => {
+                          const updatedVaccines = userData.vaccines!.filter((_, i) => i !== idx);
+                          await updateUserData({ ...editData, vaccines: updatedVaccines });
+                          Alert.alert('Success', 'Vaccine deleted');
+                        }}
+                        style={{ marginLeft: 12 }}
+                      >
+                        <Text style={{ color: '#FF3B30', fontWeight: '600' }}>Delete</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.emptyText}>No vaccines recorded</Text>
+            )}
+
+            <View style={{ marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#E0E0E0' }}>
+              <Text style={styles.fieldLabel}>Add New Vaccine</Text>
+
+              <Text style={styles.label}>Vaccine Name</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., COVID-19 (Booster)"
+                placeholderTextColor="#999"
+                value={newVaccineName}
+                onChangeText={setNewVaccineName}
+              />
+
+              <Text style={styles.label}>Date Received</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., 2024-01-15"
+                placeholderTextColor="#999"
+                value={newVaccineDate}
+                onChangeText={setNewVaccineDate}
+              />
+
+              <Text style={styles.label}>Next Due (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., 2025-01-15"
+                placeholderTextColor="#999"
+                value={newVaccineNextDue}
+                onChangeText={setNewVaccineNextDue}
+              />
+
+              <TouchableOpacity
+                style={styles.saveButton}
+                onPress={async () => {
+                  if (newVaccineName.trim() && newVaccineDate.trim()) {
+                    const updatedVaccines = [...(userData.vaccines || []), {
+                      name: newVaccineName.trim(),
+                      date: newVaccineDate.trim(),
+                      nextDue: newVaccineNextDue.trim() || undefined,
+                    }];
+                    await updateUserData({ ...editData, vaccines: updatedVaccines });
+                    setNewVaccineName('');
+                    setNewVaccineDate('');
+                    setNewVaccineNextDue('');
+                    Alert.alert('Success', 'Vaccine added');
+                  } else {
+                    Alert.alert('Error', 'Please fill in vaccine name and date');
+                  }
+                }}
+              >
+                <Text style={styles.buttonTextWhite}>+ Add Vaccine</Text>
               </TouchableOpacity>
             </View>
-          </View>
+
+            <TouchableOpacity style={styles.backButton} onPress={handleCancel}>
+              <Text style={styles.buttonText}>Back</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
       </Modal>
 
