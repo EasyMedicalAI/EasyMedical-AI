@@ -21,23 +21,30 @@ import { epicService, Medication, Appointment, Observation, Allergy, Condition }
 
 // Helper to detect media type from URI
 const getMediaTypeFromUri = (uri: string, assetType?: string): string => {
-  // If asset type is provided and is not just "image", use it
-  if (assetType && assetType !== 'image') {
-    return assetType;
-  }
-
-  // Detect from file extension
+  // ALWAYS check file extension first - it's more reliable than asset type
+  // Expo image picker sometimes gives wrong media types (e.g., says jpeg but file is heic)
   const extension = uri.split('.').pop()?.toLowerCase() || '';
   const mimeTypes: Record<string, string> = {
     'jpg': 'image/jpeg',
     'jpeg': 'image/jpeg',
     'png': 'image/png',
-    'heic': 'image/jpeg', // Convert HEIC to JPEG since Claude doesn't support HEIC
-    'heif': 'image/jpeg',
+    'heic': 'image/heic', // Mark as HEIC so we convert it
+    'heif': 'image/heif',
     'webp': 'image/webp',
     'gif': 'image/gif',
   };
-  return mimeTypes[extension] || 'image/jpeg';
+
+  // If we detected from extension, use that
+  if (extension && mimeTypes[extension]) {
+    return mimeTypes[extension];
+  }
+
+  // Fall back to asset type only if no extension or unknown extension
+  if (assetType && assetType !== 'image') {
+    return assetType;
+  }
+
+  return 'image/jpeg';
 };
 
 export default function HomeScreen() {
@@ -585,12 +592,11 @@ export default function HomeScreen() {
 
     setAnalyzingMedication(true);
     try {
-      // Convert HEIC images to JPEG if needed, or if media type is generic "image"
+      // Convert HEIC images to JPEG if needed
       let imageUri = medicationPhotoUri;
       const needsConversion =
         medicationPhotoMediaType.includes('heic') ||
-        medicationPhotoMediaType.includes('heif') ||
-        medicationPhotoMediaType === 'image'; // Generic type often means HEIC from library
+        medicationPhotoMediaType.includes('heif');
 
       if (needsConversion) {
         console.log(`🔄 Converting image (type: ${medicationPhotoMediaType}) from ${medicationPhotoUri} to JPEG...`);
