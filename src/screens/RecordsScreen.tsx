@@ -580,7 +580,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                     <View style={styles.pickerColumn}>
                       <Text style={styles.pickerLabel}>Year</Text>
                       <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                        {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map((year) => (
+                        {Array.from({ length: new Date().getFullYear() - 1900 + 10 }, (_, i) => 1900 + i).map((year) => (
                           <TouchableOpacity
                             key={year}
                             style={[styles.pickerOption, selectedYear === year && styles.pickerOptionSelected]}
