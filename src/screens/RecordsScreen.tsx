@@ -1129,6 +1129,7 @@ const styles = StyleSheet.create({
     color: '#007AFF',
   },
   modalContent: {
+    flex: 1,
     padding: 20,
   },
   label: {
