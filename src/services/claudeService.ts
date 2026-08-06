@@ -31,24 +31,30 @@ export const claudeService = {
   async parseRecordFromImage(
     base64Image: string,
     recordId: string
-  ): Promise<Partial<MedicalRecord>> {
+  ): Promise<Partial<MedicalRecord> & { medicationDetails?: { name: string; dosage: string; frequency: string } }> {
     // Mock implementation - replace with real Claude API call via backend
+    // Return structured medication data for prescription bottle analysis
     return {
       id: recordId,
       uploadDate: new Date().toISOString(),
       imageUri: `data:image/jpeg;base64,${base64Image}`,
-      specialty: 'Lab Results',
-      provider: 'Quest Diagnostics',
-      summary: 'Lab results uploaded. Connect to Claude API backend to extract real data from image.',
-      reasonForVisit: 'Routine laboratory work',
-      findings: 'Complete blood count shows WBC 7.2, RBC 4.8, Hemoglobin 14.5. All values within normal range.',
-      nextSteps: 'Results reviewed. No follow-up testing indicated at this time.',
+      specialty: 'Pharmacy',
+      provider: 'Local Pharmacy',
+      summary: 'Prescription medication bottle analyzed.',
+      reasonForVisit: 'Prescription medication',
+      findings: 'Prescription bottle image analyzed successfully.',
+      nextSteps: 'Medication added to prescription list.',
+      medicationDetails: {
+        name: 'Lisinopril',
+        dosage: '10mg',
+        frequency: 'Once daily',
+      },
       extractedData: {
-        medications: [],
+        medications: ['Lisinopril 10mg - Once daily'],
         allergies: [],
         conditions: [],
-        testResults: { 'WBC': '7.2', 'RBC': '4.8', 'Hemoglobin': '14.5' },
-        dates: { 'Test Date': new Date().toLocaleDateString() },
+        testResults: {},
+        dates: { 'Prescription Date': new Date().toLocaleDateString() },
       },
       processed: true,
     };

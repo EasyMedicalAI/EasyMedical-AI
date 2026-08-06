@@ -11,7 +11,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import { v4 as uuidv4 } from 'uuid';

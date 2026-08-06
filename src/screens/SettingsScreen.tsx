@@ -17,7 +17,7 @@ import { useRecords } from '@/context/RecordsContext';
 import { epicService } from '@/services/epicService';
 
 export default function SettingsScreen() {
-  const { records } = useRecords();
+  const { records, clearAllData } = useRecords();
   const [showEpicModal, setShowEpicModal] = useState(false);
   const [epicConnected, setEpicConnected] = useState(false);
   const [epicLoading, setEpicLoading] = useState(false);
@@ -95,8 +95,12 @@ export default function SettingsScreen() {
         {
           text: 'Clear All',
           onPress: async () => {
-            // TODO: Implement clear all functionality
-            Alert.alert('Coming Soon', 'Clear all functionality coming in next update');
+            try {
+              await clearAllData();
+              Alert.alert('Success', 'All data has been cleared.');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to clear data: ' + String(error));
+            }
           },
           style: 'destructive',
         },

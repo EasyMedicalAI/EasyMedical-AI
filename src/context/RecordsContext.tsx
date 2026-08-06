@@ -105,6 +105,7 @@ interface RecordsContextType {
   deleteRecord: (recordId: string) => Promise<void>;
   updateUserData: (data: UserHealthData) => Promise<void>;
   refreshRecords: () => Promise<void>;
+  clearAllData: () => Promise<void>;
   getRecordsBySpecialty: (specialty: string) => MedicalRecord[];
   getUniqueSpecialties: () => string[];
   getAllMedications: () => string[];
@@ -225,6 +226,53 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const clearAllData = async () => {
+    try {
+      await storageService.clearAll();
+      setRecords([]);
+      setUserData({
+        bloodType: '',
+        height: '',
+        weight: '',
+        birthday: '',
+        gender: '',
+        conditions: [],
+        allergies: [],
+        medications: [],
+        appointments: [],
+        vitals: {
+          bloodPressure: '',
+          heartRate: 0,
+          lastUpdated: new Date().toISOString(),
+        },
+        vaccines: [],
+        emergencyContacts: [],
+        insurance: {
+          provider: '',
+          memberId: '',
+          groupNumber: '',
+        },
+        insurances: [],
+        lastVisitDate: '',
+        pharmacy: {
+          name: '',
+          address: '',
+          phone: '',
+        },
+        screenings: [],
+        prescriptionMedications: [],
+        otcMedications: [],
+        surgicalHistory: [],
+        familyHistory: [],
+        pastConditions: [],
+        hospitalizations: [],
+      });
+    } catch (error) {
+      console.error('Error clearing all data:', error);
+      throw error;
+    }
+  };
+
   const value: RecordsContextType = {
     records,
     userData,
@@ -234,6 +282,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     deleteRecord,
     updateUserData,
     refreshRecords,
+    clearAllData,
     getRecordsBySpecialty,
     getUniqueSpecialties,
     getAllMedications,

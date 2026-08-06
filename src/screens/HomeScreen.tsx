@@ -12,11 +12,10 @@ import {
   Image,
   Platform,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
-import CameraModal from '@/components/CameraModal';
 import { claudeService } from '@/services/claudeService';
 import { epicService, Medication, Appointment, Observation, Allergy, Condition } from '@/services/epicService';
 
@@ -568,32 +567,63 @@ export default function HomeScreen() {
       // Analyze the medication bottle using Claude vision
       const analysis = await claudeService.parseRecordFromImage(base64, 'temp-id');
 
-      // Extract medication name from analysis
-      const medicationName = analysis.reasonForVisit || `Medication from bottle photo`;
+      // Extract medication details from analysis
+      let medicationEntry = `Medication from bottle photo`;
 
-      if (medicationType === 'prescription') {
-        const updatedData = {
-          ...editData,
-          prescriptionMedications: [...(editData.prescriptionMedications || []), medicationName]
-        };
-        setEditData(updatedData);
-        await updateUserData(updatedData);
-      } else {
-        const updatedData = {
-          ...editData,
-          otcMedications: [...(editData.otcMedications || []), medicationName]
-        };
-        setEditData(updatedData);
-        await updateUserData(updatedData);
+      if (analysis.medicationDetails) {
+        const { name, dosage, frequency } = analysis.medicationDetails;
+        medicationEntry = `${name} ${dosage} - ${frequency}`;
+      } else if (analysis.reasonForVisit) {
+        medicationEntry = analysis.reasonForVisit;
       }
 
-      setMedicationInputMode(null);
-      setMedicationType(null);
-      setMedicationPhotoUri(null);
-      Alert.alert('Success', 'Medication analyzed and added successfully!');
+      // Ask for confirmation before adding
+      Alert.alert(
+        'Confirm Medication',
+        `Add this ${medicationType} medication?\n\n${medicationEntry}`,
+        [
+          {
+            text: 'Cancel',
+            onPress: () => {
+              setAnalyzingMedication(false);
+            },
+            style: 'cancel',
+          },
+          {
+            text: 'Confirm',
+            onPress: async () => {
+              try {
+                if (medicationType === 'prescription') {
+                  const updatedData = {
+                    ...editData,
+                    prescriptionMedications: [...(editData.prescriptionMedications || []), medicationEntry]
+                  };
+                  setEditData(updatedData);
+                  await updateUserData(updatedData);
+                } else {
+                  const updatedData = {
+                    ...editData,
+                    otcMedications: [...(editData.otcMedications || []), medicationEntry]
+                  };
+                  setEditData(updatedData);
+                  await updateUserData(updatedData);
+                }
+
+                setMedicationInputMode(null);
+                setMedicationType(null);
+                setMedicationPhotoUri(null);
+                Alert.alert('Success', 'Medication added successfully!');
+              } catch (error) {
+                Alert.alert('Error', 'Failed to add medication: ' + String(error));
+              } finally {
+                setAnalyzingMedication(false);
+              }
+            },
+          },
+        ]
+      );
     } catch (error) {
       Alert.alert('Error', 'Failed to analyze medication photo: ' + String(error));
-    } finally {
       setAnalyzingMedication(false);
     }
   };
@@ -3212,25 +3242,6 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* Camera Modals */}
-      <CameraModal
-        visible={cameraModalType === 'medication'}
-        type="medication"
-        onClose={() => setCameraModalType(null)}
-        onPhotoSaved={(photoId, analysis) => handlePhotoSaved(photoId, analysis, 'medication')}
-      />
-      <CameraModal
-        visible={cameraModalType === 'document'}
-        type="document"
-        onClose={() => setCameraModalType(null)}
-        onPhotoSaved={(photoId, analysis) => handlePhotoSaved(photoId, analysis, 'document')}
-      />
-      <CameraModal
-        visible={cameraModalType === 'record'}
-        type="record"
-        onClose={() => setCameraModalType(null)}
-        onPhotoSaved={(photoId, analysis) => handlePhotoSaved(photoId, analysis, 'record')}
-      />
     </>
   );
 }

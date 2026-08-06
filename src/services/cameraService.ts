@@ -227,7 +227,7 @@ export const cameraService = {
 
   async imageUriToBase64(imageUri: string): Promise<string | null> {
     try {
-      const { FileSystem } = await import('expo-file-system');
+      const { FileSystem } = await import('expo-file-system/legacy');
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
