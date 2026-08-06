@@ -593,18 +593,24 @@ export default function HomeScreen() {
         medicationPhotoMediaType === 'image'; // Generic type often means HEIC from library
 
       if (needsConversion) {
-        console.log(`Converting image (type: ${medicationPhotoMediaType}) from ${medicationPhotoUri} to JPEG...`);
+        console.log(`🔄 Converting image (type: ${medicationPhotoMediaType}) from ${medicationPhotoUri} to JPEG...`);
         imageUri = await convertHeicToJpeg(medicationPhotoUri);
-        console.log(`Conversion complete. New URI: ${imageUri}`);
+        console.log(`✓ Conversion complete. New URI: ${imageUri}`);
+      } else {
+        console.log(`📷 Using image as-is (type: ${medicationPhotoMediaType})`);
       }
 
       // Convert photo to base64 for analysis
+      console.log(`📊 Reading image as base64 from: ${imageUri}`);
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
+      console.log(`✓ Base64 read successful. Length: ${base64.length} characters`);
 
       // Analyze the medication bottle using Claude vision
+      console.log(`🤖 Sending to Claude API (image/jpeg format)...`);
       const analysis = await claudeService.parseRecordFromImage(base64, 'temp-id', 'image/jpeg');
+      console.log(`✓ Claude analysis complete`);
 
       // Extract medication details from analysis
       let medicationEntry = `Medication from bottle photo`;

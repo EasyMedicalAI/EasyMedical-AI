@@ -238,18 +238,24 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         photoMediaType === 'image'; // Generic type often means HEIC from library
 
       if (needsConversion) {
-        console.log(`Converting image (type: ${photoMediaType}) from ${photoUri} to JPEG...`);
+        console.log(`🔄 Converting image (type: ${photoMediaType}) from ${photoUri} to JPEG...`);
         imageUri = await convertHeicToJpeg(photoUri);
-        console.log(`Conversion complete. New URI: ${imageUri}`);
+        console.log(`✓ Conversion complete. New URI: ${imageUri}`);
+      } else {
+        console.log(`📷 Using image as-is (type: ${photoMediaType})`);
       }
 
       // Convert photo to base64 for analysis
+      console.log(`📊 Reading image as base64 from: ${imageUri}`);
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
+      console.log(`✓ Base64 read successful. Length: ${base64.length} characters`);
 
       // Analyze the photo using Claude vision
+      console.log(`🤖 Sending to Claude API (image/jpeg format)...`);
       const parsedRecord = await claudeService.parseRecordFromImage(base64, recordId, 'image/jpeg');
+      console.log(`✓ Claude analysis complete`);
 
       await addRecord({
         id: recordId,

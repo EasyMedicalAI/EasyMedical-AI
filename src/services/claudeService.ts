@@ -8,16 +8,35 @@ const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 // Convert HEIC/HEIF images to JPEG for Claude API compatibility
 const convertHeicToJpeg = async (imageUri: string): Promise<string> => {
   try {
-    // Manipulate the image to convert it to JPEG
+    console.log('Starting image conversion for:', imageUri);
+
+    // First, try to manipulate the image with a small resize operation to force re-encoding
+    // This ensures the image is properly converted to JPEG format
     const manipulatedImage = await ImageManipulator.manipulateAsync(
       imageUri,
-      [],
-      { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+      [{ resize: { width: 2000, height: 2000 } }], // Resize to ensure re-encoding, maintaining aspect ratio
+      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
     );
+
+    console.log('Image conversion successful. New URI:', manipulatedImage.uri);
     return manipulatedImage.uri;
   } catch (error) {
-    console.warn('Failed to convert image to JPEG, will attempt to send as-is:', error);
-    return imageUri;
+    console.error('Error converting image to JPEG:', error);
+    console.warn('Attempting with simple resize fallback...');
+
+    try {
+      // Fallback: just resize to trigger re-encoding
+      const fallbackImage = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [],
+        { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      console.log('Fallback conversion successful:', fallbackImage.uri);
+      return fallbackImage.uri;
+    } catch (fallbackError) {
+      console.error('Fallback conversion also failed:', fallbackError);
+      return imageUri;
+    }
   }
 };
 
