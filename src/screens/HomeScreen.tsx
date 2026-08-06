@@ -1877,28 +1877,7 @@ export default function HomeScreen() {
                   </View>
                 ))
               ) : (
-                <>
-                  <View style={styles.infoRowWithEdit}>
-                    <View style={styles.infoColumn}>
-                      <Text style={styles.infoLabel}>Provider</Text>
-                      <Text style={styles.infoValue}>Blue Cross Blue Shield</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => {
-                      setEditData(userData);
-                      setEditingSection('insurance');
-                      setEditingInsuranceId(0);
-                      setInsuranceProvider('Blue Cross Blue Shield');
-                      setInsuranceMemberId('BCX123456789');
-                      setInsuranceGroupNumber('');
-                    }}>
-                      <Text style={styles.editLink}>Edit</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoLabel}>Member ID</Text>
-                    <Text style={styles.infoValueMono}>BCX123456789</Text>
-                  </View>
-                </>
+                <Text style={styles.emptyText}>No insurance information added</Text>
               )}
               <TouchableOpacity
                 style={styles.addButton}
@@ -2029,23 +2008,7 @@ export default function HomeScreen() {
                   </View>
                 ))
               ) : (
-                <View style={styles.contactRowWithEdit}>
-                  <View>
-                    <Text style={styles.contactName}>Jane Doe</Text>
-                    <Text style={styles.contactRelationship}>Spouse</Text>
-                    <Text style={styles.contactPhoneNumber}>(555) 123-4567</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => {
-                    setEditData(userData);
-                    setEditingSection('emergency');
-                    setEditingEmergencyContactId(0);
-                    setEmergencyContactName('Jane Doe');
-                    setEmergencyContactRelationship('Spouse');
-                    setEmergencyContactPhone('(555) 123-4567');
-                  }}>
-                    <Text style={styles.editLink}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
+                <Text style={styles.emptyText}>No emergency contacts added</Text>
               )}
               <TouchableOpacity
                 style={styles.addButton}

@@ -2,98 +2,39 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { MedicalRecord, MedicalHub, UserHealthData } from '../types/medical';
 import { storageService } from '../services/storageService';
 
-const MOCK_USER_DATA: UserHealthData = {
-  bloodType: 'O+',
-  height: '5\'10"',
-  weight: '180 lbs',
-  birthday: '1965-03-22',
-  gender: 'Male',
-  conditions: ['Hypertension', 'Type 2 Diabetes'],
-  allergies: ['Penicillin', 'Sulfa drugs'],
-  medications: ['Lisinopril 10mg daily', 'Metformin 500mg twice daily'],
-  appointments: [
-    { id: '1', dateTime: 'Aug 15, 2024 • 2:00 PM', doctorName: 'Dr. Sarah Johnson', specialty: 'Cardiology' },
-  ],
+// Empty initial state - will be populated from storage or user input
+const EMPTY_USER_DATA: UserHealthData = {
+  bloodType: '',
+  height: '',
+  weight: '',
+  birthday: '',
+  gender: 'Other',
+  conditions: [],
+  allergies: [],
+  medications: [],
+  appointments: [],
   vitals: {
-    bloodPressure: '140/90 mmHg',
-    heartRate: 72,
+    bloodPressure: '',
+    heartRate: 0,
     lastUpdated: new Date().toISOString(),
   },
-  vaccines: [
-    { name: 'COVID-19 (Booster)', date: '2024-01-15', nextDue: '2025-01-15' },
-    { name: 'Flu Shot', date: '2024-09-20', nextDue: '2025-09-20' },
-  ],
-  emergencyContacts: [
-    { name: 'Jane Doe', relationship: 'Spouse', phone: '(555) 123-4567' },
-    { name: 'John Smith', relationship: 'Brother', phone: '(555) 987-6543' },
-  ],
+  vaccines: [],
+  emergencyContacts: [],
   insurance: {
-    provider: 'Blue Cross Blue Shield',
-    memberId: 'BCX123456789',
-    groupNumber: 'GRP789',
+    provider: '',
+    memberId: '',
+    groupNumber: '',
   },
-  insurances: [
-    {
-      provider: 'Blue Cross Blue Shield',
-      memberId: 'BCX123456789',
-      groupNumber: 'GRP789',
-    },
-  ],
-  lastVisitDate: '2024-06-15',
-  pharmacy: {
-    name: 'CVS Pharmacy',
-    address: '123 Main Street, Springfield, IL 62701',
-    phone: '(217) 555-1234',
-  },
-  screenings: [
-    {
-      type: 'Colonoscopy',
-      date: '06/15/2024',
-      notes: 'Dr. Smith, GI Specialist. Normal results. Next due in 10 years.',
-    },
-    {
-      type: 'Blood Pressure Check',
-      date: '07/10/2024',
-      notes: 'Regular monitoring. Readings elevated, continue medication.',
-    },
-  ],
-  prescriptionMedications: [
-    'Lisinopril 10mg daily',
-    'Metformin 500mg twice daily',
-    'Atorvastatin 20mg nightly',
-  ],
-  otcMedications: [
-    'Vitamin D 2000 IU daily',
-    'Omega-3 supplements',
-    'Aspirin 81mg daily',
-  ],
-  surgicalHistory: [
-    {
-      type: 'Appendectomy',
-      date: '1995-08-10',
-      notes: 'Successful surgery at Memorial Hospital',
-    },
-  ],
-  familyHistory: [
-    {
-      familyMember: 'Father',
-      condition: 'Heart Disease',
-    },
-    {
-      familyMember: 'Mother',
-      condition: 'Hypertension',
-    },
-  ],
-  pastConditions: [
-    'Elevated Cholesterol',
-    'Prediabetes (resolved with diet)',
-  ],
-  hospitalizations: [
-    {
-      reason: 'Hypertension management and medication adjustment',
-      date: '2022-03-15',
-    },
-  ],
+  insurances: [],
+  lastVisitDate: '',
+  pharmacy: undefined,
+  screenings: [],
+  prescriptionMedications: [],
+  otcMedications: [],
+  surgicalHistory: [],
+  familyHistory: [],
+  pastConditions: [],
+  hospitalizations: [],
 };
 
 interface RecordsContextType {
@@ -118,7 +59,7 @@ const RecordsContext = createContext<RecordsContextType | undefined>(undefined);
 
 export function RecordsProvider({ children }: { children: React.ReactNode }) {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
-  const [userData, setUserData] = useState<UserHealthData>(MOCK_USER_DATA);
+  const [userData, setUserData] = useState<UserHealthData>(EMPTY_USER_DATA);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
