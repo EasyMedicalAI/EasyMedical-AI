@@ -362,6 +362,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   }
 
   return (
+    <>
     <ScrollView style={styles.container}>
       <View style={styles.topBar}>
         <View />
@@ -448,6 +449,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       </View>
 
       <View style={styles.spacing} />
+    </ScrollView>
 
       {/* Upload Modal */}
       <Modal visible={uploadingSpecialty !== null} animationType="slide" onRequestClose={() => {
@@ -816,7 +818,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
           </View>
         </View>
       </Modal>
-    </ScrollView>
+    </>
   );
 }
 
