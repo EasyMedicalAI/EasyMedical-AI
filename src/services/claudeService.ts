@@ -1,7 +1,27 @@
 import { MedicalRecord, ExtractedData } from '../types/medical';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const ANTHROPIC_API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+
+// Convert HEIC/HEIF images to JPEG for Claude API compatibility
+const convertHeicToJpeg = async (imageUri: string): Promise<string> => {
+  try {
+    // Manipulate the image to convert it to JPEG
+    const manipulatedImage = await ImageManipulator.manipulateAsync(
+      imageUri,
+      [],
+      { compress: 0.9, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    return manipulatedImage.uri;
+  } catch (error) {
+    console.warn('Failed to convert image to JPEG, will attempt to send as-is:', error);
+    return imageUri;
+  }
+};
+
+export { convertHeicToJpeg };
 
 export const claudeService = {
   async parseRecordFromText(
@@ -46,7 +66,7 @@ export const claudeService = {
       const finalMediaType = supportedFormats.includes(mediaType) ? mediaType : 'image/jpeg';
 
       if (mediaType !== finalMediaType) {
-        console.warn(`Image format ${mediaType} not supported by Claude, using JPEG instead`);
+        console.warn(`Image format '${mediaType}' not supported by Claude, using '${finalMediaType}' instead`);
       }
 
       // Call Claude API with vision to analyze the medication image

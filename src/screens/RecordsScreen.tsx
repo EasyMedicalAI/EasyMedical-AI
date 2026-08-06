@@ -15,9 +15,30 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import { v4 as uuidv4 } from 'uuid';
-import { claudeService } from '@/services/claudeService';
+import { claudeService, convertHeicToJpeg } from '@/services/claudeService';
 import { epicService, Appointment } from '@/services/epicService';
 import { MedicalRecord } from '@/types/medical';
+
+// Helper to detect media type from URI
+const getMediaTypeFromUri = (uri: string, assetType?: string): string => {
+  // If asset type is provided and is not just "image", use it
+  if (assetType && assetType !== 'image') {
+    return assetType;
+  }
+
+  // Detect from file extension
+  const extension = uri.split('.').pop()?.toLowerCase() || '';
+  const mimeTypes: Record<string, string> = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'heic': 'image/jpeg', // Convert HEIC to JPEG since Claude doesn't support HEIC
+    'heif': 'image/jpeg',
+    'webp': 'image/webp',
+    'gif': 'image/gif',
+  };
+  return mimeTypes[extension] || 'image/jpeg';
+};
 
 let ImagePicker: any;
 try {
@@ -159,8 +180,9 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       });
 
       if (!result.canceled && result.assets[0]) {
-        setPhotoUri(result.assets[0].uri);
-        setPhotoMediaType(result.assets[0].type || 'image/jpeg');
+        const uri = result.assets[0].uri;
+        setPhotoUri(uri);
+        setPhotoMediaType(getMediaTypeFromUri(uri, result.assets[0].type));
         setUploadMode('photo');
       }
     } catch (error) {
@@ -188,8 +210,9 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       });
 
       if (!result.canceled && result.assets[0]) {
-        setPhotoUri(result.assets[0].uri);
-        setPhotoMediaType(result.assets[0].type || 'image/jpeg');
+        const uri = result.assets[0].uri;
+        setPhotoUri(uri);
+        setPhotoMediaType(getMediaTypeFromUri(uri, result.assets[0].type));
         setUploadMode('photo');
       }
     } catch (error) {
@@ -207,13 +230,20 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     try {
       const recordId = uuidv4();
 
+      // Convert HEIC images to JPEG if needed
+      let imageUri = photoUri;
+      if (photoMediaType.includes('heic') || photoMediaType.includes('heif')) {
+        console.log('Converting HEIC/HEIF image to JPEG...');
+        imageUri = await convertHeicToJpeg(photoUri);
+      }
+
       // Convert photo to base64 for analysis
-      const base64 = await FileSystem.readAsStringAsync(photoUri, {
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
       // Analyze the photo using Claude vision
-      const parsedRecord = await claudeService.parseRecordFromImage(base64, recordId, photoMediaType);
+      const parsedRecord = await claudeService.parseRecordFromImage(base64, recordId, 'image/jpeg');
 
       await addRecord({
         id: recordId,

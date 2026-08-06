@@ -16,8 +16,29 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
-import { claudeService } from '@/services/claudeService';
+import { claudeService, convertHeicToJpeg } from '@/services/claudeService';
 import { epicService, Medication, Appointment, Observation, Allergy, Condition } from '@/services/epicService';
+
+// Helper to detect media type from URI
+const getMediaTypeFromUri = (uri: string, assetType?: string): string => {
+  // If asset type is provided and is not just "image", use it
+  if (assetType && assetType !== 'image') {
+    return assetType;
+  }
+
+  // Detect from file extension
+  const extension = uri.split('.').pop()?.toLowerCase() || '';
+  const mimeTypes: Record<string, string> = {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'heic': 'image/jpeg', // Convert HEIC to JPEG since Claude doesn't support HEIC
+    'heif': 'image/jpeg',
+    'webp': 'image/webp',
+    'gif': 'image/gif',
+  };
+  return mimeTypes[extension] || 'image/jpeg';
+};
 
 export default function HomeScreen() {
   const { records, userData, loading, getAbnormalResults, updateUserData } = useRecords();
@@ -519,8 +540,9 @@ export default function HomeScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        setMedicationPhotoUri(result.assets[0].uri);
-        setMedicationPhotoMediaType(result.assets[0].type || 'image/jpeg');
+        const uri = result.assets[0].uri;
+        setMedicationPhotoUri(uri);
+        setMedicationPhotoMediaType(getMediaTypeFromUri(uri, result.assets[0].type));
         setMedicationInputMode('photo');
       }
     } catch (error) {
@@ -545,8 +567,9 @@ export default function HomeScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        setMedicationPhotoUri(result.assets[0].uri);
-        setMedicationPhotoMediaType(result.assets[0].type || 'image/jpeg');
+        const uri = result.assets[0].uri;
+        setMedicationPhotoUri(uri);
+        setMedicationPhotoMediaType(getMediaTypeFromUri(uri, result.assets[0].type));
         setMedicationInputMode('photo');
       }
     } catch (error) {
@@ -562,13 +585,20 @@ export default function HomeScreen() {
 
     setAnalyzingMedication(true);
     try {
+      // Convert HEIC images to JPEG if needed
+      let imageUri = medicationPhotoUri;
+      if (medicationPhotoMediaType.includes('heic') || medicationPhotoMediaType.includes('heif')) {
+        console.log('Converting HEIC/HEIF image to JPEG...');
+        imageUri = await convertHeicToJpeg(medicationPhotoUri);
+      }
+
       // Convert photo to base64 for analysis
-      const base64 = await FileSystem.readAsStringAsync(medicationPhotoUri, {
+      const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
       // Analyze the medication bottle using Claude vision
-      const analysis = await claudeService.parseRecordFromImage(base64, 'temp-id', medicationPhotoMediaType);
+      const analysis = await claudeService.parseRecordFromImage(base64, 'temp-id', 'image/jpeg');
 
       // Extract medication details from analysis
       let medicationEntry = `Medication from bottle photo`;
