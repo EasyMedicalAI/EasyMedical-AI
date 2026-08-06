@@ -230,11 +230,17 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     try {
       const recordId = uuidv4();
 
-      // Convert HEIC images to JPEG if needed
+      // Convert HEIC images to JPEG if needed, or if media type is generic "image"
       let imageUri = photoUri;
-      if (photoMediaType.includes('heic') || photoMediaType.includes('heif')) {
-        console.log('Converting HEIC/HEIF image to JPEG...');
+      const needsConversion =
+        photoMediaType.includes('heic') ||
+        photoMediaType.includes('heif') ||
+        photoMediaType === 'image'; // Generic type often means HEIC from library
+
+      if (needsConversion) {
+        console.log(`Converting image (type: ${photoMediaType}) from ${photoUri} to JPEG...`);
         imageUri = await convertHeicToJpeg(photoUri);
+        console.log(`Conversion complete. New URI: ${imageUri}`);
       }
 
       // Convert photo to base64 for analysis

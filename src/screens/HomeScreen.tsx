@@ -585,11 +585,17 @@ export default function HomeScreen() {
 
     setAnalyzingMedication(true);
     try {
-      // Convert HEIC images to JPEG if needed
+      // Convert HEIC images to JPEG if needed, or if media type is generic "image"
       let imageUri = medicationPhotoUri;
-      if (medicationPhotoMediaType.includes('heic') || medicationPhotoMediaType.includes('heif')) {
-        console.log('Converting HEIC/HEIF image to JPEG...');
+      const needsConversion =
+        medicationPhotoMediaType.includes('heic') ||
+        medicationPhotoMediaType.includes('heif') ||
+        medicationPhotoMediaType === 'image'; // Generic type often means HEIC from library
+
+      if (needsConversion) {
+        console.log(`Converting image (type: ${medicationPhotoMediaType}) from ${medicationPhotoUri} to JPEG...`);
         imageUri = await convertHeicToJpeg(medicationPhotoUri);
+        console.log(`Conversion complete. New URI: ${imageUri}`);
       }
 
       // Convert photo to base64 for analysis
