@@ -86,6 +86,10 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     loadAppointments();
   }, []);
 
+  useEffect(() => {
+    console.log('📅 showDatePicker state changed to:', showDatePicker);
+  }, [showDatePicker]);
+
   const loadAppointments = async () => {
     try {
       const appointments = await epicService.getAppointments();
