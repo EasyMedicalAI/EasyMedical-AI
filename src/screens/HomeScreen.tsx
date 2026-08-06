@@ -129,6 +129,8 @@ export default function HomeScreen() {
   const [newVaccineDate, setNewVaccineDate] = useState('');
   const [newVaccineNextDue, setNewVaccineNextDue] = useState('');
   const [editingVaccineId, setEditingVaccineId] = useState<number | null>(null);
+  const [showVaccineModal, setShowVaccineModal] = useState(false);
+  const [selectedRecommendedVaccine, setSelectedRecommendedVaccine] = useState<string>('');
   const [medicationInputMode, setMedicationInputMode] = useState<'method' | 'text' | 'photo' | null>(null);
   const [medicationType, setMedicationType] = useState<'prescription' | 'otc' | null>(null);
   const [medicationInputText, setMedicationInputText] = useState('');
@@ -1740,6 +1742,15 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       key={idx}
                       style={[styles.recommendedItem, isCompleted && styles.completedItem]}
+                      onPress={() => {
+                        if (!isCompleted) {
+                          setSelectedRecommendedVaccine(vaccine);
+                          setNewVaccineName(vaccine.split('(')[0].trim());
+                          setNewVaccineDate(new Date().toISOString().split('T')[0]);
+                          setNewVaccineNextDue('');
+                          setShowVaccineModal(true);
+                        }
+                      }}
                     >
                       <Text style={styles.recommendedCheckbox}>{isCompleted ? '✓' : '○'}</Text>
                       <Text style={[styles.recommendedText, isCompleted && styles.completedText]}>
@@ -2856,6 +2867,78 @@ export default function HomeScreen() {
 
             <TouchableOpacity style={styles.backButton} onPress={handleCancel}>
               <Text style={styles.buttonText}>Back</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Add Vaccine from Recommended Modal */}
+      <Modal visible={showVaccineModal} animationType="slide" onRequestClose={() => setShowVaccineModal(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Add Vaccine</Text>
+            <TouchableOpacity onPress={() => setShowVaccineModal(false)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.modalContent}>
+            <Text style={styles.label}>Vaccine Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Vaccine name"
+              placeholderTextColor="#999"
+              value={newVaccineName}
+              onChangeText={setNewVaccineName}
+              editable={false}
+            />
+
+            <Text style={styles.label}>Date Received</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#999"
+              value={newVaccineDate}
+              onChangeText={setNewVaccineDate}
+            />
+
+            <Text style={styles.label}>Next Due (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#999"
+              value={newVaccineNextDue}
+              onChangeText={setNewVaccineNextDue}
+            />
+
+            <TouchableOpacity
+              style={styles.saveButton}
+              onPress={async () => {
+                if (newVaccineName.trim() && newVaccineDate.trim()) {
+                  const updatedVaccines = [...(userData.vaccines || []), {
+                    name: newVaccineName.trim(),
+                    date: newVaccineDate.trim(),
+                    nextDue: newVaccineNextDue.trim() || undefined,
+                  }];
+                  setEditData({ ...editData, vaccines: updatedVaccines });
+                  await updateUserData({ ...editData, vaccines: updatedVaccines });
+                  setNewVaccineName('');
+                  setNewVaccineDate('');
+                  setNewVaccineNextDue('');
+                  setShowVaccineModal(false);
+                  Alert.alert('Success', 'Vaccine added successfully!');
+                } else {
+                  Alert.alert('Error', 'Please fill in vaccine name and date');
+                }
+              }}
+            >
+              <Text style={styles.buttonTextWhite}>Add Vaccine</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => setShowVaccineModal(false)}
+            >
+              <Text style={styles.buttonText}>Cancel</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
