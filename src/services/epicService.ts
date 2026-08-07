@@ -222,6 +222,7 @@ class EpicService {
     return OAUTH_AUTHORIZE_URL;
   }
 
+
   // Handle OAuth callback from backend
   async handleOAuthCallback(token: string): Promise<void> {
     try {

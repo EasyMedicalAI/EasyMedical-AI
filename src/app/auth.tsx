@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import { useSearchParams, useRouter } from 'expo-router';
+import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { epicService } from '@/services/epicService';
 
 export default function CallbackScreen() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useLocalSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -15,30 +15,34 @@ export default function CallbackScreen() {
 
   const handleOAuthCallback = async () => {
     try {
-      // Extract code and state from URL parameters
-      const code = searchParams.get('code');
-      const state = searchParams.get('state');
+      // Extract token from deep link redirect (easymedical://auth?token=...)
+      const token = searchParams.token as string | undefined;
 
-      if (!code) {
-        // Check if user denied access
-        const error = searchParams.get('error');
-        if (error) {
-          setError(`Authorization denied: ${error}`);
-        } else {
-          setError('No authorization code received');
-        }
+      if (token) {
+        // Token received from backend's OAuth callback - this is the success path
+        console.log('Received token from Epic OAuth callback');
+        await epicService.handleOAuthCallback(token);
+
+        setLoading(false);
+        setTimeout(() => {
+          Alert.alert('Success', 'Your Epic account has been connected successfully!');
+          router.replace('/');
+        }, 500);
+        return;
+      }
+
+      // Check for error in deep link
+      const errorParam = searchParams.error as string | undefined;
+      if (errorParam) {
+        const errorDescription = searchParams.error_description as string | undefined;
+        setError(`Authorization failed: ${errorParam}${errorDescription ? ` - ${errorDescription}` : ''}`);
         setLoading(false);
         return;
       }
 
-      // Exchange code for access token
-      await epicService.exchangeCodeForToken(code, state);
-
-      // Success! Navigate to home
+      // No token or error received
+      setError('No authorization token received');
       setLoading(false);
-      setTimeout(() => {
-        router.replace('/');
-      }, 1500);
     } catch (err) {
       console.error('OAuth callback error:', err);
       setError(err instanceof Error ? err.message : 'Authentication failed');

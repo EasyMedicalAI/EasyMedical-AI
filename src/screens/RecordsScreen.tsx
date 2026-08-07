@@ -69,7 +69,7 @@ interface RecordsScreenProps {
 }
 
 export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) {
-  const { records, loading, getUniqueSpecialties, addRecord, updateRecord } = useRecords();
+  const { records, loading, getUniqueSpecialties, addRecord, updateRecord, deleteRecord } = useRecords();
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
   const [recordText, setRecordText] = useState('');
@@ -95,6 +95,9 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [editedSummary, setEditedSummary] = useState('');
   const [editedFindings, setEditedFindings] = useState('');
   const [editedNextSteps, setEditedNextSteps] = useState('');
+  const [editRecordMonth, setEditRecordMonth] = useState(0);
+  const [editRecordDay, setEditRecordDay] = useState(1);
+  const [editRecordYear, setEditRecordYear] = useState(new Date().getFullYear());
   // Initialize with today's date
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
@@ -134,6 +137,16 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       }, 0);
     }
   }, [uploadMode, selectedMonth, selectedDay, selectedYear]);
+
+  // Initialize date picker with selected record's date when entering edit mode
+  useEffect(() => {
+    if (isEditingRecord && selectedRecord) {
+      const recordDate = new Date(selectedRecord.appointmentDate || selectedRecord.uploadDate);
+      setEditRecordMonth(recordDate.getMonth());
+      setEditRecordDay(recordDate.getDate());
+      setEditRecordYear(recordDate.getFullYear());
+    }
+  }, [isEditingRecord, selectedRecord]);
 
   const handleDatePickerDone = () => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -952,13 +965,63 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 <View style={{ marginBottom: 20 }}>
                   <Text style={styles.label}>Date</Text>
                   {isEditingRecord ? (
-                    <TextInput
-                      style={styles.input}
-                      value={editedDate || new Date(selectedRecord.appointmentDate || selectedRecord.uploadDate).toISOString().split('T')[0]}
-                      onChangeText={setEditedDate}
-                      placeholder="YYYY-MM-DD"
-                      placeholderTextColor="#999"
-                    />
+                    <View style={styles.inlineDatePickerContainer}>
+                      <View style={styles.pickerRow}>
+                        {/* Month Picker */}
+                        <View style={styles.pickerColumn}>
+                          <Text style={styles.pickerLabel}>Month</Text>
+                          <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
+                              <TouchableOpacity
+                                key={idx}
+                                style={[styles.pickerOption, editRecordMonth === idx && styles.pickerOptionSelected]}
+                                onPress={() => setEditRecordMonth(idx)}
+                              >
+                                <Text style={[styles.pickerOptionText, editRecordMonth === idx && styles.pickerOptionTextSelected]}>
+                                  {month}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </View>
+
+                        {/* Day Picker */}
+                        <View style={styles.pickerColumn}>
+                          <Text style={styles.pickerLabel}>Day</Text>
+                          <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                            {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                              <TouchableOpacity
+                                key={day}
+                                style={[styles.pickerOption, editRecordDay === day && styles.pickerOptionSelected]}
+                                onPress={() => setEditRecordDay(day)}
+                              >
+                                <Text style={[styles.pickerOptionText, editRecordDay === day && styles.pickerOptionTextSelected]}>
+                                  {day}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </View>
+
+                        {/* Year Picker */}
+                        <View style={styles.pickerColumn}>
+                          <Text style={styles.pickerLabel}>Year</Text>
+                          <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
+                            {Array.from({ length: new Date().getFullYear() - 1900 + 10 }, (_, i) => 1900 + i).map((year) => (
+                              <TouchableOpacity
+                                key={year}
+                                style={[styles.pickerOption, editRecordYear === year && styles.pickerOptionSelected]}
+                                onPress={() => setEditRecordYear(year)}
+                              >
+                                <Text style={[styles.pickerOptionText, editRecordYear === year && styles.pickerOptionTextSelected]}>
+                                  {year}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </View>
+                      </View>
+                    </View>
                   ) : (
                     <Text style={styles.infoValue}>
                       {new Date(selectedRecord.appointmentDate || selectedRecord.uploadDate).toLocaleDateString('en-US', {
@@ -1085,6 +1148,9 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                   setEditedSummary('');
                   setEditedFindings('');
                   setEditedNextSteps('');
+                  setEditRecordMonth(0);
+                  setEditRecordDay(1);
+                  setEditRecordYear(new Date().getFullYear());
                 }}
               >
                 <Text style={styles.buttonText}>Cancel</Text>
@@ -1092,10 +1158,11 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               <TouchableOpacity
                 style={[styles.saveButton, { flex: 1 }]}
                 onPress={async () => {
+                  const formattedDate = new Date(editRecordYear, editRecordMonth, editRecordDay).toISOString();
                   const updatedRecord = {
                     ...selectedRecord,
                     provider: editedProvider || selectedRecord.provider,
-                    appointmentDate: editedDate ? new Date(editedDate).toISOString() : selectedRecord.appointmentDate,
+                    appointmentDate: formattedDate,
                     reasonForVisit: editedReason || selectedRecord.reasonForVisit,
                     summary: editedSummary || selectedRecord.summary,
                     findings: editedFindings || selectedRecord.findings,
@@ -1122,9 +1189,44 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity style={styles.backButton} onPress={() => setShowRecordDetail(false)}>
-              <Text style={styles.buttonText}>Close</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingBottom: 20 }}>
+              <TouchableOpacity style={[styles.backButton, { flex: 1 }]} onPress={() => setShowRecordDetail(false)}>
+                <Text style={styles.buttonText}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveButton, { flex: 1 }]}
+                onPress={() => setIsEditingRecord(true)}
+              >
+                <Text style={styles.buttonTextWhite}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteButton, { flex: 1 }]}
+                onPress={() => {
+                  Alert.alert(
+                    'Delete Record',
+                    'Are you sure you want to delete this record? This action cannot be undone.',
+                    [
+                      { text: 'Cancel', onPress: () => {}, style: 'cancel' },
+                      {
+                        text: 'Delete',
+                        onPress: async () => {
+                          try {
+                            await deleteRecord(selectedRecord.id);
+                            setShowRecordDetail(false);
+                            Alert.alert('Success', 'Record deleted successfully');
+                          } catch (error) {
+                            Alert.alert('Error', 'Failed to delete record');
+                          }
+                        },
+                        style: 'destructive',
+                      },
+                    ]
+                  );
+                }}
+              >
+                <Text style={styles.buttonTextWhite}>Delete</Text>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
       </Modal>
@@ -1866,5 +1968,32 @@ const styles = StyleSheet.create({
     color: '#999',
     textAlign: 'center',
     paddingVertical: 24,
+  },
+  infoValue: {
+    fontSize: 14,
+    color: '#333',
+    lineHeight: 20,
+  },
+  saveButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  deleteButton: {
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  buttonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+  },
+  buttonTextWhite: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFF',
   },
 });

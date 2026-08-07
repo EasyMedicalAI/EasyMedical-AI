@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { epicService } from '../services/epicService';
 
 export function CallbackScreen() {
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
+  const router = useRouter();
+  const searchParams = useLocalSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -16,14 +16,14 @@ export function CallbackScreen() {
   const handleOAuthCallback = async () => {
     try {
       // Extract code and state from URL parameters
-      const code = route.params?.code;
-      const state = route.params?.state;
+      const code = searchParams.code as string | undefined;
+      const state = searchParams.state as string | undefined;
 
       if (!code) {
         // Check if user denied access
-        const error = route.params?.error;
-        if (error) {
-          setError(`Authorization denied: ${error}`);
+        const errorParam = searchParams.error as string | undefined;
+        if (errorParam) {
+          setError(`Authorization denied: ${errorParam}`);
         } else {
           setError('No authorization code received');
         }
@@ -37,10 +37,7 @@ export function CallbackScreen() {
       // Success! Navigate to home
       setLoading(false);
       setTimeout(() => {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Home' }],
-        });
+        router.replace('/');
       }, 1500);
     } catch (err) {
       console.error('OAuth callback error:', err);
