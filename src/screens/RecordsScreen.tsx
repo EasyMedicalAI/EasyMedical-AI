@@ -14,10 +14,18 @@ import {
 import * as FileSystem from 'expo-file-system/legacy';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
-import { v4 as uuidv4 } from 'uuid';
 import { claudeService, convertHeicToJpeg } from '@/services/claudeService';
 import { epicService, Appointment } from '@/services/epicService';
 import { MedicalRecord } from '@/types/medical';
+
+// Simple UUID generator that works in React Native (no crypto dependency)
+const generateUUID = (): string => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
 
 // Helper to detect media type from URI
 const getMediaTypeFromUri = (uri: string, assetType?: string): string => {
@@ -258,7 +266,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
     setIsUploading(true);
     try {
-      const recordId = uuidv4();
+      const recordId = generateUUID();
 
       // Convert HEIC images to JPEG if needed
       let imageUri = photoUri;
@@ -322,7 +330,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
     setIsUploading(true);
     try {
-      const recordId = uuidv4();
+      const recordId = generateUUID();
 
       // Convert date string to ISO format for sorting
       const months: Record<string, string> = {
