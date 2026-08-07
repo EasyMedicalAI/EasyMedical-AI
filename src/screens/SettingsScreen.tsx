@@ -43,18 +43,23 @@ export default function SettingsScreen() {
         }
       } else {
         // For native mobile, use WebBrowser
+        console.log('Opening browser for Epic OAuth...');
         const result = await WebBrowser.openBrowserAsync(authUrl);
+        console.log('Browser closed, result type:', result.type);
 
-        if (result.type === 'success') {
-          // Check connection status after browser closes
-          setTimeout(async () => {
-            const connected = await epicService.isConnected();
-            setEpicConnected(connected);
-            if (connected) {
-              Alert.alert('Success', 'Your Epic account has been connected successfully!');
-            }
-          }, 1000);
-        }
+        // Browser closed - either user cancelled or deep link was triggered
+        // Wait for deep link handler to process the token
+        setTimeout(async () => {
+          console.log('Checking Epic connection status...');
+          const connected = await epicService.isConnected();
+          console.log('Connected to Epic:', connected);
+          setEpicConnected(connected);
+          if (connected) {
+            Alert.alert('Success', 'Your Epic account has been connected successfully!');
+          } else {
+            console.log('Not connected yet, checking if there was an error');
+          }
+        }, 2000);
       }
     } catch (error) {
       console.error('Error connecting to Epic:', error);
