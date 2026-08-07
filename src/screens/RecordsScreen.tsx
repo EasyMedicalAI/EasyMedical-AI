@@ -89,6 +89,8 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [showRecordDetail, setShowRecordDetail] = useState(false);
   const [isEditingRecord, setIsEditingRecord] = useState(false);
+  const [editedProvider, setEditedProvider] = useState('');
+  const [editedDate, setEditedDate] = useState('');
   const [editedReason, setEditedReason] = useState('');
   const [editedSummary, setEditedSummary] = useState('');
   const [editedFindings, setEditedFindings] = useState('');
@@ -949,19 +951,39 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               <>
                 <View style={{ marginBottom: 20 }}>
                   <Text style={styles.label}>Date</Text>
-                  <Text style={styles.infoValue}>
-                    {new Date(selectedRecord.appointmentDate || selectedRecord.uploadDate).toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </Text>
+                  {isEditingRecord ? (
+                    <TextInput
+                      style={styles.input}
+                      value={editedDate || new Date(selectedRecord.appointmentDate || selectedRecord.uploadDate).toISOString().split('T')[0]}
+                      onChangeText={setEditedDate}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor="#999"
+                    />
+                  ) : (
+                    <Text style={styles.infoValue}>
+                      {new Date(selectedRecord.appointmentDate || selectedRecord.uploadDate).toLocaleDateString('en-US', {
+                        weekday: 'long',
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                      })}
+                    </Text>
+                  )}
                 </View>
 
                 <View style={{ marginBottom: 20 }}>
                   <Text style={styles.label}>Doctor / Provider</Text>
-                  <Text style={[styles.infoValue, { fontWeight: '600' }]}>{selectedRecord.provider}</Text>
+                  {isEditingRecord ? (
+                    <TextInput
+                      style={styles.input}
+                      value={editedProvider || selectedRecord.provider || ''}
+                      onChangeText={setEditedProvider}
+                      placeholder="Enter doctor name"
+                      placeholderTextColor="#999"
+                    />
+                  ) : (
+                    <Text style={[styles.infoValue, { fontWeight: '600' }]}>{selectedRecord.provider}</Text>
+                  )}
                 </View>
 
                 <View style={{ marginBottom: 20 }}>
@@ -1057,6 +1079,8 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 style={[styles.backButton, { flex: 1 }]}
                 onPress={() => {
                   setIsEditingRecord(false);
+                  setEditedProvider('');
+                  setEditedDate('');
                   setEditedReason('');
                   setEditedSummary('');
                   setEditedFindings('');
@@ -1070,6 +1094,8 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 onPress={async () => {
                   const updatedRecord = {
                     ...selectedRecord,
+                    provider: editedProvider || selectedRecord.provider,
+                    appointmentDate: editedDate ? new Date(editedDate).toISOString() : selectedRecord.appointmentDate,
                     reasonForVisit: editedReason || selectedRecord.reasonForVisit,
                     summary: editedSummary || selectedRecord.summary,
                     findings: editedFindings || selectedRecord.findings,
@@ -1080,6 +1106,8 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                     await updateRecord(updatedRecord);
                     setSelectedRecord(updatedRecord);
                     setIsEditingRecord(false);
+                    setEditedProvider('');
+                    setEditedDate('');
                     setEditedReason('');
                     setEditedSummary('');
                     setEditedFindings('');
