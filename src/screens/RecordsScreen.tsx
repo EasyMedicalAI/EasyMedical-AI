@@ -425,10 +425,10 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                         })}
                       </Text>
                     </View>
+                    <Text style={styles.recordCardProvider}>{record.provider}</Text>
                     <Text style={styles.recordCardReason}>
                       {record.reasonForVisit || record.summary || 'No description'}
                     </Text>
-                    <Text style={styles.recordCardProvider}>{record.provider}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1628,16 +1628,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#007AFF',
   },
-  recordCardReason: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#000',
-    marginBottom: 6,
-    lineHeight: 20,
-  },
   recordCardProvider: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 4,
+  },
+  recordCardReason: {
     fontSize: 12,
-    color: '#999',
+    fontWeight: '400',
+    color: '#666',
+    lineHeight: 18,
   },
   emptyRecordsText: {
     fontSize: 14,
