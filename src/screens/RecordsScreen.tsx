@@ -10,6 +10,8 @@ import {
   TextInput,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useRecords } from '@/context/RecordsContext';
@@ -490,7 +492,10 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         setPhotoUri(null);
         setUploadMode('method');
       }}>
-        <View style={styles.modalContainer}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContainer}
+        >
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Upload {uploadingSpecialty} Record</Text>
             <TouchableOpacity onPress={() => {
@@ -695,7 +700,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               </>
             )}
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Appointment Detail Modal */}
