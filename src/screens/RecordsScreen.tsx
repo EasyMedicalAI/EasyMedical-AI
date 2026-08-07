@@ -84,6 +84,8 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
   const [showDoctorAppointments, setShowDoctorAppointments] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState<any>(null);
+  const [showRecordDetail, setShowRecordDetail] = useState(false);
   // Initialize with today's date
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
@@ -414,7 +416,10 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                   <TouchableOpacity
                     key={record.id}
                     style={styles.myRecordsCard}
-                    onPress={() => onRecordSelected?.(record)}
+                    onPress={() => {
+                      setSelectedRecord(record);
+                      setShowRecordDetail(true);
+                    }}
                   >
                     <View style={styles.recordCardHeader}>
                       <Text style={styles.recordCardDate}>
@@ -905,6 +910,87 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               <Text style={styles.datePickerDoneButtonText}>Done</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* Record Detail Modal */}
+      <Modal visible={showRecordDetail && selectedRecord !== null} animationType="slide" onRequestClose={() => setShowRecordDetail(false)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowRecordDetail(false)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Record Details</Text>
+            <View style={{ width: 40 }} />
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            {selectedRecord && (
+              <>
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={styles.label}>Date</Text>
+                  <Text style={styles.infoValue}>
+                    {new Date(selectedRecord.appointmentDate || selectedRecord.uploadDate).toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </Text>
+                </View>
+
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={styles.label}>Doctor / Provider</Text>
+                  <Text style={[styles.infoValue, { fontWeight: '600' }]}>{selectedRecord.provider}</Text>
+                </View>
+
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={styles.label}>Specialty</Text>
+                  <Text style={styles.infoValue}>{selectedRecord.specialty}</Text>
+                </View>
+
+                <View style={{ marginBottom: 20 }}>
+                  <Text style={styles.label}>Reason for Visit</Text>
+                  <Text style={styles.infoValue}>{selectedRecord.reasonForVisit || 'N/A'}</Text>
+                </View>
+
+                {selectedRecord.summary && (
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={styles.label}>Summary</Text>
+                    <Text style={styles.infoValue}>{selectedRecord.summary}</Text>
+                  </View>
+                )}
+
+                {selectedRecord.findings && (
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={styles.label}>Findings</Text>
+                    <Text style={styles.infoValue}>{selectedRecord.findings}</Text>
+                  </View>
+                )}
+
+                {selectedRecord.nextSteps && (
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={styles.label}>Next Steps</Text>
+                    <Text style={styles.infoValue}>{selectedRecord.nextSteps}</Text>
+                  </View>
+                )}
+
+                {selectedRecord.imageUri && (
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={styles.label}>Record Image</Text>
+                    <Image
+                      source={{ uri: selectedRecord.imageUri }}
+                      style={{ width: '100%', height: 300, borderRadius: 8, marginTop: 8 }}
+                    />
+                  </View>
+                )}
+              </>
+            )}
+          </ScrollView>
+
+          <TouchableOpacity style={styles.backButton} onPress={() => setShowRecordDetail(false)}>
+            <Text style={styles.buttonText}>Close</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
     </>
