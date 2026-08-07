@@ -69,7 +69,7 @@ interface RecordsScreenProps {
 }
 
 export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) {
-  const { records, loading, getUniqueSpecialties, addRecord } = useRecords();
+  const { records, loading, getUniqueSpecialties, addRecord, updateRecord } = useRecords();
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
   const [recordText, setRecordText] = useState('');
@@ -88,6 +88,11 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [showRecordDetail, setShowRecordDetail] = useState(false);
+  const [isEditingRecord, setIsEditingRecord] = useState(false);
+  const [editedReason, setEditedReason] = useState('');
+  const [editedSummary, setEditedSummary] = useState('');
+  const [editedFindings, setEditedFindings] = useState('');
+  const [editedNextSteps, setEditedNextSteps] = useState('');
   // Initialize with today's date
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
@@ -919,14 +924,24 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       </Modal>
 
       {/* Record Detail Modal */}
-      <Modal visible={showRecordDetail && selectedRecord !== null} animationType="slide" onRequestClose={() => setShowRecordDetail(false)}>
+      <Modal visible={showRecordDetail && selectedRecord !== null} animationType="slide" onRequestClose={() => { setShowRecordDetail(false); setIsEditingRecord(false); }}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowRecordDetail(false)}>
+            <TouchableOpacity onPress={() => { setShowRecordDetail(false); setIsEditingRecord(false); }}>
               <Text style={styles.closeButton}>✕</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Record Details</Text>
-            <View style={{ width: 40 }} />
+            <Text style={styles.modalTitle}>{isEditingRecord ? 'Edit Record' : 'Record Details'}</Text>
+            <TouchableOpacity onPress={() => {
+              if (isEditingRecord) {
+                setEditedReason('');
+                setEditedSummary('');
+                setEditedFindings('');
+                setEditedNextSteps('');
+              }
+              setIsEditingRecord(!isEditingRecord);
+            }}>
+              <Text style={styles.closeButton}>{isEditingRecord ? '✕' : '✎'}</Text>
+            </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.modalContent}>
@@ -956,27 +971,70 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
                 <View style={{ marginBottom: 20 }}>
                   <Text style={styles.label}>Reason for Visit</Text>
-                  <Text style={styles.infoValue}>{selectedRecord.reasonForVisit || 'N/A'}</Text>
+                  {isEditingRecord ? (
+                    <TextInput
+                      style={styles.input}
+                      value={editedReason || selectedRecord.reasonForVisit || ''}
+                      onChangeText={setEditedReason}
+                      placeholder="Enter reason for visit"
+                      placeholderTextColor="#999"
+                    />
+                  ) : (
+                    <Text style={styles.infoValue}>{selectedRecord.reasonForVisit || 'N/A'}</Text>
+                  )}
                 </View>
 
                 {selectedRecord.summary && (
                   <View style={{ marginBottom: 20 }}>
                     <Text style={styles.label}>Summary</Text>
-                    <Text style={styles.infoValue}>{selectedRecord.summary}</Text>
+                    {isEditingRecord ? (
+                      <TextInput
+                        style={[styles.input, { minHeight: 100 }]}
+                        value={editedSummary || selectedRecord.summary || ''}
+                        onChangeText={setEditedSummary}
+                        placeholder="Enter summary"
+                        placeholderTextColor="#999"
+                        multiline
+                      />
+                    ) : (
+                      <Text style={styles.infoValue}>{selectedRecord.summary}</Text>
+                    )}
                   </View>
                 )}
 
                 {selectedRecord.findings && (
                   <View style={{ marginBottom: 20 }}>
                     <Text style={styles.label}>Findings</Text>
-                    <Text style={styles.infoValue}>{selectedRecord.findings}</Text>
+                    {isEditingRecord ? (
+                      <TextInput
+                        style={[styles.input, { minHeight: 100 }]}
+                        value={editedFindings || selectedRecord.findings || ''}
+                        onChangeText={setEditedFindings}
+                        placeholder="Enter findings"
+                        placeholderTextColor="#999"
+                        multiline
+                      />
+                    ) : (
+                      <Text style={styles.infoValue}>{selectedRecord.findings}</Text>
+                    )}
                   </View>
                 )}
 
                 {selectedRecord.nextSteps && (
                   <View style={{ marginBottom: 20 }}>
                     <Text style={styles.label}>Next Steps</Text>
-                    <Text style={styles.infoValue}>{selectedRecord.nextSteps}</Text>
+                    {isEditingRecord ? (
+                      <TextInput
+                        style={[styles.input, { minHeight: 100 }]}
+                        value={editedNextSteps || selectedRecord.nextSteps || ''}
+                        onChangeText={setEditedNextSteps}
+                        placeholder="Enter next steps"
+                        placeholderTextColor="#999"
+                        multiline
+                      />
+                    ) : (
+                      <Text style={styles.infoValue}>{selectedRecord.nextSteps}</Text>
+                    )}
                   </View>
                 )}
 
@@ -993,9 +1051,53 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
             )}
           </ScrollView>
 
-          <TouchableOpacity style={styles.backButton} onPress={() => setShowRecordDetail(false)}>
-            <Text style={styles.buttonText}>Close</Text>
-          </TouchableOpacity>
+          {isEditingRecord ? (
+            <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingBottom: 20 }}>
+              <TouchableOpacity
+                style={[styles.backButton, { flex: 1 }]}
+                onPress={() => {
+                  setIsEditingRecord(false);
+                  setEditedReason('');
+                  setEditedSummary('');
+                  setEditedFindings('');
+                  setEditedNextSteps('');
+                }}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveButton, { flex: 1 }]}
+                onPress={async () => {
+                  const updatedRecord = {
+                    ...selectedRecord,
+                    reasonForVisit: editedReason || selectedRecord.reasonForVisit,
+                    summary: editedSummary || selectedRecord.summary,
+                    findings: editedFindings || selectedRecord.findings,
+                    nextSteps: editedNextSteps || selectedRecord.nextSteps,
+                  };
+
+                  try {
+                    await updateRecord(updatedRecord);
+                    setSelectedRecord(updatedRecord);
+                    setIsEditingRecord(false);
+                    setEditedReason('');
+                    setEditedSummary('');
+                    setEditedFindings('');
+                    setEditedNextSteps('');
+                    Alert.alert('Success', 'Record updated successfully');
+                  } catch (error) {
+                    Alert.alert('Error', 'Failed to update record');
+                  }
+                }}
+              >
+                <Text style={styles.buttonTextWhite}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.backButton} onPress={() => setShowRecordDetail(false)}>
+              <Text style={styles.buttonText}>Close</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </Modal>
     </>
