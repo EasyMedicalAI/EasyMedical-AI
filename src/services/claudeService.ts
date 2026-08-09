@@ -122,25 +122,37 @@ export const claudeService = {
                 },
                 {
                   type: 'text',
-                  text: `Analyze this medical image and determine if it's a lab result or medication bottle.
+                  text: `Analyze this medical image carefully. Determine if it's a LABORATORY TEST RESULT or a MEDICATION BOTTLE.
 
-If it's a LAB RESULT, extract all test metrics in this JSON format:
+LABORATORY RESULTS include:
+- LabCorp, Quest Diagnostics, Mayo Clinic, or other lab reports
+- Blood test results, metabolic panels, lipid panels
+- Test names and numerical values with units
+- "Reference Range" or "Normal Range" sections
+- Patient info and test dates
+
+MEDICATION BOTTLES include:
+- Prescription bottles with drug labels
+- OTC medication packages
+- Drug name, dosage, directions
+
+If this is a LABORATORY TEST RESULT, extract metrics in this format:
 {
   "type": "lab",
-  "testName": "e.g., Lipid Panel or Complete Blood Count",
-  "date": "YYYY-MM-DD or empty string if not visible",
+  "testName": "name of the test panel (e.g., Lipid Panel, Comprehensive Metabolic Panel)",
+  "date": "YYYY-MM-DD if visible, otherwise empty string",
   "metrics": [
     {
-      "name": "metric name (e.g., LDL Cholesterol)",
-      "value": number or "raw value string",
-      "unit": "unit (e.g., mg/dL)",
+      "name": "exact metric name as shown (e.g., LDL Cholesterol, Total Cholesterol, Glucose)",
+      "value": numerical value only (no units),
+      "unit": "unit as shown (e.g., mg/dL, mmol/L, %)",
       "normalRange": { "min": number, "max": number } or null,
-      "status": "normal|abnormal|unknown"
+      "status": "normal if value is within range, abnormal if outside range, unknown if can't determine"
     }
   ]
 }
 
-If it's a MEDICATION BOTTLE, extract in this format:
+If this is a MEDICATION BOTTLE, extract:
 {
   "type": "medication",
   "name": "medication name",
@@ -148,7 +160,7 @@ If it's a MEDICATION BOTTLE, extract in this format:
   "frequency": "frequency (e.g., Once daily)"
 }
 
-Return ONLY valid JSON, nothing else.`,
+Return ONLY valid JSON. If you cannot clearly identify the image content, return {"type": "unknown", "message": "Could not identify image content"}.`,
                 },
               ],
             },
