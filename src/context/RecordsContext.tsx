@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { MedicalRecord, MedicalHub, UserHealthData } from '../types/medical';
+import { MedicalRecord, MedicalHub, UserHealthData, LabMetric } from '../types/medical';
 import { storageService } from '../services/storageService';
 
 // Empty initial state - will be populated from storage or user input
@@ -53,6 +53,12 @@ interface RecordsContextType {
   getAllAllergies: () => string[];
   getRecentResults: (days?: number) => MedicalRecord[];
   getAbnormalResults: () => MedicalRecord[];
+  // Metric tracking methods
+  getAllMetrics: () => LabMetric[];
+  getUniqueMetricNames: () => string[];
+  getMetricHistory: (metricName: string) => LabMetric[];
+  getLatestMetrics: () => Map<string, LabMetric>;
+  calculateTrend: (metricName: string) => 'up' | 'down' | 'stable' | 'insufficient';
 }
 
 const RecordsContext = createContext<RecordsContextType | undefined>(undefined);
@@ -167,6 +173,72 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const getAllMetrics = (): LabMetric[] => {
+    const allMetrics: LabMetric[] = [];
+    records.forEach(r => {
+      if (r.extractedData.labMetrics) {
+        allMetrics.push(...r.extractedData.labMetrics);
+      }
+    });
+    return allMetrics.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  };
+
+  const getUniqueMetricNames = (): string[] => {
+    const names = new Set<string>();
+    records.forEach(r => {
+      if (r.extractedData.labMetrics) {
+        r.extractedData.labMetrics.forEach(m => names.add(m.name));
+      }
+    });
+    return Array.from(names).sort();
+  };
+
+  const getMetricHistory = (metricName: string): LabMetric[] => {
+    const metrics = getAllMetrics().filter(m => m.name === metricName);
+    return metrics.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  };
+
+  const getLatestMetrics = (): Map<string, LabMetric> => {
+    const latestMap = new Map<string, LabMetric>();
+    const allMetrics = getAllMetrics();
+
+    allMetrics.forEach(metric => {
+      const existing = latestMap.get(metric.name);
+      if (!existing || new Date(metric.date) > new Date(existing.date)) {
+        latestMap.set(metric.name, metric);
+      }
+    });
+
+    return latestMap;
+  };
+
+  const calculateTrend = (metricName: string): 'up' | 'down' | 'stable' | 'insufficient' => {
+    const history = getMetricHistory(metricName);
+    if (history.length < 2) return 'insufficient';
+
+    // Get numeric values
+    const numericValues = history
+      .map(m => {
+        if (typeof m.value === 'number') return m.value;
+        const parsed = parseFloat(String(m.value));
+        return isNaN(parsed) ? null : parsed;
+      })
+      .filter(v => v !== null) as number[];
+
+    if (numericValues.length < 2) return 'insufficient';
+
+    const oldest = numericValues[0];
+    const newest = numericValues[numericValues.length - 1];
+    const diff = newest - oldest;
+    const changePercent = Math.abs(diff / oldest) * 100;
+
+    // If change is less than 5%, consider it stable
+    if (changePercent < 5) return 'stable';
+    if (diff > 0) return 'up';
+    if (diff < 0) return 'down';
+    return 'stable';
+  };
+
   const clearAllData = async () => {
     try {
       await storageService.clearAll();
@@ -230,6 +302,11 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     getAllAllergies,
     getRecentResults,
     getAbnormalResults,
+    getAllMetrics,
+    getUniqueMetricNames,
+    getMetricHistory,
+    getLatestMetrics,
+    calculateTrend,
   };
 
   return <RecordsContext.Provider value={value}>{children}</RecordsContext.Provider>;

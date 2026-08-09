@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   ScrollView,
   View,
@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router';
 import { claudeService, convertHeicToJpeg } from '@/services/claudeService';
 import { epicService, Appointment } from '@/services/epicService';
 import { MedicalRecord } from '@/types/medical';
+import MetricDetailScreen from '@/screens/MetricDetailScreen';
 
 // Simple UUID generator that works in React Native (no crypto dependency)
 const generateUUID = (): string => {
@@ -69,7 +70,17 @@ interface RecordsScreenProps {
 }
 
 export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) {
-  const { records, loading, getUniqueSpecialties, addRecord, updateRecord, deleteRecord } = useRecords();
+  const {
+    records,
+    loading,
+    getUniqueSpecialties,
+    addRecord,
+    updateRecord,
+    deleteRecord,
+    getLatestMetrics,
+    calculateTrend,
+    getMetricHistory,
+  } = useRecords();
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
   const [recordText, setRecordText] = useState('');
@@ -98,6 +109,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [editRecordMonth, setEditRecordMonth] = useState(0);
   const [editRecordDay, setEditRecordDay] = useState(1);
   const [editRecordYear, setEditRecordYear] = useState(new Date().getFullYear());
+  const [selectedMetricName, setSelectedMetricName] = useState<string | null>(null);
   // Initialize with today's date
   const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
@@ -404,6 +416,17 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     }
   };
 
+  // Compute metrics cards for display
+  const metricCards = useMemo(() => {
+    const latestMetrics = getLatestMetrics();
+    if (latestMetrics.size === 0) return [];
+
+    return Array.from(latestMetrics.values()).map(metric => ({
+      metric,
+      trend: calculateTrend(metric.name),
+    }));
+  }, [loading, records]);
+
   if (loading) {
     return (
       <View style={styles.centerContainer}>
@@ -465,6 +488,55 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
           <Text style={styles.emptyRecordsText}>No records yet. Upload your first record to get started.</Text>
         )}
       </View>
+
+      {/* Health Metrics Section */}
+      {metricCards.length > 0 && (
+        <View style={styles.metricsSection}>
+          <Text style={styles.sectionTitle}>📊 Health Metrics</Text>
+          <Text style={styles.metricsSubtitle}>Your latest lab values and trends</Text>
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.metricsCardsContainer}
+          >
+            {metricCards.map(({ metric, trend }) => {
+              const trendIcon = {
+                'up': '📈',
+                'down': '📉',
+                'stable': '→',
+                'insufficient': '—',
+              }[trend];
+
+              const statusColor = {
+                'normal': '#34C759',
+                'abnormal': '#FF3B30',
+                'unknown': '#999',
+              }[metric.status];
+
+              return (
+                <TouchableOpacity
+                  key={metric.id}
+                  style={[styles.metricCard, { borderLeftColor: statusColor }]}
+                  onPress={() => setSelectedMetricName(metric.name)}
+                >
+                  <View style={styles.metricCardHeader}>
+                    <Text style={styles.metricCardName}>{metric.name}</Text>
+                    <Text style={styles.metricCardTrendIcon}>{trendIcon}</Text>
+                  </View>
+                  <View style={styles.metricCardValue}>
+                    <Text style={styles.metricCardValueText}>{metric.value}</Text>
+                    <Text style={styles.metricCardUnit}>{metric.unit}</Text>
+                  </View>
+                  <Text style={[styles.metricCardStatus, { color: statusColor }]}>
+                    {metric.status.charAt(0).toUpperCase() + metric.status.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Upload Records Section */}
       <View style={styles.uploadRecordsSection}>
@@ -1230,6 +1302,16 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
           )}
         </View>
       </Modal>
+
+      {/* Metric Detail Overlay */}
+      {selectedMetricName && (
+        <View style={styles.metricDetailOverlay}>
+          <MetricDetailScreen
+            metricName={selectedMetricName}
+            onBack={() => setSelectedMetricName(null)}
+          />
+        </View>
+      )}
     </>
   );
 }
@@ -1663,11 +1745,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#000',
   },
-  closeButton: {
-    fontSize: 20,
-    color: '#999',
-    fontWeight: '600',
-  },
   appointmentDetailContent: {
     flex: 1,
     padding: 20,
@@ -1750,11 +1827,6 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     marginBottom: 8,
   },
-  recordDate: {
-    fontSize: 13,
-    color: '#999',
-    fontWeight: '500',
-  },
   doctorsList: {
     gap: 12,
   },
@@ -1826,11 +1898,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#333',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#FFF',
-    paddingTop: 50,
   },
   dateModalHeader: {
     flexDirection: 'row',
@@ -1912,12 +1979,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 24,
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 16,
-  },
   specialtyGroup: {
     marginBottom: 20,
   },
@@ -1995,5 +2056,74 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFF',
+  },
+  metricsSection: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  metricsSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 12,
+  },
+  metricsCardsContainer: {
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
+  },
+  metricCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 14,
+    borderLeftWidth: 4,
+    marginRight: 12,
+    minWidth: 150,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  metricCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  metricCardName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#000',
+    flex: 1,
+  },
+  metricCardTrendIcon: {
+    fontSize: 16,
+    marginLeft: 4,
+  },
+  metricCardValue: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  metricCardValueText: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+  },
+  metricCardUnit: {
+    fontSize: 11,
+    color: '#666',
+    marginLeft: 2,
+  },
+  metricCardStatus: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  metricDetailOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FAFAFA',
+    zIndex: 1000,
   },
 });

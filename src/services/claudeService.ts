@@ -2,8 +2,14 @@ import { MedicalRecord, ExtractedData } from '../types/medical';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 
+// Note: API key is read at module load time, so must be set before import
 const ANTHROPIC_API_KEY = process.env.EXPO_PUBLIC_ANTHROPIC_API_KEY;
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+
+// Log to debug if API key is loaded
+if (typeof window !== 'undefined') {
+  console.log('🔑 Anthropic API Key loaded:', ANTHROPIC_API_KEY ? '✅ YES' : '❌ NO');
+}
 
 // Convert HEIC/HEIF images to JPEG for Claude API compatibility
 const convertHeicToJpeg = async (imageUri: string): Promise<string> => {
@@ -73,7 +79,7 @@ export const claudeService = {
     base64Image: string,
     recordId: string,
     mediaType: string = 'image/jpeg'
-  ): Promise<Partial<MedicalRecord> & { medicationDetails: { name: string; dosage: string; frequency: string } }> {
+  ): Promise<Partial<MedicalRecord> & { medicationDetails?: { name: string; dosage: string; frequency: string } }> {
     try {
       if (!ANTHROPIC_API_KEY) {
         throw new Error('ANTHROPIC_API_KEY not configured');
@@ -88,7 +94,10 @@ export const claudeService = {
         console.warn(`Image format '${mediaType}' not supported by Claude, using '${finalMediaType}' instead`);
       }
 
-      // Call Claude API with vision to analyze the medication image
+      // Call Claude API with vision to analyze the image
+      console.log('📡 Calling Claude API with image analysis...');
+      console.log('🔑 Using API key:', ANTHROPIC_API_KEY?.substring(0, 20) + '...');
+
       const response = await fetch(ANTHROPIC_API_URL, {
         method: 'POST',
         headers: {
@@ -98,7 +107,7 @@ export const claudeService = {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-5',
-          max_tokens: 1024,
+          max_tokens: 1500,
           messages: [
             {
               role: 'user',
@@ -113,14 +122,33 @@ export const claudeService = {
                 },
                 {
                   type: 'text',
-                  text: `Analyze this medication bottle image and extract the following information in JSON format:
+                  text: `Analyze this medical image and determine if it's a lab result or medication bottle.
+
+If it's a LAB RESULT, extract all test metrics in this JSON format:
 {
-  "name": "medication name",
-  "dosage": "dosage (e.g., 10mg)",
-  "frequency": "frequency (e.g., Once daily, Twice daily, Every 12 hours)"
+  "type": "lab",
+  "testName": "e.g., Lipid Panel or Complete Blood Count",
+  "date": "YYYY-MM-DD or empty string if not visible",
+  "metrics": [
+    {
+      "name": "metric name (e.g., LDL Cholesterol)",
+      "value": number or "raw value string",
+      "unit": "unit (e.g., mg/dL)",
+      "normalRange": { "min": number, "max": number } or null,
+      "status": "normal|abnormal|unknown"
+    }
+  ]
 }
 
-Only return valid JSON. If you cannot identify a medication, return the image content description instead. Be concise and return ONLY the JSON object, nothing else.`,
+If it's a MEDICATION BOTTLE, extract in this format:
+{
+  "type": "medication",
+  "name": "medication name",
+  "dosage": "dosage (e.g., 10mg)",
+  "frequency": "frequency (e.g., Once daily)"
+}
+
+Return ONLY valid JSON, nothing else.`,
                 },
               ],
             },
@@ -128,41 +156,74 @@ Only return valid JSON. If you cannot identify a medication, return the image co
         }),
       });
 
+      console.log('📡 Claude API response status:', response.status);
+
       if (!response.ok) {
         const error = await response.text();
+        console.error('❌ Claude API error response:', error);
         throw new Error(`Claude API error: ${response.status} - ${error}`);
       }
 
+      console.log('✅ Claude API success!');
       const data = await response.json();
       const responseText = data.content[0].text;
+      console.log('📝 Claude response:', responseText.substring(0, 200) + '...');
 
       // Parse the JSON response
-      let medicationDetails = {
-        name: 'Unknown Medication',
-        dosage: 'Unknown dosage',
-        frequency: 'Unknown frequency',
-      };
+      let analysisData: any = { type: 'unknown' };
 
       try {
-        // Extract JSON from response (it might be wrapped in markdown code blocks)
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          medicationDetails = {
-            name: parsed.name || 'Unknown Medication',
-            dosage: parsed.dosage || 'Unknown dosage',
-            frequency: parsed.frequency || 'Unknown frequency',
-          };
+          analysisData = JSON.parse(jsonMatch[0]);
         }
       } catch (e) {
         console.error('Error parsing Claude response:', e);
-        // Fall back to using the raw response
-        medicationDetails = {
-          name: responseText.substring(0, 50),
-          dosage: 'See analysis',
-          frequency: 'Manual review needed',
+      }
+
+      // Handle Lab Results
+      if (analysisData.type === 'lab') {
+        const metrics = (analysisData.metrics || []).map((metric: any, idx: number) => ({
+          id: `${recordId}-metric-${idx}`,
+          name: metric.name || 'Unknown Test',
+          value: metric.value || 'N/A',
+          unit: metric.unit || '',
+          normalRange: metric.normalRange || undefined,
+          status: metric.status || 'unknown',
+          date: analysisData.date || new Date().toISOString().split('T')[0],
+          recordId: recordId,
+        }));
+
+        return {
+          id: recordId,
+          uploadDate: new Date().toISOString(),
+          imageUri: `data:image/jpeg;base64,${base64Image}`,
+          specialty: 'Laboratory',
+          provider: 'Lab Results',
+          summary: `Lab Result: ${analysisData.testName || 'Test Results'}`,
+          reasonForVisit: analysisData.testName || 'Lab Work',
+          findings: `${analysisData.testName || 'Lab Results'} - ${metrics.length} metrics extracted`,
+          nextSteps: 'Review results and follow up with provider if needed',
+          extractedData: {
+            medications: [],
+            allergies: [],
+            conditions: [],
+            testResults: Object.fromEntries(
+              metrics.map((m: any) => [`${m.name} (${m.unit})`, `${m.value}`])
+            ),
+            dates: { 'Test Date': analysisData.date || new Date().toLocaleDateString() },
+            labMetrics: metrics,
+          },
+          processed: true,
         };
       }
+
+      // Handle Medication Bottles
+      const medicationDetails = {
+        name: analysisData.name || 'Unknown Medication',
+        dosage: analysisData.dosage || 'Unknown dosage',
+        frequency: analysisData.frequency || 'Unknown frequency',
+      };
 
       return {
         id: recordId,
@@ -185,7 +246,7 @@ Only return valid JSON. If you cannot identify a medication, return the image co
         processed: true,
       };
     } catch (error) {
-      console.error('Error analyzing medication image:', error);
+      console.error('Error analyzing image:', error);
       throw error;
     }
   },

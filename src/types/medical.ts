@@ -1,9 +1,32 @@
+export interface LabMetric {
+  id: string;
+  name: string; // e.g., "LDL Cholesterol", "Blood Glucose"
+  value: number | string;
+  unit: string; // e.g., "mg/dL", "mg/L"
+  normalRange?: {
+    min: number;
+    max: number;
+  };
+  status: 'normal' | 'abnormal' | 'unknown'; // auto-determined based on range
+  date: string; // ISO date string
+  recordId?: string; // Link to parent record
+}
+
+export interface LabResult {
+  id: string;
+  date: string;
+  testName: string; // e.g., "Lipid Panel", "Complete Blood Count"
+  metrics: LabMetric[];
+  notes?: string;
+}
+
 export interface ExtractedData {
   medications?: string[];
   allergies?: string[];
   conditions?: string[];
   testResults?: Record<string, string>;
   dates?: Record<string, string>;
+  labMetrics?: LabMetric[]; // Individual lab values for tracking trends
   [key: string]: any;
 }
 
