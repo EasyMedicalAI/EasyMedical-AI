@@ -48,9 +48,9 @@ export default function CallbackScreen() {
           console.log('✅ Token saved successfully');
 
           setLoading(false);
-          // Go back to SettingsScreen - the auto-refresh will detect the new connection
+          // Navigate directly to settings tab to show the updated connection
           setTimeout(() => {
-            router.back();
+            router.replace('/(tabs)');
           }, 500);
           return;
         } catch (codeExchangeErr) {
@@ -68,9 +68,9 @@ export default function CallbackScreen() {
         console.log('✅ Token saved successfully');
 
         setLoading(false);
-        // Go back to SettingsScreen - the auto-refresh will detect the new connection
+        // Navigate directly to tabs to show the updated connection
         setTimeout(() => {
-          router.back();
+          router.replace('/(tabs)');
         }, 500);
         return;
       }
