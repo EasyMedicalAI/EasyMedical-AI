@@ -291,12 +291,18 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   const syncWithEpic = async (): Promise<{ added: number; duplicates: number }> => {
     try {
       console.log('🔄 Syncing with Epic...');
-      console.log('Access token:', await epicService.getStoredAccessToken() ? 'Present' : 'Missing');
+      const token = await epicService.getStoredAccessToken();
+      console.log('Access token:', token ? 'Present' : 'Missing');
 
       // Fetch all data from Epic
       console.log('📥 About to fetch all patient data...');
       const epicData = await epicService.fetchAllPatientData();
       console.log('📊 Epic data received:', epicData);
+
+      // Show debug info
+      if (!epicData || Object.keys(epicData).length === 0) {
+        console.error('❌ No Epic data returned!');
+      }
 
       // Convert Epic data to MedicalRecords
       const epicRecords = await epicService.convertEpicDataToMedicalRecords(epicData);

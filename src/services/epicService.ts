@@ -279,21 +279,30 @@ class EpicService {
       await this.saveAccessToken(token);
       this.setAccessToken(token);
 
-      // Fetch the logged-in user's patient ID from Epic
-      console.log('📋 Fetching your patient ID from Epic...');
-      const response = await fetch(`${FHIR_SERVER_URL}/Patient/me`, {
-        headers: this.getAuthHeaders(),
-      });
+      // Extract patient ID from the JWT token (fhirUser claim)
+      try {
+        const parts = token.split('.');
+        if (parts.length === 3) {
+          // Decode the payload (second part)
+          const payload = JSON.parse(
+            Buffer.from(parts[1], 'base64').toString('utf8')
+          );
 
-      if (response.ok) {
-        const patientData = await response.json();
-        const patientId = patientData.id;
-        console.log('✅ Got patient ID:', patientId);
-        this.setPatientId(patientId);
-        // Save patient ID for later
-        await AsyncStorage.setItem('epic_patient_id', patientId);
-      } else {
-        console.warn('Could not fetch patient ID, using default test patient');
+          // Look for fhirUser claim which contains the patient reference
+          if (payload.fhirUser) {
+            // fhirUser is in format "Patient/123456"
+            const patientId = payload.fhirUser.split('/').pop();
+            if (patientId) {
+              console.log('✅ Got patient ID from token:', patientId);
+              this.setPatientId(patientId);
+              await AsyncStorage.setItem('epic_patient_id', patientId);
+            }
+          } else {
+            console.warn('No fhirUser in token, using default test patient');
+          }
+        }
+      } catch (err) {
+        console.warn('Error decoding token:', err, '- using default test patient');
       }
 
       // Save connected status
