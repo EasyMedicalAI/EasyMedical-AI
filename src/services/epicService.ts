@@ -279,6 +279,23 @@ class EpicService {
       await this.saveAccessToken(token);
       this.setAccessToken(token);
 
+      // Fetch the logged-in user's patient ID from Epic
+      console.log('📋 Fetching your patient ID from Epic...');
+      const response = await fetch(`${FHIR_SERVER_URL}/Patient/me`, {
+        headers: this.getAuthHeaders(),
+      });
+
+      if (response.ok) {
+        const patientData = await response.json();
+        const patientId = patientData.id;
+        console.log('✅ Got patient ID:', patientId);
+        this.setPatientId(patientId);
+        // Save patient ID for later
+        await AsyncStorage.setItem('epic_patient_id', patientId);
+      } else {
+        console.warn('Could not fetch patient ID, using default test patient');
+      }
+
       // Save connected status
       await AsyncStorage.setItem('epic_connected', 'true');
     } catch (error) {
@@ -293,6 +310,14 @@ class EpicService {
       const token = await this.getStoredAccessToken();
       if (token) {
         this.setAccessToken(token);
+
+        // Also load the saved patient ID
+        const patientId = await AsyncStorage.getItem('epic_patient_id');
+        if (patientId) {
+          this.setPatientId(patientId);
+          console.log('✅ Loaded patient ID:', patientId);
+        }
+
         return true;
       }
       return false;
