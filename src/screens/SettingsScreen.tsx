@@ -100,8 +100,11 @@ export default function SettingsScreen() {
 
   const handleSyncEpic = async () => {
     try {
+      console.log('🔄 Starting Epic sync...');
       setSyncing(true);
+      console.log('📥 Calling syncWithEpic()...');
       const result = await syncWithEpic();
+      console.log('✅ Sync result:', result);
 
       Alert.alert(
         'Sync Complete',
