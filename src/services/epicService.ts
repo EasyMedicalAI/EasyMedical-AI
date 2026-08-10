@@ -374,51 +374,37 @@ class EpicService {
     }
 
     try {
-      console.log('📥 Fetching all data from Epic...');
+      console.log('📥 Fetching patient data from backend...');
 
-      // Fetch all data in parallel
-      const [patient, medications, appointments, observations, allergies, conditions] = await Promise.all([
-        this.getPatient().catch(e => {
-          console.warn('Failed to fetch patient:', e);
-          return null;
-        }),
-        this.getMedications().catch(e => {
-          console.warn('Failed to fetch medications:', e);
-          return [];
-        }),
-        this.getAppointments().catch(e => {
-          console.warn('Failed to fetch appointments:', e);
-          return [];
-        }),
-        this.getObservations().catch(e => {
-          console.warn('Failed to fetch observations:', e);
-          return [];
-        }),
-        this.getAllergies().catch(e => {
-          console.warn('Failed to fetch allergies:', e);
-          return [];
-        }),
-        this.getConditions().catch(e => {
-          console.warn('Failed to fetch conditions:', e);
-          return [];
-        }),
-      ]);
+      const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://easymedical-backend-new-production.up.railway.app';
+      const response = await fetch(`${backendUrl}/api/auth/epic/patient-data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: this.accessToken }),
+      });
 
-      console.log(`✅ Fetched Epic data:
-        - Patient: ${patient?.name}
-        - Medications: ${medications.length}
-        - Appointments: ${appointments.length}
-        - Observations: ${observations.length}
-        - Allergies: ${allergies.length}
-        - Conditions: ${conditions.length}`);
+      if (!response.ok) {
+        throw new Error(`Backend returned ${response.status}: ${await response.text()}`);
+      }
+
+      const data = await response.json();
+
+      console.log(`✅ Fetched Epic data from backend:
+        - Patient: ${data.patient?.name?.[0]?.given?.[0]}
+        - Medications: ${data.medications?.length || 0}
+        - Observations: ${data.observations?.length || 0}
+        - Procedures: ${data.procedures?.length || 0}
+        - Diagnostics: ${data.diagnostics?.length || 0}`);
 
       return {
-        patient,
-        medications,
-        appointments,
-        observations,
-        allergies,
-        conditions,
+        patient: data.patient,
+        medications: data.medications || [],
+        appointments: [],
+        observations: data.observations || [],
+        allergies: [],
+        conditions: [],
+        procedures: data.procedures || [],
+        diagnostics: data.diagnostics || [],
       };
     } catch (error) {
       console.error('❌ Error fetching Epic data:', error);
@@ -520,6 +506,71 @@ class EpicService {
             conditions: [cond.name],
             testResults: {},
             dates: { 'Onset Date': cond.onsetDate || '' },
+          },
+          processed: true,
+          source: 'epic',
+        });
+      });
+    }
+
+    // Convert procedures to medical records
+    if (epicData.procedures && epicData.procedures.length > 0) {
+      epicData.procedures.forEach((proc: any) => {
+        const performedDate = proc.performedDateTime || proc.performedDate || new Date().toISOString();
+        records.push({
+          id: generateId(),
+          uploadDate: performedDate,
+          appointmentDate: performedDate,
+          specialty: 'Surgical',
+          provider: 'Epic EHR - Procedures',
+          summary: proc.code?.coding?.[0]?.display || proc.code?.text || 'Procedure',
+          reasonForVisit: proc.code?.coding?.[0]?.display || 'Medical Procedure',
+          findings: `Status: ${proc.status}`,
+          nextSteps: '',
+          notes: proc.note?.[0]?.text || 'Imported from Epic',
+          extractedData: {
+            medications: [],
+            allergies: [],
+            conditions: [],
+            testResults: {},
+            dates: { 'Procedure Date': performedDate },
+          },
+          processed: true,
+          source: 'epic',
+        });
+      });
+    }
+
+    // Convert diagnostic reports to medical records
+    if (epicData.diagnostics && epicData.diagnostics.length > 0) {
+      epicData.diagnostics.forEach((diag: any) => {
+        const issuedDate = diag.issued || new Date().toISOString();
+        const testResults: { [key: string]: string } = {};
+
+        // Extract results from contained resources if available
+        if (diag.result) {
+          diag.result.forEach((resultRef: any) => {
+            testResults[resultRef.display || 'Result'] = resultRef.reference || '';
+          });
+        }
+
+        records.push({
+          id: generateId(),
+          uploadDate: issuedDate,
+          appointmentDate: issuedDate,
+          specialty: 'Lab',
+          provider: 'Epic EHR - Diagnostic Report',
+          summary: `${diag.code?.coding?.[0]?.display || 'Diagnostic Report'} - ${diag.status}`,
+          reasonForVisit: 'Diagnostic Testing',
+          findings: `Status: ${diag.status}`,
+          nextSteps: '',
+          notes: diag.conclusion || 'Imported from Epic',
+          extractedData: {
+            medications: [],
+            allergies: [],
+            conditions: [],
+            testResults,
+            dates: { 'Report Date': issuedDate },
           },
           processed: true,
           source: 'epic',
