@@ -178,6 +178,13 @@ Return ONLY valid JSON. If you cannot clearly identify the image content, return
 
       console.log('✅ Claude API success!');
       const data = await response.json();
+
+      // Check if response has the expected structure
+      if (!data.content || !data.content[0] || !data.content[0].text) {
+        console.error('❌ Unexpected response structure:', data);
+        throw new Error(`Unexpected Claude API response: ${JSON.stringify(data)}`);
+      }
+
       const responseText = data.content[0].text;
       console.log('📝 Claude response:', responseText.substring(0, 200) + '...');
 
@@ -188,9 +195,16 @@ Return ONLY valid JSON. If you cannot clearly identify the image content, return
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           analysisData = JSON.parse(jsonMatch[0]);
+          console.log('✅ Successfully parsed JSON:', analysisData.type);
+        } else {
+          console.warn('⚠️ No JSON found in Claude response');
+          console.log('Raw response:', responseText);
+          throw new Error('Claude did not return valid JSON');
         }
       } catch (e) {
-        console.error('Error parsing Claude response:', e);
+        console.error('❌ Error parsing Claude response:', e);
+        console.error('Response text was:', responseText);
+        throw new Error(`Failed to parse Claude response: ${e instanceof Error ? e.message : String(e)}`);
       }
 
       // Handle Lab Results
