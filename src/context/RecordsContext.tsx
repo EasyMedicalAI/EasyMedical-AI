@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { MedicalRecord, MedicalHub, UserHealthData, LabMetric } from '../types/medical';
 import { storageService } from '../services/storageService';
+import { epicService } from '../services/epicService';
 
 // Empty initial state - will be populated from storage or user input
 const EMPTY_USER_DATA: UserHealthData = {
@@ -47,6 +48,7 @@ interface RecordsContextType {
   updateUserData: (data: UserHealthData) => Promise<void>;
   refreshRecords: () => Promise<void>;
   clearAllData: () => Promise<void>;
+  syncWithEpic: () => Promise<{ added: number; duplicates: number }>;
   getRecordsBySpecialty: (specialty: string) => MedicalRecord[];
   getUniqueSpecialties: () => string[];
   getAllMedications: () => string[];
@@ -286,6 +288,50 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const syncWithEpic = async (): Promise<{ added: number; duplicates: number }> => {
+    try {
+      console.log('🔄 Syncing with Epic...');
+
+      // Fetch all data from Epic
+      const epicData = await epicService.fetchAllPatientData();
+
+      // Convert Epic data to MedicalRecords
+      const epicRecords = await epicService.convertEpicDataToMedicalRecords(epicData);
+
+      console.log(`📊 Got ${epicRecords.length} records from Epic`);
+
+      // Merge with existing records (no deletion)
+      let added = 0;
+      let duplicates = 0;
+
+      for (const epicRecord of epicRecords) {
+        // Check for duplicates based on date + provider + summary
+        const isDuplicate = records.some(
+          (r) =>
+            new Date(r.appointmentDate || r.uploadDate).toDateString() ===
+              new Date(epicRecord.appointmentDate || epicRecord.uploadDate).toDateString() &&
+            r.provider === epicRecord.provider &&
+            r.summary === epicRecord.summary
+        );
+
+        if (isDuplicate) {
+          console.log(`⏭️ Skipping duplicate: ${epicRecord.summary}`);
+          duplicates++;
+        } else {
+          console.log(`➕ Adding: ${epicRecord.summary}`);
+          await addRecord(epicRecord);
+          added++;
+        }
+      }
+
+      console.log(`✅ Epic sync complete: ${added} added, ${duplicates} duplicates skipped`);
+      return { added, duplicates };
+    } catch (error) {
+      console.error('❌ Error syncing with Epic:', error);
+      throw error;
+    }
+  };
+
   const value: RecordsContextType = {
     records,
     userData,
@@ -296,6 +342,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     updateUserData,
     refreshRecords,
     clearAllData,
+    syncWithEpic,
     getRecordsBySpecialty,
     getUniqueSpecialties,
     getAllMedications,

@@ -3,6 +3,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { MedicalRecord } from '../types/medical';
 
 // Configuration for Epic FHIR Sandbox
 const FHIR_SERVER_URL = 'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4';
@@ -285,6 +286,169 @@ class EpicService {
   }
 
   // Clear access token and connected status
+  async fetchAllPatientData(): Promise<any> {
+    if (!this.accessToken) {
+      throw new Error('Not connected to Epic. Please authenticate first.');
+    }
+
+    try {
+      console.log('📥 Fetching all data from Epic...');
+
+      // Fetch all data in parallel
+      const [patient, medications, appointments, observations, allergies, conditions] = await Promise.all([
+        this.getPatient().catch(e => {
+          console.warn('Failed to fetch patient:', e);
+          return null;
+        }),
+        this.getMedications().catch(e => {
+          console.warn('Failed to fetch medications:', e);
+          return [];
+        }),
+        this.getAppointments().catch(e => {
+          console.warn('Failed to fetch appointments:', e);
+          return [];
+        }),
+        this.getObservations().catch(e => {
+          console.warn('Failed to fetch observations:', e);
+          return [];
+        }),
+        this.getAllergies().catch(e => {
+          console.warn('Failed to fetch allergies:', e);
+          return [];
+        }),
+        this.getConditions().catch(e => {
+          console.warn('Failed to fetch conditions:', e);
+          return [];
+        }),
+      ]);
+
+      console.log(`✅ Fetched Epic data:
+        - Patient: ${patient?.name}
+        - Medications: ${medications.length}
+        - Appointments: ${appointments.length}
+        - Observations: ${observations.length}
+        - Allergies: ${allergies.length}
+        - Conditions: ${conditions.length}`);
+
+      return {
+        patient,
+        medications,
+        appointments,
+        observations,
+        allergies,
+        conditions,
+      };
+    } catch (error) {
+      console.error('❌ Error fetching Epic data:', error);
+      throw error;
+    }
+  }
+
+  async convertEpicDataToMedicalRecords(epicData: any): Promise<any[]> {
+    const records: any[] = [];
+    const generateId = () => Math.random().toString(36).substring(2, 11);
+
+    // Convert appointments to medical records
+    if (epicData.appointments && epicData.appointments.length > 0) {
+      epicData.appointments.forEach((apt: Appointment) => {
+        records.push({
+          id: generateId(),
+          uploadDate: apt.date,
+          appointmentDate: apt.date,
+          specialty: 'Epic EHR',
+          provider: apt.provider,
+          summary: apt.description,
+          reasonForVisit: apt.description,
+          findings: 'Appointment from Epic EHR',
+          nextSteps: '',
+          notes: 'Imported from Epic',
+          extractedData: {
+            medications: [],
+            allergies: [],
+            conditions: [],
+            testResults: {},
+            dates: { 'Appointment Date': apt.date },
+          },
+          processed: true,
+          source: 'epic',
+        });
+      });
+    }
+
+    // Convert observations (lab results) to medical records
+    if (epicData.observations && epicData.observations.length > 0) {
+      const obsGroupedByDate: { [key: string]: any[] } = {};
+
+      // Group observations by date
+      epicData.observations.forEach((obs: Observation) => {
+        if (!obsGroupedByDate[obs.date]) {
+          obsGroupedByDate[obs.date] = [];
+        }
+        obsGroupedByDate[obs.date].push(obs);
+      });
+
+      // Convert each date's observations to a record
+      Object.entries(obsGroupedByDate).forEach(([date, obsList]) => {
+        const testResults: { [key: string]: string } = {};
+        obsList.forEach((obs: Observation) => {
+          testResults[obs.code] = `${obs.value} ${obs.unit}`;
+        });
+
+        records.push({
+          id: generateId(),
+          uploadDate: date,
+          appointmentDate: date,
+          specialty: 'Lab',
+          provider: 'Epic EHR - Lab Results',
+          summary: `Lab Results from ${new Date(date).toLocaleDateString()}`,
+          reasonForVisit: 'Lab Work',
+          findings: `${obsList.length} lab values`,
+          nextSteps: 'Review with provider',
+          notes: 'Imported from Epic',
+          extractedData: {
+            medications: [],
+            allergies: [],
+            conditions: [],
+            testResults,
+            dates: { 'Test Date': date },
+          },
+          processed: true,
+          source: 'epic',
+        });
+      });
+    }
+
+    // Add conditions as records
+    if (epicData.conditions && epicData.conditions.length > 0) {
+      epicData.conditions.forEach((cond: Condition) => {
+        records.push({
+          id: generateId(),
+          uploadDate: cond.onsetDate || new Date().toISOString(),
+          appointmentDate: cond.onsetDate || new Date().toISOString(),
+          specialty: 'Primary Care',
+          provider: 'Epic EHR - Conditions',
+          summary: cond.name,
+          reasonForVisit: cond.name,
+          findings: `Status: ${cond.status}`,
+          nextSteps: '',
+          notes: 'Imported from Epic',
+          extractedData: {
+            medications: [],
+            allergies: [],
+            conditions: [cond.name],
+            testResults: {},
+            dates: { 'Onset Date': cond.onsetDate || '' },
+          },
+          processed: true,
+          source: 'epic',
+        });
+      });
+    }
+
+    console.log(`✅ Converted ${records.length} records from Epic data`);
+    return records;
+  }
+
   async disconnect(): Promise<void> {
     try {
       await AsyncStorage.removeItem('epic_access_token');
