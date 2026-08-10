@@ -219,8 +219,56 @@ class EpicService {
   // OAuth SMART on FHIR Flow Methods
 
   // Generate authorization URL - backend handles OAuth flow
-  async generateAuthorizationUrl(): Promise<string> {
-    return OAUTH_AUTHORIZE_URL;
+  async generateAuthorizationUrl(): Promise<{ url: string; state: string }> {
+    // Get the authorization URL and state from the backend
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/epic/authorize`, {
+        method: 'GET',
+        redirect: 'manual', // Don't follow redirects
+      });
+
+      // Extract state from Location header (the 302 redirect URL)
+      const locationHeader = response.headers.get('location');
+      if (!locationHeader) {
+        throw new Error('No redirect location from authorization endpoint');
+      }
+
+      // Extract state from the URL
+      const url = new URL(locationHeader);
+      const state = url.searchParams.get('state');
+      if (!state) {
+        throw new Error('No state in authorization URL');
+      }
+
+      return {
+        url: locationHeader,
+        state: state,
+      };
+    } catch (error) {
+      console.error('Error generating authorization URL:', error);
+      throw error;
+    }
+  }
+
+  // Retrieve token after authorization using state
+  async retrieveTokenByState(state: string): Promise<string | null> {
+    try {
+      const response = await fetch(`${BACKEND_URL}/api/auth/epic/token/${state}`);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log('Token not found for state:', state);
+          return null;
+        }
+        throw new Error(`Failed to retrieve token: ${response.status}`);
+      }
+
+      const tokenData = await response.json();
+      return tokenData.access_token;
+    } catch (error) {
+      console.error('Error retrieving token by state:', error);
+      return null;
+    }
   }
 
 

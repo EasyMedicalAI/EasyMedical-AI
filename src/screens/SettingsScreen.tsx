@@ -40,7 +40,10 @@ export default function SettingsScreen() {
   const handleConnectEpic = async () => {
     try {
       setEpicLoading(true);
-      const authUrl = await epicService.generateAuthorizationUrl();
+
+      // Get authorization URL and state from backend
+      const { url: authUrl, state } = await epicService.generateAuthorizationUrl();
+      console.log('✅ Got authorization URL with state:', state);
 
       if (Platform.OS === 'web') {
         // For web, use window.open to open the OAuth URL
@@ -53,16 +56,20 @@ export default function SettingsScreen() {
         const result = await WebBrowser.openBrowserAsync(authUrl);
         console.log('Browser closed, result type:', result.type);
 
-        // Browser closed - check if token was saved
-        setTimeout(async () => {
-          console.log('Checking Epic connection status...');
-          const connected = await epicService.isConnected();
-          console.log('Connected to Epic:', connected);
-          setEpicConnected(connected);
-          if (connected) {
-            Alert.alert('Success', 'Your Epic account has been connected successfully!');
-          }
-        }, 2000);
+        // Browser closed - retrieve token using state
+        console.log('Retrieving token for state:', state);
+        const token = await epicService.retrieveTokenByState(state);
+
+        if (token) {
+          console.log('✅ Token retrieved, saving...');
+          await epicService.handleOAuthCallback(token);
+          console.log('✅ Token saved successfully');
+          setEpicConnected(true);
+          Alert.alert('Success', 'Your Epic account has been connected successfully!');
+        } else {
+          console.log('Token not found - authorization may have been cancelled');
+          Alert.alert('Authorization Cancelled', 'Epic authorization was cancelled or timed out.');
+        }
       }
     } catch (error) {
       console.error('Error connecting to Epic:', error);
