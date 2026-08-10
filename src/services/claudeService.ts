@@ -180,12 +180,19 @@ Return ONLY valid JSON. If you cannot clearly identify the image content, return
       const data = await response.json();
 
       // Check if response has the expected structure
-      if (!data.content || !data.content[0] || !data.content[0].text) {
+      if (!data.content || !Array.isArray(data.content)) {
         console.error('❌ Unexpected response structure:', data);
         throw new Error(`Unexpected Claude API response: ${JSON.stringify(data)}`);
       }
 
-      const responseText = data.content[0].text;
+      // Find the text block (Claude may return thinking blocks first)
+      const textBlock = data.content.find((block: any) => block.type === 'text');
+      if (!textBlock || !textBlock.text) {
+        console.error('❌ No text block found in response:', data);
+        throw new Error('Claude response missing text block');
+      }
+
+      const responseText = textBlock.text;
       console.log('📝 Claude response:', responseText.substring(0, 200) + '...');
 
       // Parse the JSON response
