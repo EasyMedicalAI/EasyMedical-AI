@@ -31,7 +31,7 @@ export const cameraService = {
     }
   },
 
-  async pickPhotoFromLibrary(): Promise<string | null> {
+  async pickPhotoFromLibrary(allowMultiple: boolean = false): Promise<string | string[] | null> {
     try {
       const hasPermission = await this.requestMediaLibraryPermission();
       if (!hasPermission) {
@@ -41,10 +41,14 @@ export const cameraService = {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
+        allowsMultiple: allowMultiple,
         quality: 1,
       });
 
       if (!result.canceled && result.assets.length > 0) {
+        if (allowMultiple) {
+          return result.assets.map(asset => asset.uri);
+        }
         return result.assets[0].uri;
       }
       return null;
@@ -145,19 +149,26 @@ export const cameraService = {
     }
   },
 
-  async analyzeHealthRecord(imageUri: string): Promise<AnalysisResult> {
+  async analyzeHealthRecord(imageUris: string | string[], recordType: 'lab' | 'other' = 'other'): Promise<AnalysisResult> {
     try {
-      const base64 = await this.imageUriToBase64(imageUri);
-      if (!base64) {
-        throw new Error('Failed to convert image to base64');
+      // Convert single URI to array for consistent processing
+      const uriArray = Array.isArray(imageUris) ? imageUris : [imageUris];
+
+      // Convert all images to base64
+      const base64Images = await Promise.all(
+        uriArray.map(uri => this.imageUriToBase64(uri))
+      );
+
+      if (base64Images.some(b64 => !b64)) {
+        throw new Error('Failed to convert one or more images to base64');
       }
 
       const response = await fetch(`${BACKEND_URL}/api/vision/analyze-record`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          image: base64,
-          analysisType: 'record',
+          images: base64Images,
+          recordType: recordType,
         }),
       });
 
