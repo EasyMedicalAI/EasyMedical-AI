@@ -17,10 +17,11 @@ import { useRecords } from '@/context/RecordsContext';
 import { epicService } from '@/services/epicService';
 
 export default function SettingsScreen() {
-  const { records, clearAllData } = useRecords();
+  const { records, clearAllData, syncWithEpic } = useRecords();
   const [showEpicModal, setShowEpicModal] = useState(false);
   const [epicConnected, setEpicConnected] = useState(false);
   const [epicLoading, setEpicLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     checkEpicConnection();
@@ -86,6 +87,26 @@ export default function SettingsScreen() {
         },
       ]
     );
+  };
+
+  const handleSyncEpic = async () => {
+    try {
+      setSyncing(true);
+      const result = await syncWithEpic();
+
+      Alert.alert(
+        'Sync Complete',
+        `✅ Added ${result.added} records from Epic\n⏭️ Skipped ${result.duplicates} duplicates\n\nYour local records are preserved.`,
+        [{ text: 'OK' }]
+      );
+    } catch (error) {
+      Alert.alert(
+        'Sync Failed',
+        'Error syncing with Epic: ' + String(error)
+      );
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleClearAllData = () => {
@@ -168,6 +189,30 @@ export default function SettingsScreen() {
             )}
           </View>
         </TouchableOpacity>
+
+        {epicConnected && (
+          <TouchableOpacity
+            style={[styles.card, styles.syncButton]}
+            onPress={handleSyncEpic}
+            disabled={syncing}
+          >
+            <View style={styles.epicRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.syncTitle}>
+                  🔄 Sync Records from Epic
+                </Text>
+                <Text style={styles.syncSubtitle}>
+                  Import appointments, labs & conditions
+                </Text>
+              </View>
+              {syncing ? (
+                <ActivityIndicator size="small" color="#007AFF" />
+              ) : (
+                <Text style={styles.syncIcon}>→</Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.section}>
@@ -305,6 +350,27 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     fontSize: 24,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  syncButton: {
+    marginTop: 12,
+    backgroundColor: '#F0F8FF',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  syncTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#007AFF',
+    marginBottom: 4,
+  },
+  syncSubtitle: {
+    fontSize: 12,
+    color: '#0051BA',
+  },
+  syncIcon: {
+    fontSize: 20,
     color: '#007AFF',
     fontWeight: '600',
   },
