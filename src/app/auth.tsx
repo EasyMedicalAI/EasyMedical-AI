@@ -48,9 +48,9 @@ export default function CallbackScreen() {
           console.log('✅ Token saved successfully');
 
           setLoading(false);
+          // Go back to SettingsScreen - the auto-refresh will detect the new connection
           setTimeout(() => {
-            Alert.alert('Success', 'Your Epic account has been connected successfully!');
-            router.replace('/');
+            router.back();
           }, 500);
           return;
         } catch (codeExchangeErr) {
@@ -68,9 +68,9 @@ export default function CallbackScreen() {
         console.log('✅ Token saved successfully');
 
         setLoading(false);
+        // Go back to SettingsScreen - the auto-refresh will detect the new connection
         setTimeout(() => {
-          Alert.alert('Success', 'Your Epic account has been connected successfully!');
-          router.replace('/');
+          router.back();
         }, 500);
         return;
       }

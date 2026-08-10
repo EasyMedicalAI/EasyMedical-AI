@@ -25,6 +25,11 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     checkEpicConnection();
+
+    // Check for Epic connection status every time the screen comes into focus
+    // This handles the case where user just completed Epic OAuth
+    const interval = setInterval(checkEpicConnection, 1000);
+    return () => clearInterval(interval);
   }, []);
 
   const checkEpicConnection = async () => {
