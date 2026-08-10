@@ -352,7 +352,25 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       setUploadMode('method');
       Alert.alert('Success', 'Record added from photo analysis!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to process photo: ' + String(error));
+      // Get detailed error information
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorDetails = error instanceof Error && error.stack ? error.stack : '';
+
+      console.error('❌ Photo upload error:', errorMessage);
+      console.error('Stack trace:', errorDetails);
+
+      // Show comprehensive error to user
+      const displayMessage = `Failed to process photo:\n\n${errorMessage}\n\nCheck console for full details.`;
+      Alert.alert('Photo Processing Error', displayMessage, [
+        {
+          text: 'OK',
+          onPress: () => {
+            // Reset upload state
+            setPhotoUri(null);
+            setUploadMode('method');
+          },
+        },
+      ]);
     } finally {
       setIsUploading(false);
     }
