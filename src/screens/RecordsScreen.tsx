@@ -17,6 +17,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import { claudeService, convertHeicToJpeg } from '@/services/claudeService';
+import { cameraService } from '@/services/cameraService';
 import { epicService, Appointment } from '@/services/epicService';
 import { MedicalRecord } from '@/types/medical';
 import MetricDetailScreen from '@/screens/MetricDetailScreen';
@@ -325,24 +326,53 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       });
       console.log(`✓ Base64 read successful. Length: ${base64.length} characters`);
 
-      // Analyze the photo using Claude vision
-      console.log(`🤖 Sending to Claude API (image/jpeg format)...`);
-      const parsedRecord = await claudeService.parseRecordFromImage(base64, recordId, 'image/jpeg');
-      console.log(`✓ Claude analysis complete`);
+      // Determine record type (lab vs other based on specialty)
+      const isLab = uploadingSpecialty?.toLowerCase().includes('lab') ||
+                   uploadingSpecialty?.toLowerCase().includes('pathology');
+      const recordType = isLab ? 'lab' : 'other';
+
+      // Analyze using backend endpoint (supports multiple images and different record types)
+      console.log(`🤖 Sending to backend for analysis (recordType: ${recordType})...`);
+      const analysisResult = await cameraService.analyzeHealthRecord(imageUri, recordType);
+
+      if (!analysisResult.success) {
+        throw new Error(analysisResult.error || 'Failed to analyze record');
+      }
+
+      // Parse response based on record type
+      let summary = 'Medical record';
+      let title = uploadingSpecialty || 'Record';
+
+      if (!isLab && analysisResult.data?.analysis) {
+        // For non-lab records, extract title and summary from Claude's formatted response
+        const analysis = analysisResult.data.analysis;
+        const titleMatch = analysis.match(/TITLE:\s*(.+?)(?:\n|$)/i);
+        const summaryMatch = analysis.match(/SUMMARY:\s*(.+?)(?:KEY POINTS|$)/is);
+
+        if (titleMatch) {
+          title = titleMatch[1].trim();
+        }
+        if (summaryMatch) {
+          summary = summaryMatch[1].trim();
+        }
+      } else if (isLab && analysisResult.data?.analysis) {
+        // For labs, use analysis as summary
+        summary = analysisResult.data.analysis;
+      }
 
       await addRecord({
         id: recordId,
         uploadDate: new Date().toISOString(),
-        appointmentDate: parsedRecord.uploadDate || new Date().toISOString(),
+        appointmentDate: new Date().toISOString(),
         imageUri: photoUri,
-        originalText: parsedRecord.originalText,
+        originalText: analysisResult.data?.analysis || '',
         specialty: uploadingSpecialty,
-        provider: parsedRecord.provider || 'Unknown',
-        summary: parsedRecord.summary || 'Medical record',
-        reasonForVisit: parsedRecord.reasonForVisit,
-        findings: parsedRecord.findings,
-        nextSteps: parsedRecord.nextSteps,
-        extractedData: parsedRecord.extractedData || {},
+        provider: 'Unknown',
+        summary: summary,
+        reasonForVisit: !isLab ? summary : undefined,
+        findings: analysisResult.data?.analysis,
+        nextSteps: undefined,
+        extractedData: { recordType, analysis: analysisResult.data?.analysis },
         processed: true,
         isTeamMember: true,
       });
