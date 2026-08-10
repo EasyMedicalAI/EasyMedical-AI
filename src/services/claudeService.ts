@@ -199,15 +199,23 @@ Return ONLY valid JSON. If you cannot clearly identify the image content, return
       let analysisData: any = { type: 'unknown' };
 
       try {
+        console.log('📝 Raw response text length:', responseText.length);
+        console.log('📝 First 500 chars:', responseText.substring(0, 500));
+        console.log('📝 Last 500 chars:', responseText.substring(Math.max(0, responseText.length - 500)));
+
         const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          analysisData = JSON.parse(jsonMatch[0]);
-          console.log('✅ Successfully parsed JSON:', analysisData.type);
-        } else {
+        if (!jsonMatch) {
           console.warn('⚠️ No JSON found in Claude response');
-          console.log('Raw response:', responseText);
-          throw new Error('Claude did not return valid JSON');
+          console.log('Full response text:', responseText);
+          throw new Error('Claude did not return valid JSON - no { } found');
         }
+
+        console.log('📝 Extracted JSON length:', jsonMatch[0].length);
+        console.log('📝 JSON starts with:', jsonMatch[0].substring(0, 100));
+        console.log('📝 JSON ends with:', jsonMatch[0].substring(Math.max(0, jsonMatch[0].length - 100)));
+
+        analysisData = JSON.parse(jsonMatch[0]);
+        console.log('✅ Successfully parsed JSON:', analysisData.type);
       } catch (e) {
         console.error('❌ Error parsing Claude response:', e);
         console.error('Response text was:', responseText);
