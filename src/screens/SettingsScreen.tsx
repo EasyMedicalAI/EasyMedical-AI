@@ -40,7 +40,17 @@ export default function SettingsScreen() {
   const handleConnectEpic = async () => {
     try {
       setEpicLoading(true);
-      const authUrl = await epicService.generateAuthorizationUrl();
+
+      // Get authorization URL and state from backend
+      const backendUrl = 'https://easymedical-backend-new-production.up.railway.app';
+      const response = await fetch(`${backendUrl}/api/auth/epic/authorize`);
+
+      if (!response.ok) {
+        throw new Error('Failed to get authorization URL from backend');
+      }
+
+      const { authUrl, state } = await response.json();
+      console.log('✅ Got authorization URL with state:', state);
 
       if (Platform.OS === 'web') {
         // For web, use window.open to open the OAuth URL
@@ -53,19 +63,23 @@ export default function SettingsScreen() {
         const result = await WebBrowser.openBrowserAsync(authUrl);
         console.log('Browser closed, result type:', result.type);
 
-        // Browser closed - either user cancelled or deep link was triggered
-        // Wait for deep link handler to process the token
-        setTimeout(async () => {
-          console.log('Checking Epic connection status...');
-          const connected = await epicService.isConnected();
-          console.log('Connected to Epic:', connected);
-          setEpicConnected(connected);
-          if (connected) {
-            Alert.alert('Success', 'Your Epic account has been connected successfully!');
-          } else {
-            console.log('Not connected yet, checking if there was an error');
-          }
-        }, 2000);
+        // Browser closed - retrieve token using the state
+        console.log('Retrieving token for state:', state);
+        const tokenResponse = await fetch(`${backendUrl}/api/auth/epic/token/${state}`);
+
+        if (tokenResponse.ok) {
+          const tokenData = await tokenResponse.json();
+          console.log('✅ Token received from backend, saving...');
+          await epicService.handleOAuthCallback(tokenData.access_token);
+          console.log('✅ Token saved successfully');
+          setEpicConnected(true);
+          Alert.alert('Success', 'Your Epic account has been connected successfully!');
+        } else if (tokenResponse.status === 404) {
+          console.log('Token not found - user may have cancelled');
+          Alert.alert('Authorization Cancelled', 'Epic authorization was cancelled or timed out.');
+        } else {
+          throw new Error(`Failed to retrieve token: ${tokenResponse.status}`);
+        }
       }
     } catch (error) {
       console.error('Error connecting to Epic:', error);
