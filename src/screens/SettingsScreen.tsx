@@ -51,6 +51,7 @@ export default function SettingsScreen() {
 
       const { authUrl, state } = await response.json();
       console.log('✅ Got authorization URL with state:', state);
+      console.log('🔗 Auth URL:', authUrl);
 
       if (Platform.OS === 'web') {
         // For web, use window.open to open the OAuth URL
@@ -60,10 +61,19 @@ export default function SettingsScreen() {
       } else {
         // For native mobile, use WebBrowser
         console.log('Opening browser for Epic OAuth...');
-        const result = await WebBrowser.openBrowserAsync(authUrl);
-        console.log('Browser closed, result type:', result.type);
+        console.log('Browser URL:', authUrl);
+        try {
+          const result = await WebBrowser.openBrowserAsync(authUrl);
+          console.log('✅ Browser returned, result type:', result.type);
+        } catch (browserError) {
+          console.error('❌ Error opening browser:', browserError);
+          throw browserError;
+        }
 
-        // Browser closed - retrieve token using the state
+        // Browser closed - wait a moment then retrieve token using the state
+        console.log('Browser closed, waiting to retrieve token for state:', state);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second for backend to process
+
         console.log('Retrieving token for state:', state);
         const tokenResponse = await fetch(`${backendUrl}/api/auth/epic/token/${state}`);
 
