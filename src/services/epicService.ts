@@ -7,7 +7,7 @@ import { MedicalRecord } from '../types/medical';
 
 // Configuration for Epic FHIR Sandbox
 const FHIR_SERVER_URL = 'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4';
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://easymedical-backend.vercel.app';
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://easymedical-backend-new-production.up.railway.app';
 const OAUTH_AUTHORIZE_URL = `${BACKEND_URL}/api/auth/epic/authorize`;
 
 // For Epic Sandbox testing, use this public test patient
