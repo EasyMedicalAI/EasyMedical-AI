@@ -249,80 +249,70 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       'patient name', 'patient id', 'dob', 'age', 'sex', 'specimen id', 'specimen',
       'ordering physician', 'physician', 'account number', 'performing lab', 'lab',
       'date collected', 'date received', 'date reported', 'fasting status', 'field',
-      'test', 'value', 'unit', 'reference', 'result', 'status', 'comments'
+      'unit', 'reference range', 'comments', 'notes', 'patient & specimen metadata'
     ];
 
     records.forEach(record => {
       if (record.specialty?.toLowerCase().includes('lab') || record.specialty === 'Lab') {
         if (record.summary) {
-          console.log('📊 Parsing lab summary');
           const lines = record.summary.split('\n');
-
-          let inTable = false;
+          let tableCount = 0;
           let headerFound = false;
-          let tableCount = 0; // Track which table we're in
 
-          lines.forEach((line) => {
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
             const cleanLine = line.trim();
 
-            // Detect table start
-            if (cleanLine.startsWith('|') && cleanLine.endsWith('|')) {
-              // Check if this looks like a header separator row (|---|---|)
-              if (cleanLine.includes('---')) {
-                headerFound = true;
-                inTable = true;
-                tableCount++;
-                return;
-              }
+            // Count tables by counting header separators (|---|)
+            if (cleanLine.includes('---') && cleanLine.startsWith('|')) {
+              tableCount++;
+              headerFound = true;
+              continue; // Skip the separator line itself
+            }
 
-              // Skip the first table (metadata), only process second table onwards (actual results)
-              if (headerFound && !cleanLine.includes('---') && tableCount >= 2) {
-                // Split by pipe and extract values
-                const cells = cleanLine.split('|').map(c => c.trim()).filter(c => c && c !== '---');
+            // Parse data rows from the second table onwards
+            if (cleanLine.startsWith('|') && cleanLine.endsWith('|') && tableCount >= 2 && headerFound) {
+              const cells = cleanLine.split('|').map(c => c.trim()).filter(c => c && !c.includes('---'));
 
-                if (cells.length >= 2) {
-                  const labName = cells[0];
-                  const labValue = cells[1];
+              if (cells.length >= 2) {
+                const labName = cells[0];
+                const labValue = cells[1];
 
-                  // Check if this is a metadata field we should skip
-                  const isMetadata = metadataFields.some(field =>
-                    labName.toLowerCase().includes(field)
-                  );
+                // Check if this is a metadata field we should skip
+                const isMetadata = metadataFields.some(field =>
+                  labName.toLowerCase().includes(field)
+                );
 
-                  // Skip if it's metadata, header text, or just a number
-                  if (!isMetadata &&
-                      labName &&
-                      labValue &&
-                      !labName.match(/^[0-9]+$/) && // Skip pure numbers
-                      labName.length < 50 &&
-                      labValue.length < 100) {
+                // Only include if it's a real lab value
+                if (!isMetadata &&
+                    labName &&
+                    labValue &&
+                    !labName.match(/^[0-9]+$/) && // Skip pure numbers
+                    labName.toLowerCase() !== 'test' &&
+                    labName.toLowerCase() !== 'value' &&
+                    labName.length > 2 &&
+                    labName.length < 50 &&
+                    labValue.length < 100) {
 
-                    if (!labMap.has(labName)) {
-                      labMap.set(labName, {
-                        value: labValue,
-                        date: record.uploadDate,
-                        history: [{ value: labValue, date: record.uploadDate }],
-                      });
-                      console.log(`✅ Found lab: ${labName} = ${labValue}`);
-                    } else {
-                      const existing = labMap.get(labName)!;
-                      existing.history.push({ value: labValue, date: record.uploadDate });
-                      if (new Date(record.uploadDate) > new Date(existing.date)) {
-                        existing.value = labValue;
-                        existing.date = record.uploadDate;
-                      }
+                  if (!labMap.has(labName)) {
+                    labMap.set(labName, {
+                      value: labValue,
+                      date: record.uploadDate,
+                      history: [{ value: labValue, date: record.uploadDate }],
+                    });
+                    console.log(`✅ Found lab: ${labName} = ${labValue}`);
+                  } else {
+                    const existing = labMap.get(labName)!;
+                    existing.history.push({ value: labValue, date: record.uploadDate });
+                    if (new Date(record.uploadDate) > new Date(existing.date)) {
+                      existing.value = labValue;
+                      existing.date = record.uploadDate;
                     }
                   }
                 }
               }
-            } else if (cleanLine && !cleanLine.startsWith('#') && !cleanLine.startsWith('-')) {
-              // Reset table mode if we hit non-table content
-              if (inTable && !cleanLine.startsWith('|')) {
-                inTable = false;
-                headerFound = false;
-              }
             }
-          });
+          }
         }
       }
     });
