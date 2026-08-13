@@ -256,8 +256,6 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     records.forEach(record => {
       if (record.specialty?.toLowerCase().includes('lab') || record.specialty === 'Lab') {
         if (record.summary) {
-          console.log(`📋 Lab record specialty: "${record.specialty}"`);
-          console.log(`📝 Lab summary (first 300 chars): ${record.summary.substring(0, 300)}`);
           const lines = record.summary.split('\n');
 
           for (let i = 0; i < lines.length; i++) {
@@ -269,7 +267,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
             let labValue = '';
 
             // Pattern 1: Markdown table | Name | Value |
-            if (cleanLine.startsWith('|') && cleanLine.endsWith('|')) {
+            if (cleanLine.startsWith('|') && cleanLine.endsWith('|') && !cleanLine.includes('---')) {
               const cells = cleanLine.split('|').map(c => c.trim()).filter(c => c && !c.includes('---'));
               if (cells.length >= 2) {
                 labName = cells[0];
@@ -288,21 +286,27 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
             // Process if we found a name and value
             if (labName && labValue) {
               // Extract just the numeric/result part from values like "98 mg/dL" or "High"
-              const valueMatch = labValue.match(/^([0-9.]+|[A-Za-z\s]+)/);
+              const valueMatch = labValue.match(/^([0-9.]+|High|Low|Normal|Abnormal|Positive|Negative|[A-Za-z\s]+)/);
               const cleanValue = valueMatch ? valueMatch[1].trim() : labValue;
 
-              // Check if this is metadata
-              const isMetadata = metadataFields.has(labName.toLowerCase()) ||
-                                metadataFields.has(labName.toLowerCase().split(/\s+/)[0]); // Check first word
+              // Check if this is metadata by checking exact match or first word
+              const lowerName = labName.toLowerCase();
+              const isMetadata = metadataFields.has(lowerName) ||
+                                metadataFields.has(lowerName.split(/[\/\s-]+/)[0]); // Check first word/part
 
               // Only include real lab values
+              // Exclude header row indicators and metadata
               if (!isMetadata &&
                   labName &&
+                  labName !== 'Test' &&
+                  labName !== 'Field' &&
                   cleanValue &&
+                  cleanValue !== 'Value' &&
+                  cleanValue !== 'Result' &&
                   !labName.match(/^[0-9]+$/) &&
                   labName.length > 2 &&
                   labName.length < 60 &&
-                  cleanValue.length < 50) {
+                  cleanValue.length < 100) {
 
                 if (!labMap.has(labName)) {
                   labMap.set(labName, {
