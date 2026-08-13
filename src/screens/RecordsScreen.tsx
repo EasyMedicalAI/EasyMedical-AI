@@ -274,6 +274,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               if (cells.length >= 2) {
                 labName = cells[0];
                 labValue = cells[1];
+                console.log(`  📍 Found table row: "${labName}" = "${labValue}"`);
               }
             }
             // Pattern 2: "Name: Value" format
@@ -282,6 +283,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               if (match) {
                 labName = match[1].trim();
                 labValue = match[2].trim();
+                console.log(`  📍 Found colon format: "${labName}" = "${labValue}"`);
               }
             }
 
@@ -298,6 +300,19 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
               // Only include real lab values
               // Exclude header row indicators and metadata
+              const reasons = [];
+              if (isMetadata) reasons.push('metadata');
+              if (labName === 'Test' || labName === 'Field') reasons.push('header');
+              if (cleanValue === 'Value' || cleanValue === 'Result') reasons.push('header-value');
+              if (labName.match(/^[0-9]+$/)) reasons.push('numeric-name');
+              if (labName.length <= 2) reasons.push('name-too-short');
+              if (labName.length >= 60) reasons.push('name-too-long');
+              if (cleanValue.length >= 100) reasons.push('value-too-long');
+
+              if (reasons.length > 0) {
+                console.log(`    ❌ Rejected: ${labName} = ${cleanValue} [${reasons.join(', ')}]`);
+              }
+
               if (!isMetadata &&
                   labName &&
                   labName !== 'Test' &&
