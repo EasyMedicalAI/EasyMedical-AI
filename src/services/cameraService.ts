@@ -164,7 +164,11 @@ export const cameraService = {
         throw new Error('Failed to convert one or more images to base64');
       }
 
-      const response = await fetch(`${BACKEND_URL}/api/vision/analyze-record`, {
+      const url = `${BACKEND_URL}/api/vision/analyze-record`;
+      console.log(`🌐 Calling backend: ${url}`);
+      console.log(`📦 Payload: ${base64Images.length} images, recordType: ${recordType}`);
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -174,9 +178,11 @@ export const cameraService = {
       });
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`❌ Backend returned ${response.status}:`, errorText);
         return {
           success: false,
-          error: 'Failed to analyze health record',
+          error: `Backend error ${response.status}: ${errorText}`,
         };
       }
 
