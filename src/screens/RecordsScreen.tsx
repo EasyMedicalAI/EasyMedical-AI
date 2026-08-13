@@ -1191,7 +1191,9 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
                 {selectedRecord.summary && (
                   <View style={{ marginBottom: 20 }}>
-                    <Text style={styles.label}>Summary</Text>
+                    <Text style={styles.label}>
+                      {selectedRecord.specialty?.toLowerCase().includes('lab') ? '🔬 Lab Results' : 'Summary'}
+                    </Text>
                     {isEditingRecord ? (
                       <TextInput
                         style={[styles.input, { minHeight: 100 }]}
@@ -1202,7 +1204,30 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                         multiline
                       />
                     ) : (
-                      <Text style={styles.infoValue}>{selectedRecord.summary}</Text>
+                      <ScrollView
+                        nestedScrollEnabled={true}
+                        style={{
+                          maxHeight: 300,
+                          backgroundColor: selectedRecord.specialty?.toLowerCase().includes('lab') ? '#F5F9FF' : '#FAFAFA',
+                          borderRadius: 8,
+                          padding: 12,
+                          borderLeftWidth: 3,
+                          borderLeftColor: selectedRecord.specialty?.toLowerCase().includes('lab') ? '#007AFF' : '#DDD',
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.infoValue,
+                            {
+                              lineHeight: 22,
+                              color: '#333',
+                              fontFamily: selectedRecord.specialty?.toLowerCase().includes('lab') ? 'monospace' : 'System',
+                            },
+                          ]}
+                        >
+                          {selectedRecord.summary}
+                        </Text>
+                      </ScrollView>
                     )}
                   </View>
                 )}
