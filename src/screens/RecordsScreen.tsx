@@ -696,9 +696,10 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       )}
 
       {/* My Labs Section */}
-      {labValues.length > 0 && (
+      {records.some(r => r.specialty?.toLowerCase().includes('lab')) && (
         <View style={styles.myLabsSection}>
           <Text style={styles.sectionTitle}>🧬 My Labs</Text>
+          {labValues.length > 0 ? (
           <View style={styles.labsGrid}>
             {labValues.map(lab => (
               <TouchableOpacity
@@ -714,6 +715,16 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               </TouchableOpacity>
             ))}
           </View>
+          ) : (
+            <View style={{ padding: 16, backgroundColor: '#FFF8DC', borderRadius: 8, marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: '#666', fontStyle: 'italic' }}>
+                Lab records uploaded but parsing in progress... Check back in a moment.
+              </Text>
+              <Text style={{ fontSize: 11, color: '#999', marginTop: 8 }}>
+                Records found: {records.filter(r => r.specialty?.toLowerCase().includes('lab')).length}
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
