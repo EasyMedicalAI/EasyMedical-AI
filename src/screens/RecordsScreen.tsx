@@ -244,70 +244,77 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const getLabValues = () => {
     const labMap = new Map<string, { value: string; date: string; history: Array<{ value: string; date: string }> }>();
 
-    // Metadata fields to exclude from lab results
-    const metadataFields = [
+    // Metadata fields to exclude
+    const metadataFields = new Set([
       'patient name', 'patient id', 'dob', 'age', 'sex', 'specimen id', 'specimen',
       'ordering physician', 'physician', 'account number', 'performing lab', 'lab',
       'date collected', 'date received', 'date reported', 'fasting status', 'field',
-      'unit', 'reference range', 'comments', 'notes', 'patient & specimen metadata'
-    ];
+      'unit', 'reference range', 'reference interval', 'comments', 'notes', 'previous result',
+      'current result', 'flag', 'test', 'result', 'value', 'units'
+    ]);
 
     records.forEach(record => {
       if (record.specialty?.toLowerCase().includes('lab') || record.specialty === 'Lab') {
         if (record.summary) {
           const lines = record.summary.split('\n');
-          let tableCount = 0;
-          let headerFound = false;
 
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
             const cleanLine = line.trim();
 
-            // Count tables by counting header separators (|---|)
-            if (cleanLine.includes('---') && cleanLine.startsWith('|')) {
-              tableCount++;
-              headerFound = true;
-              continue; // Skip the separator line itself
+            // Try multiple parsing patterns
+            let labName = '';
+            let labValue = '';
+
+            // Pattern 1: Markdown table | Name | Value |
+            if (cleanLine.startsWith('|') && cleanLine.endsWith('|')) {
+              const cells = cleanLine.split('|').map(c => c.trim()).filter(c => c && !c.includes('---'));
+              if (cells.length >= 2) {
+                labName = cells[0];
+                labValue = cells[1];
+              }
+            }
+            // Pattern 2: "Name: Value" format
+            else if (cleanLine.includes(':') && !cleanLine.startsWith('#') && !cleanLine.startsWith('-')) {
+              const match = cleanLine.match(/^([^:]+):\s*(.+)$/);
+              if (match) {
+                labName = match[1].trim();
+                labValue = match[2].trim();
+              }
             }
 
-            // Parse data rows from the second table onwards
-            if (cleanLine.startsWith('|') && cleanLine.endsWith('|') && tableCount >= 2 && headerFound) {
-              const cells = cleanLine.split('|').map(c => c.trim()).filter(c => c && !c.includes('---'));
+            // Process if we found a name and value
+            if (labName && labValue) {
+              // Extract just the numeric/result part from values like "98 mg/dL" or "High"
+              const valueMatch = labValue.match(/^([0-9.]+|[A-Za-z\s]+)/);
+              const cleanValue = valueMatch ? valueMatch[1].trim() : labValue;
 
-              if (cells.length >= 2) {
-                const labName = cells[0];
-                const labValue = cells[1];
+              // Check if this is metadata
+              const isMetadata = metadataFields.has(labName.toLowerCase()) ||
+                                metadataFields.has(labName.toLowerCase().split(/\s+/)[0]); // Check first word
 
-                // Check if this is a metadata field we should skip
-                const isMetadata = metadataFields.some(field =>
-                  labName.toLowerCase().includes(field)
-                );
+              // Only include real lab values
+              if (!isMetadata &&
+                  labName &&
+                  cleanValue &&
+                  !labName.match(/^[0-9]+$/) &&
+                  labName.length > 2 &&
+                  labName.length < 60 &&
+                  cleanValue.length < 50) {
 
-                // Only include if it's a real lab value
-                if (!isMetadata &&
-                    labName &&
-                    labValue &&
-                    !labName.match(/^[0-9]+$/) && // Skip pure numbers
-                    labName.toLowerCase() !== 'test' &&
-                    labName.toLowerCase() !== 'value' &&
-                    labName.length > 2 &&
-                    labName.length < 50 &&
-                    labValue.length < 100) {
-
-                  if (!labMap.has(labName)) {
-                    labMap.set(labName, {
-                      value: labValue,
-                      date: record.uploadDate,
-                      history: [{ value: labValue, date: record.uploadDate }],
-                    });
-                    console.log(`✅ Found lab: ${labName} = ${labValue}`);
-                  } else {
-                    const existing = labMap.get(labName)!;
-                    existing.history.push({ value: labValue, date: record.uploadDate });
-                    if (new Date(record.uploadDate) > new Date(existing.date)) {
-                      existing.value = labValue;
-                      existing.date = record.uploadDate;
-                    }
+                if (!labMap.has(labName)) {
+                  labMap.set(labName, {
+                    value: cleanValue,
+                    date: record.uploadDate,
+                    history: [{ value: cleanValue, date: record.uploadDate }],
+                  });
+                  console.log(`✅ Found lab: ${labName} = ${cleanValue}`);
+                } else {
+                  const existing = labMap.get(labName)!;
+                  existing.history.push({ value: cleanValue, date: record.uploadDate });
+                  if (new Date(record.uploadDate) > new Date(existing.date)) {
+                    existing.value = cleanValue;
+                    existing.date = record.uploadDate;
                   }
                 }
               }
