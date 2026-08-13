@@ -1,5 +1,6 @@
 import * as Camera from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { photoStorageService, StoredPhoto } from './photoStorageService';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
@@ -238,13 +239,14 @@ export const cameraService = {
 
   async imageUriToBase64(imageUri: string): Promise<string | null> {
     try {
-      const { FileSystem } = await import('expo-file-system/legacy');
+      console.log(`📊 Converting image to base64: ${imageUri}`);
       const base64 = await FileSystem.readAsStringAsync(imageUri, {
         encoding: FileSystem.EncodingType.Base64,
       });
+      console.log(`✅ Base64 conversion successful. Length: ${base64.length} characters`);
       return base64;
     } catch (error) {
-      console.error('Error converting image to base64:', error);
+      console.error('❌ Error converting image to base64:', error);
       return null;
     }
   },
