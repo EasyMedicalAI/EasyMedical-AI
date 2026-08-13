@@ -244,18 +244,25 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const getLabValues = () => {
     const labMap = new Map<string, { value: string; date: string; history: Array<{ value: string; date: string }> }>();
 
+    // Metadata fields to exclude from lab results
+    const metadataFields = [
+      'patient name', 'patient id', 'dob', 'age', 'sex', 'specimen id', 'specimen',
+      'ordering physician', 'physician', 'account number', 'performing lab', 'lab',
+      'date collected', 'date received', 'date reported', 'fasting status', 'field',
+      'test', 'value', 'unit', 'reference', 'result', 'status', 'comments'
+    ];
+
     records.forEach(record => {
       if (record.specialty?.toLowerCase().includes('lab') || record.specialty === 'Lab') {
-        // Parse lab values from summary if they exist
         if (record.summary) {
           console.log('📊 Parsing lab summary');
           const lines = record.summary.split('\n');
 
-          // Parse Markdown tables: | Name | Value |
           let inTable = false;
           let headerFound = false;
+          let tableCount = 0; // Track which table we're in
 
-          lines.forEach((line, idx) => {
+          lines.forEach((line) => {
             const cleanLine = line.trim();
 
             // Detect table start
@@ -264,24 +271,29 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               if (cleanLine.includes('---')) {
                 headerFound = true;
                 inTable = true;
+                tableCount++;
                 return;
               }
 
-              // If we're in a table and past the header, parse data rows
-              if (headerFound && !cleanLine.includes('---')) {
+              // Skip the first table (metadata), only process second table onwards (actual results)
+              if (headerFound && !cleanLine.includes('---') && tableCount >= 2) {
                 // Split by pipe and extract values
                 const cells = cleanLine.split('|').map(c => c.trim()).filter(c => c && c !== '---');
 
                 if (cells.length >= 2) {
-                  // First cell is usually the lab name, second is the value
                   const labName = cells[0];
                   const labValue = cells[1];
 
-                  // Skip header rows and meta info
-                  if (labName && labValue &&
-                      !labName.toLowerCase().includes('field') &&
-                      !labName.toLowerCase().includes('test') &&
-                      !labValue.toLowerCase().includes('value') &&
+                  // Check if this is a metadata field we should skip
+                  const isMetadata = metadataFields.some(field =>
+                    labName.toLowerCase().includes(field)
+                  );
+
+                  // Skip if it's metadata, header text, or just a number
+                  if (!isMetadata &&
+                      labName &&
+                      labValue &&
+                      !labName.match(/^[0-9]+$/) && // Skip pure numbers
                       labName.length < 50 &&
                       labValue.length < 100) {
 
