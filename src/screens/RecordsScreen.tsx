@@ -243,42 +243,66 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       if (record.specialty?.toLowerCase().includes('lab') || record.specialty === 'Lab') {
         // Parse lab values from summary if they exist
         if (record.summary) {
-          console.log('📊 Parsing lab summary:', record.summary.substring(0, 100));
+          console.log('📊 Parsing lab summary');
           const lines = record.summary.split('\n');
-          lines.forEach(line => {
-            // Look for patterns like:
-            // "Lab Name: value units"
-            // "- Test: result"
-            // "Test Name | value"
+
+          // Parse Markdown tables: | Name | Value |
+          let inTable = false;
+          let headerFound = false;
+
+          lines.forEach((line, idx) => {
             const cleanLine = line.trim();
 
-            // Try different patterns
-            let match = cleanLine.match(/^[\-•]?\s*([^:]+):\s*(.+)$/);
-            if (!match) match = cleanLine.match(/^([^|]+)\|\s*(.+)$/);
+            // Detect table start
+            if (cleanLine.startsWith('|') && cleanLine.endsWith('|')) {
+              // Check if this looks like a header separator row (|---|---|)
+              if (cleanLine.includes('---')) {
+                headerFound = true;
+                inTable = true;
+                return;
+              }
 
-            if (match) {
-              let [, name, value] = match;
-              const labName = name.trim().replace(/^[\-•]\s*/, '');
-              const labValue = value.trim();
+              // If we're in a table and past the header, parse data rows
+              if (headerFound && !cleanLine.includes('---')) {
+                // Split by pipe and extract values
+                const cells = cleanLine.split('|').map(c => c.trim()).filter(c => c && c !== '---');
 
-              // Only accept reasonable lab names and values
-              if (labName && labValue && labName.length < 50 && labValue.length < 100) {
-                if (!labMap.has(labName)) {
-                  labMap.set(labName, {
-                    value: labValue,
-                    date: record.uploadDate,
-                    history: [{ value: labValue, date: record.uploadDate }],
-                  });
-                  console.log(`✅ Found lab: ${labName} = ${labValue}`);
-                } else {
-                  const existing = labMap.get(labName)!;
-                  existing.history.push({ value: labValue, date: record.uploadDate });
-                  // Keep the most recent
-                  if (new Date(record.uploadDate) > new Date(existing.date)) {
-                    existing.value = labValue;
-                    existing.date = record.uploadDate;
+                if (cells.length >= 2) {
+                  // First cell is usually the lab name, second is the value
+                  const labName = cells[0];
+                  const labValue = cells[1];
+
+                  // Skip header rows and meta info
+                  if (labName && labValue &&
+                      !labName.toLowerCase().includes('field') &&
+                      !labName.toLowerCase().includes('test') &&
+                      !labValue.toLowerCase().includes('value') &&
+                      labName.length < 50 &&
+                      labValue.length < 100) {
+
+                    if (!labMap.has(labName)) {
+                      labMap.set(labName, {
+                        value: labValue,
+                        date: record.uploadDate,
+                        history: [{ value: labValue, date: record.uploadDate }],
+                      });
+                      console.log(`✅ Found lab: ${labName} = ${labValue}`);
+                    } else {
+                      const existing = labMap.get(labName)!;
+                      existing.history.push({ value: labValue, date: record.uploadDate });
+                      if (new Date(record.uploadDate) > new Date(existing.date)) {
+                        existing.value = labValue;
+                        existing.date = record.uploadDate;
+                      }
+                    }
                   }
                 }
+              }
+            } else if (cleanLine && !cleanLine.startsWith('#') && !cleanLine.startsWith('-')) {
+              // Reset table mode if we hit non-table content
+              if (inTable && !cleanLine.startsWith('|')) {
+                inTable = false;
+                headerFound = false;
               }
             }
           });
