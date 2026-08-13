@@ -3,7 +3,10 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { photoStorageService, StoredPhoto } from './photoStorageService';
 
-const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://easymedical-backend-new-production.up.railway.app';
+
+// Log backend URL on startup
+console.log(`🌐 Backend URL configured: ${BACKEND_URL}`);
 
 export interface AnalysisResult {
   success: boolean;
@@ -168,34 +171,50 @@ export const cameraService = {
       console.log(`🌐 Calling backend: ${url}`);
       console.log(`📦 Payload: ${base64Images.length} images, recordType: ${recordType}`);
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          images: base64Images,
-          recordType: recordType,
-        }),
-      });
+      let response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            images: base64Images,
+            recordType: recordType,
+          }),
+        });
+      } catch (fetchError) {
+        console.error(`❌ Network error calling backend:`, fetchError);
+        return {
+          success: false,
+          error: `Network error: ${fetchError instanceof Error ? fetchError.message : 'Failed to connect to backend'}. Check if backend is running at ${BACKEND_URL}`,
+        };
+      }
 
       if (!response.ok) {
-        const errorText = await response.text();
+        let errorText = '';
+        try {
+          errorText = await response.text();
+        } catch (e) {
+          errorText = 'Unable to read error response';
+        }
         console.error(`❌ Backend returned ${response.status}:`, errorText);
         return {
           success: false,
-          error: `Backend error ${response.status}: ${errorText}`,
+          error: `Backend error ${response.status}: ${errorText || 'No response body'}`,
         };
       }
 
       const result = await response.json();
+      console.log('✅ Backend analysis successful');
       return {
         success: true,
         data: result,
       };
     } catch (error) {
-      console.error('Error analyzing health record:', error);
+      console.error('❌ Error analyzing health record:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
+        error: `Analysis error: ${errorMsg}`,
       };
     }
   },
