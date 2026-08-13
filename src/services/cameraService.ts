@@ -1,6 +1,7 @@
 import * as Camera from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { photoStorageService, StoredPhoto } from './photoStorageService';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://easymedical-backend-new-production.up.railway.app';
@@ -158,9 +159,15 @@ export const cameraService = {
       // Convert single URI to array for consistent processing
       const uriArray = Array.isArray(imageUris) ? imageUris : [imageUris];
 
+      // Compress images before converting to base64 to avoid payload size limits
+      console.log(`📸 Compressing ${uriArray.length} image(s) before encoding...`);
+      const compressedUris = await Promise.all(
+        uriArray.map(uri => this.compressImage(uri))
+      );
+
       // Convert all images to base64
       const base64Images = await Promise.all(
-        uriArray.map(uri => this.imageUriToBase64(uri))
+        compressedUris.map(uri => this.imageUriToBase64(uri))
       );
 
       if (base64Images.some(b64 => !b64)) {
@@ -259,6 +266,34 @@ export const cameraService = {
     } catch (error) {
       console.error('Error capturing and saving photo:', error);
       throw error;
+    }
+  },
+
+  async compressImage(imageUri: string): Promise<string> {
+    try {
+      console.log(`🗜️ Compressing image: ${imageUri}`);
+
+      // Get original file size
+      const originalInfo = await FileSystem.getInfoAsync(imageUri);
+      const originalSizeMB = (originalInfo.size! / 1024 / 1024).toFixed(2);
+      console.log(`📏 Original file size: ${originalSizeMB} MB`);
+
+      // Resize and compress image using ImageManipulator
+      const manipResult = await ImageManipulator.manipulateAsync(
+        imageUri,
+        [{ resize: { width: 1200, height: 1600 } }], // Resize to reasonable size
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } // Compress to 60% quality
+      );
+
+      // Get compressed file size
+      const compressedInfo = await FileSystem.getInfoAsync(manipResult.uri);
+      const compressedSizeMB = (compressedInfo.size! / 1024 / 1024).toFixed(2);
+      console.log(`✅ Compressed from ${originalSizeMB}MB to ${compressedSizeMB}MB`);
+
+      return manipResult.uri;
+    } catch (error) {
+      console.warn(`⚠️ Compression failed, using original:`, error);
+      return imageUri;
     }
   },
 
