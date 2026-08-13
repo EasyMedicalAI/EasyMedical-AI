@@ -171,10 +171,15 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   };
 
   const getOrganizedRecords = () => {
-    // Group records by specialty (only uploaded records)
+    // Group records by specialty (only uploaded records, excluding Lab records which go to My Labs)
     const recordsBySpecialty: Record<string, typeof records> = {};
 
     records.forEach(record => {
+      // Skip lab records - they're shown in My Labs section instead
+      if (record.specialty?.toLowerCase().includes('lab') || record.specialty === 'Lab') {
+        return;
+      }
+
       if (!recordsBySpecialty[record.specialty]) {
         recordsBySpecialty[record.specialty] = [];
       }
