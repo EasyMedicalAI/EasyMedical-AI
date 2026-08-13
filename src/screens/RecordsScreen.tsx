@@ -256,6 +256,8 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     records.forEach(record => {
       if (record.specialty?.toLowerCase().includes('lab') || record.specialty === 'Lab') {
         if (record.summary) {
+          console.log(`📋 Processing lab record with ${record.summary.split('\n').length} lines`);
+          console.log(`📄 Full summary length: ${record.summary.length} characters`);
           const lines = record.summary.split('\n');
 
           for (let i = 0; i < lines.length; i++) {
