@@ -235,6 +235,55 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     ? []
     : records.filter(record => selectedSpecialties.includes(record.specialty));
 
+  // Extract lab values from records
+  const getLabValues = () => {
+    const labMap = new Map<string, { value: string; date: string; history: Array<{ value: string; date: string }> }>();
+
+    records.forEach(record => {
+      if (record.specialty?.toLowerCase().includes('lab') || record.specialty === 'Lab') {
+        // Parse lab values from summary if they exist
+        if (record.summary) {
+          const lines = record.summary.split('\n');
+          lines.forEach(line => {
+            // Look for patterns like "Lab Name: value units" or "Test: result"
+            const match = line.match(/^([^:]+):\s*(.+)$/);
+            if (match) {
+              const [, name, value] = match;
+              const labName = name.trim();
+              const labValue = value.trim();
+
+              if (labName && labValue && labName.length < 50 && labValue.length < 50) {
+                if (!labMap.has(labName)) {
+                  labMap.set(labName, {
+                    value: labValue,
+                    date: record.uploadDate,
+                    history: [{ value: labValue, date: record.uploadDate }],
+                  });
+                } else {
+                  const existing = labMap.get(labName)!;
+                  existing.history.push({ value: labValue, date: record.uploadDate });
+                  // Keep the most recent
+                  if (new Date(record.uploadDate) > new Date(existing.date)) {
+                    existing.value = labValue;
+                    existing.date = record.uploadDate;
+                  }
+                }
+              }
+            }
+          });
+        }
+      }
+    });
+
+    return Array.from(labMap.entries()).map(([name, data]) => ({
+      name,
+      ...data,
+    }));
+  };
+
+  const labValues = getLabValues();
+  const [selectedLabName, setSelectedLabName] = useState<string | null>(null);
+
   const handleTakePhoto = async () => {
     if (!ImagePicker) {
       Alert.alert('Error', 'Camera not available');
@@ -583,6 +632,28 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               );
             })}
           </ScrollView>
+        </View>
+      )}
+
+      {/* My Labs Section */}
+      {labValues.length > 0 && (
+        <View style={styles.myLabsSection}>
+          <Text style={styles.sectionTitle}>🧬 My Labs</Text>
+          <View style={styles.labsGrid}>
+            {labValues.map(lab => (
+              <TouchableOpacity
+                key={lab.name}
+                style={styles.labCard}
+                onPress={() => setSelectedLabName(lab.name)}
+              >
+                <Text style={styles.labName}>{lab.name}</Text>
+                <Text style={styles.labValue}>{lab.value}</Text>
+                <Text style={styles.labDate}>
+                  {new Date(lab.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       )}
 
@@ -1376,6 +1447,45 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         </View>
       </Modal>
 
+      {/* Lab History Modal */}
+      <Modal visible={selectedLabName !== null} animationType="slide" onRequestClose={() => setSelectedLabName(null)}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setSelectedLabName(null)}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>
+              {selectedLabName ? `${selectedLabName} History` : 'Lab History'}
+            </Text>
+            <View style={{ width: 24 }} />
+          </View>
+
+          {selectedLabName && (
+            <ScrollView style={styles.labHistoryScrollView}>
+              <View style={styles.labHistoryContent}>
+                {labValues
+                  .find(lab => lab.name === selectedLabName)
+                  ?.history.sort(
+                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                  )
+                  .map((entry, index) => (
+                    <View key={index} style={styles.labHistoryItem}>
+                      <Text style={styles.labHistoryValue}>{entry.value}</Text>
+                      <Text style={styles.labHistoryDate}>
+                        {new Date(entry.date).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })}
+                      </Text>
+                    </View>
+                  ))}
+              </View>
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
+
       {/* Metric Detail Overlay */}
       {selectedMetricName && (
         <View style={styles.metricDetailOverlay}>
@@ -1466,6 +1576,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
+  },
+  myLabsSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    paddingTop: 24,
+  },
+  labsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 12,
+  },
+  labCard: {
+    flex: 1,
+    minWidth: 140,
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: '#F0F8FF',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    alignItems: 'center',
+  },
+  labName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0051BA',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  labValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#007AFF',
+    marginBottom: 6,
+  },
+  labDate: {
+    fontSize: 11,
+    color: '#666',
+  },
+  labHistoryScrollView: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+  labHistoryContent: {
+    gap: 12,
+  },
+  labHistoryItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 10,
+    backgroundColor: '#F0F8FF',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  labHistoryValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#007AFF',
+    marginBottom: 6,
+  },
+  labHistoryDate: {
+    fontSize: 12,
+    color: '#666',
   },
   uploadRecordsSection: {
     paddingHorizontal: 20,
