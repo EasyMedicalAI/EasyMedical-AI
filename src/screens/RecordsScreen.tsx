@@ -313,6 +313,13 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 console.log(`    ❌ Rejected: ${labName} = ${cleanValue} [${reasons.join(', ')}]`);
               }
 
+              // Special case: accept index | test name format (e.g., "1" = "Glucose")
+              // This happens when Claude extracts test names from the table
+              const isTestNameFormat = labName.match(/^[0-9]+$/) &&
+                                      cleanValue.length > 2 &&
+                                      cleanValue.length < 60 &&
+                                      !metadataFields.has(cleanValue.toLowerCase());
+
               if (!isMetadata &&
                   labName &&
                   labName !== 'Test' &&
@@ -320,10 +327,11 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                   cleanValue &&
                   cleanValue !== 'Value' &&
                   cleanValue !== 'Result' &&
-                  !labName.match(/^[0-9]+$/) &&
-                  labName.length > 2 &&
-                  labName.length < 60 &&
-                  cleanValue.length < 100) {
+                  ((!labName.match(/^[0-9]+$/) &&
+                    labName.length > 2 &&
+                    labName.length < 60 &&
+                    cleanValue.length < 100) ||
+                   isTestNameFormat)) {
 
                 if (!labMap.has(labName)) {
                   labMap.set(labName, {
