@@ -243,22 +243,33 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       if (record.specialty?.toLowerCase().includes('lab') || record.specialty === 'Lab') {
         // Parse lab values from summary if they exist
         if (record.summary) {
+          console.log('📊 Parsing lab summary:', record.summary.substring(0, 100));
           const lines = record.summary.split('\n');
           lines.forEach(line => {
-            // Look for patterns like "Lab Name: value units" or "Test: result"
-            const match = line.match(/^([^:]+):\s*(.+)$/);
+            // Look for patterns like:
+            // "Lab Name: value units"
+            // "- Test: result"
+            // "Test Name | value"
+            const cleanLine = line.trim();
+
+            // Try different patterns
+            let match = cleanLine.match(/^[\-•]?\s*([^:]+):\s*(.+)$/);
+            if (!match) match = cleanLine.match(/^([^|]+)\|\s*(.+)$/);
+
             if (match) {
-              const [, name, value] = match;
-              const labName = name.trim();
+              let [, name, value] = match;
+              const labName = name.trim().replace(/^[\-•]\s*/, '');
               const labValue = value.trim();
 
-              if (labName && labValue && labName.length < 50 && labValue.length < 50) {
+              // Only accept reasonable lab names and values
+              if (labName && labValue && labName.length < 50 && labValue.length < 100) {
                 if (!labMap.has(labName)) {
                   labMap.set(labName, {
                     value: labValue,
                     date: record.uploadDate,
                     history: [{ value: labValue, date: record.uploadDate }],
                   });
+                  console.log(`✅ Found lab: ${labName} = ${labValue}`);
                 } else {
                   const existing = labMap.get(labName)!;
                   existing.history.push({ value: labValue, date: record.uploadDate });
@@ -275,10 +286,13 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       }
     });
 
-    return Array.from(labMap.entries()).map(([name, data]) => ({
+    const result = Array.from(labMap.entries()).map(([name, data]) => ({
       name,
       ...data,
     }));
+
+    console.log(`🧬 Found ${result.length} unique lab values`);
+    return result;
   };
 
   const labValues = getLabValues();
