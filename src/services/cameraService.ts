@@ -271,28 +271,44 @@ export const cameraService = {
 
   async compressImage(imageUri: string): Promise<string> {
     try {
-      console.log(`🗜️ Compressing image: ${imageUri}`);
+      console.log(`🗜️ Starting image compression: ${imageUri}`);
 
       // Get original file size
       const originalInfo = await FileSystem.getInfoAsync(imageUri);
-      const originalSizeMB = (originalInfo.size! / 1024 / 1024).toFixed(2);
+      if (!originalInfo.size) {
+        console.warn(`⚠️ Could not get file size, skipping compression`);
+        return imageUri;
+      }
+
+      const originalSizeMB = (originalInfo.size / 1024 / 1024).toFixed(2);
       console.log(`📏 Original file size: ${originalSizeMB} MB`);
+
+      // For very large images, use more aggressive compression
+      const compress = originalInfo.size > 5 * 1024 * 1024 ? 0.3 : 0.5; // 30% for large, 50% for normal
+      const width = originalInfo.size > 5 * 1024 * 1024 ? 800 : 1200; // Smaller width for large images
+
+      console.log(`🔧 Using compression: ${compress}, width: ${width}px`);
 
       // Resize and compress image using ImageManipulator
       const manipResult = await ImageManipulator.manipulateAsync(
         imageUri,
-        [{ resize: { width: 1200, height: 1600 } }], // Resize to reasonable size
-        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } // Compress to 60% quality
+        [{ resize: { width, height: Math.round(width * 1.33) } }],
+        { compress, format: ImageManipulator.SaveFormat.JPEG }
       );
+
+      console.log(`✅ Compression complete: ${manipResult.uri}`);
 
       // Get compressed file size
       const compressedInfo = await FileSystem.getInfoAsync(manipResult.uri);
-      const compressedSizeMB = (compressedInfo.size! / 1024 / 1024).toFixed(2);
-      console.log(`✅ Compressed from ${originalSizeMB}MB to ${compressedSizeMB}MB`);
+      if (compressedInfo.size) {
+        const compressedSizeMB = (compressedInfo.size / 1024 / 1024).toFixed(2);
+        console.log(`📊 Compressed from ${originalSizeMB}MB to ${compressedSizeMB}MB`);
+      }
 
       return manipResult.uri;
     } catch (error) {
-      console.warn(`⚠️ Compression failed, using original:`, error);
+      console.error(`❌ Compression error:`, error);
+      console.warn(`⚠️ Falling back to original image`);
       return imageUri;
     }
   },
