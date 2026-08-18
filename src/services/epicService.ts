@@ -2,6 +2,7 @@
 // Epic Sandbox: https://fhir.epic.com/interconnect-fhir-oauth
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Linking from 'expo-linking';
 import Constants from 'expo-constants';
 import { MedicalRecord } from '../types/medical';
 
@@ -60,6 +61,86 @@ export interface Condition {
 class EpicService {
   private patientId = DEFAULT_TEST_PATIENT_ID; // Default Epic sandbox test patient
   private accessToken: string | null = null;
+
+  async initializeFromStorage(): Promise<void> {
+    try {
+      const token = await AsyncStorage.getItem('epic_access_token');
+      if (token) {
+        this.accessToken = token;
+        console.log('✅ Loaded Epic access token from storage');
+      }
+    } catch (error) {
+      console.error('Error loading Epic token:', error);
+    }
+  }
+
+  async isConnected(): Promise<boolean> {
+    try {
+      const token = await AsyncStorage.getItem('epic_access_token');
+      return !!token;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async initiateOAuth(): Promise<void> {
+    try {
+      console.log('🔐 Initiating Epic OAuth flow...');
+      console.log('Opening OAuth URL:', OAUTH_AUTHORIZE_URL);
+
+      // Open the OAuth authorization URL
+      await Linking.openURL(OAUTH_AUTHORIZE_URL);
+    } catch (error) {
+      console.error('Error initiating OAuth:', error);
+      throw new Error('Failed to open Epic authorization. Please check your connection.');
+    }
+  }
+
+  async handleOAuthCallback(url: string): Promise<boolean> {
+    try {
+      console.log('📱 Handling OAuth callback:', url);
+
+      // Check if this is an Epic callback
+      if (!url.includes('state=')) {
+        return false;
+      }
+
+      // Extract the state parameter from the URL
+      const stateMatch = url.match(/state=([^&]+)/);
+      if (!stateMatch) {
+        console.warn('No state parameter in callback URL');
+        return false;
+      }
+
+      const state = stateMatch[1];
+      console.log('🔍 Extracted state:', state);
+
+      // Exchange state for access token from backend
+      const tokenResponse = await fetch(`${BACKEND_URL}/api/auth/epic/token/${state}`);
+
+      if (!tokenResponse.ok) {
+        const error = await tokenResponse.json();
+        console.error('Failed to get token:', error);
+        throw new Error(error.error || 'Failed to get access token');
+      }
+
+      const tokenData = await tokenResponse.json();
+      const accessToken = tokenData.access_token;
+
+      // Store the token
+      await AsyncStorage.setItem('epic_access_token', accessToken);
+      await AsyncStorage.setItem('epic_connected', 'true');
+
+      // Set the token in this service
+      this.accessToken = accessToken;
+
+      console.log('✅ Successfully authenticated with Epic!');
+      return true;
+    } catch (error) {
+      console.error('Error handling OAuth callback:', error);
+      return false;
+    }
+  }
 
   setPatientId(id: string) {
     this.patientId = id;
@@ -582,12 +663,68 @@ class EpicService {
     return records;
   }
 
+  async generateAuthorizationUrl(): Promise<{ url: string; state: string }> {
+    try {
+      // Generate a random state for security
+      const state = this.generateRandomString(32);
+
+      // Save state for later verification
+      await AsyncStorage.setItem('oauth_state', state);
+
+      const authUrl = OAUTH_AUTHORIZE_URL;
+      console.log('✅ Generated authorization URL with state:', state);
+
+      return { url: authUrl, state };
+    } catch (error) {
+      console.error('Error generating authorization URL:', error);
+      throw error;
+    }
+  }
+
+  async retrieveTokenByState(state: string): Promise<string | null> {
+    try {
+      console.log('🔍 Retrieving token for state:', state);
+
+      const response = await fetch(`${BACKEND_URL}/api/auth/epic/token/${state}`);
+
+      if (!response.ok) {
+        console.error('Token retrieval failed with status:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+      console.log('✅ Token retrieved from backend');
+
+      return data.access_token;
+    } catch (error) {
+      console.error('Error retrieving token:', error);
+      return null;
+    }
+  }
+
+  async handleOAuthCallback(token: string): Promise<void> {
+    try {
+      // Store the token
+      await AsyncStorage.setItem('epic_access_token', token);
+      await AsyncStorage.setItem('epic_connected', 'true');
+
+      // Set the token in this service
+      this.accessToken = token;
+
+      console.log('✅ Epic OAuth token saved successfully');
+    } catch (error) {
+      console.error('Error saving token:', error);
+      throw error;
+    }
+  }
+
   async disconnect(): Promise<void> {
     try {
       await AsyncStorage.removeItem('epic_access_token');
       await AsyncStorage.removeItem('epic_connected');
       await AsyncStorage.removeItem('oauth_state');
       this.accessToken = null;
+      console.log('✅ Disconnected from Epic');
     } catch (error) {
       console.error('Error disconnecting:', error);
     }
