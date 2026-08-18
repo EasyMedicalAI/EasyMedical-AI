@@ -86,9 +86,10 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
   const [recordText, setRecordText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadMode, setUploadMode] = useState<'method' | 'text' | 'photo'>('method');
+  const [uploadMode, setUploadMode] = useState<'method' | 'text' | 'photo' | 'photo-review'>('method');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoMediaType, setPhotoMediaType] = useState<string>('image/jpeg');
+  const [selectedPhotos, setSelectedPhotos] = useState<Array<{ uri: string; mediaType: string }>>([]);
   const [doctorName, setDoctorName] = useState('');
   const [appointmentDate, setAppointmentDate] = useState('');
   const [appointmentSummary, setAppointmentSummary] = useState('');
@@ -456,12 +457,43 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
       if (!result.canceled && result.assets[0]) {
         const uri = result.assets[0].uri;
+        const mediaType = getMediaTypeFromUri(uri, result.assets[0].type);
         setPhotoUri(uri);
-        setPhotoMediaType(getMediaTypeFromUri(uri, result.assets[0].type));
-        setUploadMode('photo');
+        setPhotoMediaType(mediaType);
+        setSelectedPhotos([{ uri, mediaType }]);
+        setUploadMode('photo-review');
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to access camera: ' + String(error));
+    }
+  };
+
+  const handleAddAnotherPhoto = async () => {
+    if (!ImagePicker) {
+      Alert.alert('Error', 'Photo library not available');
+      return;
+    }
+
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Photo library permission is required');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri;
+        const mediaType = getMediaTypeFromUri(uri, result.assets[0].type);
+        // Add to existing photos
+        setSelectedPhotos([...selectedPhotos, { uri, mediaType }]);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add photo: ' + String(error));
     }
   };
 
@@ -486,9 +518,11 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
       if (!result.canceled && result.assets[0]) {
         const uri = result.assets[0].uri;
+        const mediaType = getMediaTypeFromUri(uri, result.assets[0].type);
         setPhotoUri(uri);
-        setPhotoMediaType(getMediaTypeFromUri(uri, result.assets[0].type));
-        setUploadMode('photo');
+        setPhotoMediaType(mediaType);
+        setSelectedPhotos([{ uri, mediaType }]);
+        setUploadMode('photo-review');
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to access photo library: ' + String(error));
@@ -496,7 +530,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   };
 
   const handleUploadPhoto = async () => {
-    if (!uploadingSpecialty || !photoUri) {
+    if (!uploadingSpecialty || selectedPhotos.length === 0) {
       Alert.alert('Error', 'Please select a photo');
       return;
     }
@@ -505,23 +539,29 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     try {
       const recordId = generateUUID();
 
-      // Convert HEIC images to JPEG if needed
-      let imageUri = photoUri;
-      const needsConversion =
-        photoMediaType.includes('heic') ||
-        photoMediaType.includes('heif');
+      // Process all selected photos
+      const processedUris: string[] = [];
 
-      if (needsConversion) {
-        console.log(`🔄 Converting image (type: ${photoMediaType}) from ${photoUri} to JPEG...`);
-        imageUri = await convertHeicToJpeg(photoUri);
-        console.log(`✓ Conversion complete. New URI: ${imageUri}`);
-      } else {
-        console.log(`📷 Using image as-is (type: ${photoMediaType})`);
+      for (const photo of selectedPhotos) {
+        let imageUri = photo.uri;
+        const needsConversion =
+          photo.mediaType.includes('heic') ||
+          photo.mediaType.includes('heif');
+
+        if (needsConversion) {
+          console.log(`🔄 Converting image (type: ${photo.mediaType}) from ${photo.uri} to JPEG...`);
+          imageUri = await convertHeicToJpeg(photo.uri);
+          console.log(`✓ Conversion complete. New URI: ${imageUri}`);
+        } else {
+          console.log(`📷 Using image as-is (type: ${photo.mediaType})`);
+        }
+
+        processedUris.push(imageUri);
       }
 
-      // Convert photo to base64 for analysis
-      console.log(`📊 Reading image as base64 from: ${imageUri}`);
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
+      // Convert first photo to base64 for analysis
+      console.log(`📊 Reading image as base64 from: ${processedUris[0]}`);
+      const base64 = await FileSystem.readAsStringAsync(processedUris[0], {
         encoding: FileSystem.EncodingType.Base64,
       });
       console.log(`✓ Base64 read successful. Length: ${base64.length} characters`);
@@ -531,9 +571,9 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                    uploadingSpecialty?.toLowerCase().includes('pathology');
       const recordType = isLab ? 'lab' : 'other';
 
-      // Analyze using backend endpoint (supports multiple images and different record types)
+      // Analyze using backend endpoint
       console.log(`🤖 Sending to backend for analysis (recordType: ${recordType})...`);
-      const analysisResult = await cameraService.analyzeHealthRecord(imageUri, recordType);
+      const analysisResult = await cameraService.analyzeHealthRecord(processedUris[0], recordType);
 
       if (!analysisResult.success) {
         throw new Error(analysisResult.error || 'Failed to analyze record');
@@ -564,7 +604,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         id: recordId,
         uploadDate: new Date().toISOString(),
         appointmentDate: new Date().toISOString(),
-        imageUri: photoUri,
+        imageUri: processedUris[0],
         originalText: analysisResult.data?.analysis || '',
         specialty: uploadingSpecialty,
         provider: 'Unknown',
@@ -579,8 +619,9 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
       setUploadingSpecialty(null);
       setPhotoUri(null);
+      setSelectedPhotos([]);
       setUploadMode('method');
-      Alert.alert('Success', 'Record added from photo analysis!');
+      Alert.alert('Success', `Record${selectedPhotos.length > 1 ? 's' : ''} added from photo analysis!`);
     } catch (error) {
       // Get detailed error information
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -848,6 +889,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         setUploadingSpecialty(null);
         setRecordText('');
         setPhotoUri(null);
+        setSelectedPhotos([]);
         setUploadMode('method');
       }}>
         <KeyboardAvoidingView
@@ -860,6 +902,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               setUploadingSpecialty(null);
               setRecordText('');
               setPhotoUri(null);
+              setSelectedPhotos([]);
               setUploadMode('method');
             }}>
               <Text style={styles.closeButton}>✕</Text>
@@ -1030,30 +1073,62 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               </>
             )}
 
-            {uploadMode === 'photo' && photoUri && (
+            {uploadMode === 'photo-review' && selectedPhotos.length > 0 && (
               <>
-                <Text style={styles.label}>Preview Your Document</Text>
-                <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="contain" />
-                <Text style={styles.sublabel}>Claude will analyze this image to extract medical information</Text>
+                <Text style={styles.label}>Review Photos ({selectedPhotos.length})</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoCarousel}>
+                  {selectedPhotos.map((photo, index) => (
+                    <View key={index} style={styles.photoItem}>
+                      <Image source={{ uri: photo.uri }} style={styles.photoPreviewLarge} resizeMode="contain" />
+                      <Text style={styles.photoIndex}>Photo {index + 1}</Text>
+                    </View>
+                  ))}
+                </ScrollView>
+
+                <Text style={styles.sublabel}>Claude will analyze these images to extract medical information</Text>
+
+                <View style={styles.photoReviewButtons}>
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
+                    onPress={handleAddAnotherPhoto}
+                  >
+                    <Text style={styles.secondaryButtonText}>+ Add Another Photo</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.primaryButton, isUploading && styles.buttonDisabled]}
+                    onPress={handleUploadPhoto}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Upload</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.addButton, isUploading && styles.buttonDisabled]}
+                    onPress={handleUploadPhoto}
+                    disabled={isUploading}
+                  >
+                    {isUploading ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <Text style={styles.addButtonText}>Add to My Team Now</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
                 <TouchableOpacity
                   style={styles.backButton}
                   onPress={() => {
                     setUploadMode('method');
                     setPhotoUri(null);
+                    setSelectedPhotos([]);
                   }}
                 >
                   <Text style={styles.backButtonText}>← Back</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.addButton, isUploading && styles.buttonDisabled]}
-                  onPress={handleUploadPhoto}
-                  disabled={isUploading}
-                >
-                  {isUploading ? (
-                    <ActivityIndicator color="#FFF" />
-                  ) : (
-                    <Text style={styles.addButtonText}>Add to My Team</Text>
-                  )}
                 </TouchableOpacity>
               </>
             )}
@@ -2207,6 +2282,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
+  },
+  photoCarousel: {
+    marginVertical: 16,
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
+  },
+  photoItem: {
+    marginRight: 12,
+    alignItems: 'center',
+  },
+  photoPreviewLarge: {
+    width: 200,
+    height: 250,
+    borderRadius: 12,
+    backgroundColor: '#F0F0F0',
+    borderWidth: 1,
+    borderColor: '#DDD',
+  },
+  photoIndex: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+  },
+  photoReviewButtons: {
+    gap: 12,
+    marginVertical: 16,
+  },
+  primaryButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  secondaryButton: {
+    backgroundColor: '#FFF',
+    borderWidth: 2,
+    borderColor: '#007AFF',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
   },
   methodButton: {
     backgroundColor: '#FFF',
