@@ -786,6 +786,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               >
                 <Text style={styles.labName}>{lab.name}</Text>
                 <Text style={styles.labValue}>{lab.value}</Text>
+                {lab.range && <Text style={styles.labRange}>Normal: {lab.range}</Text>}
                 <Text style={styles.labDate}>
                   {new Date(lab.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </Text>
@@ -1630,15 +1631,14 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                           <Text style={styles.labDetailTrend}>{trend}</Text>
                         </View>
                         <Text style={styles.labDetailTrendLabel}>{trendLabel}</Text>
-                      </View>
 
-                      {/* Reference Range Section */}
-                      {lab.range && (
-                        <View style={styles.labDetailRangeSection}>
-                          <Text style={styles.labDetailLabel}>Normal Range</Text>
-                          <Text style={styles.labDetailRange}>{lab.range}</Text>
-                        </View>
-                      )}
+                        {lab.range && (
+                          <View style={styles.labDetailRangeInline}>
+                            <Text style={styles.labDetailRangeLabel}>Normal Range:</Text>
+                            <Text style={styles.labDetailRangeValue}>{lab.range}</Text>
+                          </View>
+                        )}
+                      </View>
 
                       {/* History Section */}
                       <View style={styles.labDetailHistorySection}>
@@ -1798,6 +1798,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#666',
   },
+  labRange: {
+    fontSize: 10,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
   labHistoryScrollView: {
     flex: 1,
     paddingHorizontal: 20,
@@ -1853,6 +1859,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#0051BA',
     fontWeight: '500',
+  },
+  labDetailRangeInline: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 81, 186, 0.2)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  labDetailRangeLabel: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  labDetailRangeValue: {
+    fontSize: 12,
+    color: '#0051BA',
+    fontWeight: '600',
   },
   labDetailLabel: {
     fontSize: 14,
