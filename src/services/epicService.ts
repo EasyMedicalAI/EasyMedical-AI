@@ -534,6 +534,30 @@ class EpicService {
     }
   }
 
+  // Initialize service with stored access token
+  async initializeWithStoredToken(): Promise<boolean> {
+    try {
+      const token = await AsyncStorage.getItem('epic_access_token');
+      if (token) {
+        this.setAccessToken(token);
+
+        // Also load the saved patient ID if available
+        const patientId = await AsyncStorage.getItem('epic_patient_id');
+        if (patientId) {
+          this.setPatientId(patientId);
+          console.log('✅ Loaded patient ID:', patientId);
+        }
+
+        console.log('✅ Loaded Epic access token from storage');
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error initializing with stored token:', error);
+      return false;
+    }
+  }
+
   // Helper to generate random string for state parameter
   private generateRandomString(length: number): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
