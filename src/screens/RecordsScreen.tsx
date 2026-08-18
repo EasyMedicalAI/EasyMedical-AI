@@ -618,14 +618,21 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
       let doctorName = 'Unknown';
       let reasonForVisit = '';
+      let appointmentDateISO = new Date().toISOString(); // Fallback to current date
 
       if (!isLab && analysisResult.data?.analysis) {
-        // For non-lab records, extract doctor name, reason, and summary from Claude's formatted response
+        // For non-lab records, extract appointment date, doctor name, reason, and summary from Claude's formatted response
         const analysis = analysisResult.data.analysis;
+        const dateMatch = analysis.match(/APPOINTMENT\s+DATE:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
         const doctorMatch = analysis.match(/DOCTOR:\s*(.+?)(?:\n|$)/i);
         const reasonMatch = analysis.match(/REASON:\s*(.+?)(?:\n|$)/i);
         const summaryMatch = analysis.match(/SUMMARY:\s*(.+?)(?:KEY POINTS|$)/is);
 
+        if (dateMatch) {
+          const [, month, day, year] = dateMatch;
+          appointmentDateISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
+          console.log(`📅 Extracted appointment date: ${dateMatch[0]} → ${appointmentDateISO}`);
+        }
         if (doctorMatch) {
           doctorName = doctorMatch[1].trim();
           console.log(`👨‍⚕️ Extracted doctor: ${doctorName}`);
@@ -645,7 +652,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       await addRecord({
         id: recordId,
         uploadDate: new Date().toISOString(),
-        appointmentDate: new Date().toISOString(),
+        appointmentDate: appointmentDateISO,
         imageUri: processedUris[0],
         originalText: analysisResult.data?.analysis || '',
         specialty: uploadingSpecialty,
