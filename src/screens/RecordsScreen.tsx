@@ -616,14 +616,23 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       let summary = 'Medical record';
       let title = uploadingSpecialty || 'Record';
 
+      let doctorName = 'Unknown';
+      let reasonForVisit = '';
+
       if (!isLab && analysisResult.data?.analysis) {
-        // For non-lab records, extract title and summary from Claude's formatted response
+        // For non-lab records, extract doctor name, reason, and summary from Claude's formatted response
         const analysis = analysisResult.data.analysis;
-        const titleMatch = analysis.match(/TITLE:\s*(.+?)(?:\n|$)/i);
+        const doctorMatch = analysis.match(/DOCTOR:\s*(.+?)(?:\n|$)/i);
+        const reasonMatch = analysis.match(/REASON:\s*(.+?)(?:\n|$)/i);
         const summaryMatch = analysis.match(/SUMMARY:\s*(.+?)(?:KEY POINTS|$)/is);
 
-        if (titleMatch) {
-          title = titleMatch[1].trim();
+        if (doctorMatch) {
+          doctorName = doctorMatch[1].trim();
+          console.log(`👨‍⚕️ Extracted doctor: ${doctorName}`);
+        }
+        if (reasonMatch) {
+          reasonForVisit = reasonMatch[1].trim();
+          console.log(`📋 Extracted reason: ${reasonForVisit}`);
         }
         if (summaryMatch) {
           summary = summaryMatch[1].trim();
@@ -640,9 +649,9 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         imageUri: processedUris[0],
         originalText: analysisResult.data?.analysis || '',
         specialty: uploadingSpecialty,
-        provider: 'Unknown',
+        provider: doctorName,
         summary: summary,
-        reasonForVisit: !isLab ? summary : undefined,
+        reasonForVisit: reasonForVisit || summary,
         findings: analysisResult.data?.analysis,
         nextSteps: undefined,
         extractedData: { recordType, analysis: analysisResult.data?.analysis },
