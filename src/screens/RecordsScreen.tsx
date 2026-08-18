@@ -86,7 +86,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
   const [recordText, setRecordText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadMode, setUploadMode] = useState<'method' | 'text' | 'photo' | 'photo-review'>('method');
+  const [uploadMode, setUploadMode] = useState<'method' | 'text' | 'photo' | 'photo-review' | 'add-photo-method'>('method');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoMediaType, setPhotoMediaType] = useState<string>('image/jpeg');
   const [selectedPhotos, setSelectedPhotos] = useState<Array<{ uri: string; mediaType: string }>>([]);
@@ -468,7 +468,38 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     }
   };
 
-  const handleAddAnotherPhoto = async () => {
+  const handleTakeCameraPhotoForAdding = async () => {
+    if (!ImagePicker) {
+      Alert.alert('Error', 'Camera not available');
+      return;
+    }
+
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera permission is required to take photos');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const uri = result.assets[0].uri;
+        const mediaType = getMediaTypeFromUri(uri, result.assets[0].type);
+        // Add to existing photos
+        setSelectedPhotos([...selectedPhotos, { uri, mediaType }]);
+        // Go back to photo review
+        setUploadMode('photo-review');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to take photo: ' + String(error));
+    }
+  };
+
+  const handleAddPhotoFromLibrary = async () => {
     if (!ImagePicker) {
       Alert.alert('Error', 'Photo library not available');
       return;
@@ -491,6 +522,8 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         const mediaType = getMediaTypeFromUri(uri, result.assets[0].type);
         // Add to existing photos
         setSelectedPhotos([...selectedPhotos, { uri, mediaType }]);
+        // Go back to photo review
+        setUploadMode('photo-review');
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to add photo: ' + String(error));
@@ -1073,6 +1106,36 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               </>
             )}
 
+            {uploadMode === 'add-photo-method' && (
+              <>
+                <Text style={styles.label}>Add Another Photo</Text>
+                <Text style={styles.sublabel}>How would you like to add another photo?</Text>
+
+                <TouchableOpacity style={styles.methodButton} onPress={handleTakeCameraPhotoForAdding}>
+                  <Text style={styles.methodButtonIcon}>📷</Text>
+                  <View style={styles.methodButtonContent}>
+                    <Text style={styles.methodButtonText}>Take Photo</Text>
+                    <Text style={styles.methodButtonDesc}>Use camera to photograph document</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity style={styles.methodButton} onPress={handleAddPhotoFromLibrary}>
+                  <Text style={styles.methodButtonIcon}>🖼️</Text>
+                  <View style={styles.methodButtonContent}>
+                    <Text style={styles.methodButtonText}>Choose Photo</Text>
+                    <Text style={styles.methodButtonDesc}>Select from photo library</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => setUploadMode('photo-review')}
+                >
+                  <Text style={styles.backButtonText}>← Back</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
             {uploadMode === 'photo-review' && selectedPhotos.length > 0 && (
               <>
                 <Text style={styles.label}>Review Photos ({selectedPhotos.length})</Text>
@@ -1090,7 +1153,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 <View style={styles.photoReviewButtons}>
                   <TouchableOpacity
                     style={styles.secondaryButton}
-                    onPress={handleAddAnotherPhoto}
+                    onPress={() => setUploadMode('add-photo-method')}
                   >
                     <Text style={styles.secondaryButtonText}>+ Add Another Photo</Text>
                   </TouchableOpacity>
