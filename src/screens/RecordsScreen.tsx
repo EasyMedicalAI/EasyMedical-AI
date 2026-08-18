@@ -624,32 +624,52 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         // For non-lab records, extract appointment date, doctor name, reason, and summary from Claude's formatted response
         const analysis = analysisResult.data.analysis;
 
-        // Try multiple date formats
-        let dateMatch = analysis.match(/APPOINTMENT\s+DATE:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
-        if (!dateMatch) {
+        console.log(`🔍 Parsing analysis for appointment info...`);
+        console.log(`📝 Analysis length: ${analysis.length} chars`);
+
+        // Try multiple date formats - be very flexible
+        let dateMatch = null;
+        let dateFound = false;
+
+        // Format 1: APPOINTMENT DATE: MM/DD/YYYY
+        dateMatch = analysis.match(/APPOINTMENT\s+DATE:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+        if (dateMatch) {
+          dateFound = true;
+          const [, month, day, year] = dateMatch;
+          appointmentDateISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
+          console.log(`✅ Format 1 matched: ${dateMatch[0].trim()} → ${appointmentDateISO}`);
+        }
+
+        // Format 2: APPOINTMENT DATE: YYYY-MM-DD
+        if (!dateFound) {
           dateMatch = analysis.match(/APPOINTMENT\s+DATE:\s*(\d{4})-(\d{1,2})-(\d{1,2})/i);
           if (dateMatch) {
-            // Swap to [month, day, year] format
+            dateFound = true;
             const [, year, month, day] = dateMatch;
-            dateMatch = [dateMatch[0], month, day, year];
+            appointmentDateISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
+            console.log(`✅ Format 2 matched: ${dateMatch[0].trim()} → ${appointmentDateISO}`);
           }
         }
-        if (!dateMatch) {
-          dateMatch = analysis.match(/DATE[\s:]+([\d]{1,2})[\/\-]([\d]{1,2})[\/\-]([\d]{4})/i);
+
+        // Format 3: Any DATE line with numbers
+        if (!dateFound) {
+          dateMatch = analysis.match(/DATE[\s:]+(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/i);
+          if (dateMatch) {
+            dateFound = true;
+            const [, month, day, year] = dateMatch;
+            appointmentDateISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
+            console.log(`✅ Format 3 matched: ${dateMatch[0].trim()} → ${appointmentDateISO}`);
+          }
+        }
+
+        if (!dateFound) {
+          console.warn(`⚠️ No appointment date found in analysis. Showing upload date as fallback.`);
+          console.log(`📝 Full analysis:\n${analysis}`);
         }
 
         const doctorMatch = analysis.match(/DOCTOR:\s*(.+?)(?:\n|$)/i);
         const reasonMatch = analysis.match(/REASON:\s*(.+?)(?:\n|$)/i);
         const summaryMatch = analysis.match(/SUMMARY:\s*(.+?)(?:KEY POINTS|$)/is);
-
-        if (dateMatch) {
-          const [, month, day, year] = dateMatch;
-          appointmentDateISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
-          console.log(`📅 Extracted appointment date: ${dateMatch[0].trim()} → ${appointmentDateISO}`);
-        } else {
-          console.log(`⚠️ No appointment date found in analysis. Using upload date as fallback.`);
-          console.log(`📝 Analysis snippet: ${analysis.substring(0, 200)}`);
-        }
 
         if (doctorMatch) {
           doctorName = doctorMatch[1].trim();
