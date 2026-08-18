@@ -28,12 +28,19 @@ export default function ChatbotScreen() {
   const [canAsk, setCanAsk] = useState(true);
   const scrollViewRef = useRef<ScrollView>(null);
 
+  const suggestedQuestions = [
+    'What does my Glucose level mean?',
+    'Is my cholesterol high?',
+    'What should I know about my lab results?',
+    'What does a normal Potassium level look like?',
+  ];
+
   useEffect(() => {
     loadQuestionCount();
     setMessages([
       {
         id: '1',
-        text: 'Hello! I\'m here to answer your health-related questions. Remember, I provide educational information only and cannot replace professional medical advice. You have 20 questions available today.',
+        text: 'Hello! I can answer questions about your health and help you understand your lab results. You can ask about the tests you\'ve uploaded. I provide educational information only and cannot replace professional medical advice. You have 20 questions available today.',
         sender: 'bot',
         timestamp: new Date(),
       },
@@ -148,25 +155,16 @@ export default function ChatbotScreen() {
 
         {messages.length === 1 && !loading && (
           <View style={styles.sampleQuestionsContainer}>
-            <Text style={styles.sampleQuestionsLabel}>Try asking:</Text>
-            <TouchableOpacity
-              style={styles.sampleQuestion}
-              onPress={() => setInputText('What are the symptoms of diabetes?')}
-            >
-              <Text style={styles.sampleQuestionText}>What are the symptoms of diabetes?</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.sampleQuestion}
-              onPress={() => setInputText('How can I manage high blood pressure?')}
-            >
-              <Text style={styles.sampleQuestionText}>How can I manage high blood pressure?</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.sampleQuestion}
-              onPress={() => setInputText('What foods are good for heart health?')}
-            >
-              <Text style={styles.sampleQuestionText}>What foods are good for heart health?</Text>
-            </TouchableOpacity>
+            <Text style={styles.sampleQuestionsLabel}>Ask about your records:</Text>
+            {suggestedQuestions.map((question, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.sampleQuestion}
+                onPress={() => setInputText(question)}
+              >
+                <Text style={styles.sampleQuestionText}>{question}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
 

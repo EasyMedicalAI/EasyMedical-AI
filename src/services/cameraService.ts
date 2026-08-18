@@ -160,9 +160,9 @@ export const cameraService = {
       const uriArray = Array.isArray(imageUris) ? imageUris : [imageUris];
 
       // Compress images before converting to base64 to avoid payload size limits
-      console.log(`📸 Compressing ${uriArray.length} image(s) before encoding...`);
+      console.log(`📸 Compressing ${uriArray.length} image(s) before encoding (recordType: ${recordType})...`);
       const compressedUris = await Promise.all(
-        uriArray.map(uri => this.compressImage(uri))
+        uriArray.map(uri => this.compressImage(uri, recordType === 'lab'))
       );
 
       // Convert all images to base64
@@ -269,9 +269,9 @@ export const cameraService = {
     }
   },
 
-  async compressImage(imageUri: string): Promise<string> {
+  async compressImage(imageUri: string, isLabPhoto: boolean = false): Promise<string> {
     try {
-      console.log(`🗜️ Starting image compression: ${imageUri}`);
+      console.log(`🗜️ Starting image compression: ${imageUri} (lab: ${isLabPhoto})`);
 
       // Get original file size
       const originalInfo = await FileSystem.getInfoAsync(imageUri);
@@ -283,16 +283,30 @@ export const cameraService = {
       const originalSizeMB = (originalInfo.size / 1024 / 1024).toFixed(2);
       console.log(`📏 Original file size: ${originalSizeMB} MB`);
 
-      // For very large images, use more aggressive compression
-      const compress = originalInfo.size > 5 * 1024 * 1024 ? 0.3 : 0.5; // 30% for large, 50% for normal
-      const width = originalInfo.size > 5 * 1024 * 1024 ? 800 : 1200; // Smaller width for large images
+      // For lab photos, use HIGHER quality to preserve text/numbers readability
+      // For other images, use standard compression
+      let compress: number;
+      let width: number;
 
-      console.log(`🔧 Using compression: ${compress}, width: ${width}px`);
+      if (isLabPhoto) {
+        // Lab photos: MAXIMIZE quality for Claude's vision to read all text
+        compress = 0.8; // 80% quality - high quality for text clarity
+        width = 1800; // Higher width to preserve table text readability
+        console.log(`🔬 Lab photo mode: HIGH QUALITY (${(compress * 100).toFixed(0)}%) at ${width}px for full text extraction`);
+      } else {
+        // Regular images: standard compression
+        compress = originalInfo.size > 5 * 1024 * 1024 ? 0.3 : 0.5; // 30-50% quality for others
+        width = originalInfo.size > 5 * 1024 * 1024 ? 800 : 1200; // Standard widths
+        console.log(`📸 Regular photo mode: standard compression (${(compress * 100).toFixed(0)}%)`);
+      }
+
+      console.log(`🔧 Using compression: ${(compress * 100).toFixed(0)}%, width: ${width}px`);
 
       // Resize and compress image using ImageManipulator
+      // For documents, preserve original aspect ratio instead of forcing 1.33
       const manipResult = await ImageManipulator.manipulateAsync(
         imageUri,
-        [{ resize: { width, height: Math.round(width * 1.33) } }],
+        [{ resize: { width } }], // Don't specify height - let it maintain original aspect ratio
         { compress, format: ImageManipulator.SaveFormat.JPEG }
       );
 

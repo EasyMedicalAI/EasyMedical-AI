@@ -242,7 +242,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
   // Extract lab values from records
   const getLabValues = () => {
-    const labMap = new Map<string, { value: string; date: string; history: Array<{ value: string; date: string }> }>();
+    const labMap = new Map<string, { value: string; range?: string; date: string; history: Array<{ value: string; date: string }> }>();
 
     // Metadata fields to exclude
     const metadataFields = new Set([
@@ -259,6 +259,51 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
           console.log(`📋 Processing lab record with ${record.summary.split('\n').length} lines`);
           console.log(`📄 Full summary length: ${record.summary.length} characters`);
           const lines = record.summary.split('\n');
+
+          // Extract test date from the lab document
+          let testDate = record.uploadDate; // fallback to upload date
+          for (const line of lines) {
+            // Try various date patterns found in lab results
+            let match = line.match(/Date\s+Collected:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
+            if (match) {
+              const [month, day, year] = match[1].split('/');
+              testDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
+              console.log(`📅 Extracted Date Collected: ${match[1]} → ${testDate}`);
+              break;
+            }
+
+            match = line.match(/Test\s+Date:\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
+            if (match) {
+              const [month, day, year] = match[1].split('/');
+              testDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
+              console.log(`📅 Extracted Test Date: ${match[1]} → ${testDate}`);
+              break;
+            }
+          }
+
+          // Build a map of lab names to their reference ranges
+          const rangeMap = new Map<string, string>();
+          for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const cleanLine = line.trim();
+
+            // Look for reference range patterns
+            // Pattern: "Reference Range: 70-100 mg/dL" or similar
+            let rangeMatch = cleanLine.match(/reference\s+(?:range|interval):\s*(.+?)(?:\s*$|;\s*|,\s*)/i);
+            if (rangeMatch) {
+              const rangeValue = rangeMatch[1].trim();
+              // Try to find the lab name from previous lines or same line
+              if (i > 0) {
+                const prevLine = lines[i - 1].trim();
+                const prevMatch = prevLine.match(/^([A-Za-z\s]+?):/);
+                if (prevMatch) {
+                  const labName = prevMatch[1].trim();
+                  rangeMap.set(labName.toLowerCase(), rangeValue);
+                  console.log(`  📊 Found range for "${labName}": ${rangeValue}`);
+                }
+              }
+            }
+          }
 
           for (let i = 0; i < lines.length; i++) {
             const line = lines[i];
@@ -334,18 +379,27 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                    isTestNameFormat)) {
 
                 if (!labMap.has(labName)) {
+                  const range = rangeMap.get(labName.toLowerCase());
                   labMap.set(labName, {
                     value: cleanValue,
-                    date: record.uploadDate,
-                    history: [{ value: cleanValue, date: record.uploadDate }],
+                    range: range,
+                    date: testDate,
+                    history: [{ value: cleanValue, date: testDate }],
                   });
-                  console.log(`✅ Found lab: ${labName} = ${cleanValue}`);
+                  console.log(`✅ Found lab: ${labName} = ${cleanValue}${range ? ` (Range: ${range})` : ''}`);
                 } else {
                   const existing = labMap.get(labName)!;
-                  existing.history.push({ value: cleanValue, date: record.uploadDate });
-                  if (new Date(record.uploadDate) > new Date(existing.date)) {
+                  existing.history.push({ value: cleanValue, date: testDate });
+                  if (new Date(testDate) > new Date(existing.date)) {
                     existing.value = cleanValue;
-                    existing.date = record.uploadDate;
+                    existing.date = testDate;
+                  }
+                  // Add range if we found it
+                  if (!existing.range) {
+                    const range = rangeMap.get(labName.toLowerCase());
+                    if (range) {
+                      existing.range = range;
+                    }
                   }
                 }
               }
@@ -721,10 +775,10 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       {/* My Labs Section */}
       {records.some(r => r.specialty?.toLowerCase().includes('lab')) && (
         <View style={styles.myLabsSection}>
-          <Text style={styles.sectionTitle}>🧬 My Labs</Text>
+          <Text style={styles.sectionTitle}>My Labs</Text>
           {labValues.length > 0 ? (
           <View style={styles.labsGrid}>
-            {labValues.map(lab => (
+            {labValues.sort((a, b) => a.name.localeCompare(b.name)).map(lab => (
               <TouchableOpacity
                 key={lab.name}
                 style={styles.labCard}
@@ -733,7 +787,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 <Text style={styles.labName}>{lab.name}</Text>
                 <Text style={styles.labValue}>{lab.value}</Text>
                 <Text style={styles.labDate}>
-                  {new Date(lab.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {new Date(lab.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -769,22 +823,6 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
-
-      {/* Quick Upload Actions */}
-      <View style={styles.quickUploadSection}>
-        <TouchableOpacity
-          style={styles.quickUploadButton}
-          onPress={() => setUploadingSpecialty('Lab')}
-        >
-          <Text style={styles.quickUploadButtonText}>🔬 Upload Labs</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.quickUploadButton}
-          onPress={() => setUploadingSpecialty('Imaging')}
-        >
-          <Text style={styles.quickUploadButtonText}>📷 Upload Imaging</Text>
-        </TouchableOpacity>
       </View>
 
       <View style={styles.spacing} />
@@ -1557,23 +1595,73 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
           {selectedLabName && (
             <ScrollView style={styles.labHistoryScrollView}>
               <View style={styles.labHistoryContent}>
-                {labValues
-                  .find(lab => lab.name === selectedLabName)
-                  ?.history.sort(
+                {(() => {
+                  const lab = labValues.find(lab => lab.name === selectedLabName);
+                  if (!lab) return null;
+
+                  const sortedHistory = [...lab.history].sort(
                     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-                  )
-                  .map((entry, index) => (
-                    <View key={index} style={styles.labHistoryItem}>
-                      <Text style={styles.labHistoryValue}>{entry.value}</Text>
-                      <Text style={styles.labHistoryDate}>
-                        {new Date(entry.date).toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}
-                      </Text>
-                    </View>
-                  ))}
+                  );
+
+                  // Calculate trend
+                  let trend = '→';
+                  let trendLabel = 'Stable';
+                  if (sortedHistory.length >= 2) {
+                    const current = parseFloat(sortedHistory[0].value);
+                    const previous = parseFloat(sortedHistory[1].value);
+                    if (!isNaN(current) && !isNaN(previous)) {
+                      if (current > previous) {
+                        trend = '↑';
+                        trendLabel = 'Trending Up';
+                      } else if (current < previous) {
+                        trend = '↓';
+                        trendLabel = 'Trending Down';
+                      }
+                    }
+                  }
+
+                  return (
+                    <>
+                      {/* Current Value Section */}
+                      <View style={styles.labDetailCurrentSection}>
+                        <Text style={styles.labDetailLabel}>Current Value</Text>
+                        <View style={styles.labDetailCurrentRow}>
+                          <Text style={styles.labDetailCurrentValue}>{lab.value}</Text>
+                          <Text style={styles.labDetailTrend}>{trend}</Text>
+                        </View>
+                        <Text style={styles.labDetailTrendLabel}>{trendLabel}</Text>
+                      </View>
+
+                      {/* Reference Range Section */}
+                      {lab.range && (
+                        <View style={styles.labDetailRangeSection}>
+                          <Text style={styles.labDetailLabel}>Normal Range</Text>
+                          <Text style={styles.labDetailRange}>{lab.range}</Text>
+                        </View>
+                      )}
+
+                      {/* History Section */}
+                      <View style={styles.labDetailHistorySection}>
+                        <Text style={styles.labDetailLabel}>History</Text>
+                        {sortedHistory.map((entry, index) => (
+                          <View key={index} style={styles.labHistoryItem}>
+                            <View style={styles.labHistoryItemLeft}>
+                              <Text style={styles.labHistoryValue}>{entry.value}</Text>
+                              <Text style={styles.labHistoryDate}>
+                                {new Date(entry.date).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'long',
+                                  day: 'numeric',
+                                })}
+                              </Text>
+                            </View>
+                            {index === 0 && <Text style={styles.labHistoryLatest}>Latest</Text>}
+                          </View>
+                        ))}
+                      </View>
+                    </>
+                  );
+                })()}
               </View>
             </ScrollView>
           )}
@@ -1725,6 +1813,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F8FF',
     borderWidth: 1,
     borderColor: '#007AFF',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   labHistoryValue: {
     fontSize: 20,
@@ -1735,6 +1826,67 @@ const styles = StyleSheet.create({
   labHistoryDate: {
     fontSize: 12,
     color: '#666',
+  },
+  labDetailCurrentSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    backgroundColor: '#E8F4FF',
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  labDetailCurrentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: 8,
+  },
+  labDetailCurrentValue: {
+    fontSize: 36,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  labDetailTrend: {
+    fontSize: 32,
+    marginLeft: 8,
+  },
+  labDetailTrendLabel: {
+    fontSize: 14,
+    color: '#0051BA',
+    fontWeight: '500',
+  },
+  labDetailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 8,
+  },
+  labDetailRangeSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  labDetailRange: {
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  labDetailHistorySection: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  labHistoryItemLeft: {
+    flex: 1,
+  },
+  labHistoryLatest: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#007AFF',
+    backgroundColor: '#E8F4FF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
   },
   uploadRecordsSection: {
     paddingHorizontal: 20,
