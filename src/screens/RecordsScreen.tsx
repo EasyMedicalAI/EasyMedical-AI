@@ -334,9 +334,23 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
             // Process if we found a name and value
             if (labName && labValue) {
+              // Extract reference range from format "Value (Range)" or "Value"
+              let labRange = '';
+              let rangeMatch = labValue.match(/\(([^)]+)\)\s*$/);
+              if (rangeMatch) {
+                labRange = rangeMatch[1].trim();
+                // Remove the range from the value for further parsing
+                labValue = labValue.replace(/\s*\([^)]+\)\s*$/, '').trim();
+              }
+
               // Extract just the numeric/result part from values like "98 mg/dL" or "High"
               const valueMatch = labValue.match(/^([0-9.]+|High|Low|Normal|Abnormal|Positive|Negative|[A-Za-z\s]+)/);
               const cleanValue = valueMatch ? valueMatch[1].trim() : labValue;
+
+              // Store the range for this test
+              if (labRange && labName) {
+                rangeMap.set(labName.toLowerCase(), labRange);
+              }
 
               // Check if this is metadata by checking exact match or first word
               const lowerName = labName.toLowerCase();
