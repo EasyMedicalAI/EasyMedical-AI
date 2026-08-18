@@ -663,8 +663,40 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         }
 
         if (!dateFound) {
-          console.warn(`⚠️ No appointment date found in analysis. Showing upload date as fallback.`);
-          console.log(`📝 Full analysis:\n${analysis}`);
+          // Last resort: try to find date mentioned anywhere in the text
+          // Look for common date patterns: "January 15, 2026", "01/15/2026", "01-15-2026", etc.
+          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                             'July', 'August', 'September', 'October', 'November', 'December'];
+          const monthPattern = monthNames.join('|');
+          const datePatterns = [
+            new RegExp(`(${monthPattern})\\s+(\\d{1,2}),?\\s+(\\d{4})`),
+            new RegExp(`(\\d{1,2})\\s+(${monthPattern})\\s+(\\d{4})`),
+          ];
+
+          for (const pattern of datePatterns) {
+            const match = analysis.match(pattern);
+            if (match) {
+              dateFound = true;
+              const monthStr = match[1];
+              let month = monthNames.indexOf(monthStr) + 1;
+              if (isNaN(month) || month === 0) {
+                month = parseInt(monthStr);
+              }
+              const day = parseInt(match[2] || match[3]);
+              const year = parseInt(match[3] || match[4]);
+
+              if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
+                appointmentDateISO = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00.000Z`;
+                console.log(`✅ Format 4 (from summary): ${match[0].trim()} → ${appointmentDateISO}`);
+                break;
+              }
+            }
+          }
+
+          if (!dateFound) {
+            console.warn(`⚠️ No appointment date found in analysis. Showing upload date as fallback.`);
+            console.log(`📝 Full analysis:\n${analysis}`);
+          }
         }
 
         const doctorMatch = analysis.match(/DOCTOR:\s*(.+?)(?:\n|$)/i);
