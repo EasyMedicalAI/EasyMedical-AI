@@ -1155,14 +1155,14 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
             {uploadMode === 'photo-review' && selectedPhotos.length > 0 && (
               <>
                 <Text style={styles.label}>Review Photos ({selectedPhotos.length})</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoCarousel}>
+                <View style={styles.photoGrid}>
                   {selectedPhotos.map((photo, index) => (
-                    <View key={index} style={styles.photoItem}>
-                      <Image source={{ uri: photo.uri }} style={styles.photoPreviewLarge} resizeMode="contain" />
-                      <Text style={styles.photoIndex}>Photo {index + 1}</Text>
+                    <View key={index} style={styles.photoGridItem}>
+                      <Image source={{ uri: photo.uri }} style={styles.photoGridImage} resizeMode="contain" />
+                      <Text style={styles.photoGridIndex}>Photo {index + 1}</Text>
                     </View>
                   ))}
-                </ScrollView>
+                </View>
 
                 <Text style={styles.sublabel}>Claude will analyze these images to extract medical information</Text>
 
@@ -2350,27 +2350,29 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFF',
   },
-  photoCarousel: {
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
     marginVertical: 16,
-    marginHorizontal: -20,
-    paddingHorizontal: 20,
+    justifyContent: 'space-between',
   },
-  photoItem: {
-    marginRight: 12,
+  photoGridItem: {
+    width: '48%',
     alignItems: 'center',
   },
-  photoPreviewLarge: {
-    width: 200,
-    height: 250,
+  photoGridImage: {
+    width: '100%',
+    height: 180,
     borderRadius: 12,
     backgroundColor: '#F0F0F0',
     borderWidth: 1,
     borderColor: '#DDD',
   },
-  photoIndex: {
+  photoGridIndex: {
     fontSize: 12,
     color: '#666',
-    marginTop: 8,
+    marginTop: 6,
   },
   photoReviewButtons: {
     gap: 12,
