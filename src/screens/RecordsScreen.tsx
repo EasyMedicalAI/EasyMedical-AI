@@ -1175,18 +1175,6 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.primaryButton, isUploading && styles.buttonDisabled]}
-                    onPress={handleUploadPhoto}
-                    disabled={isUploading}
-                  >
-                    {isUploading ? (
-                      <ActivityIndicator color="#FFF" />
-                    ) : (
-                      <Text style={styles.primaryButtonText}>Upload</Text>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
                     style={[styles.addButton, isUploading && styles.buttonDisabled]}
                     onPress={handleUploadPhoto}
                     disabled={isUploading}
@@ -1194,7 +1182,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                     {isUploading ? (
                       <ActivityIndicator color="#FFF" />
                     ) : (
-                      <Text style={styles.addButtonText}>Add to My Team Now</Text>
+                      <Text style={styles.addButtonText}>Add to My Team</Text>
                     )}
                   </TouchableOpacity>
                 </View>
