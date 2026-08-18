@@ -623,7 +623,21 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       if (!isLab && analysisResult.data?.analysis) {
         // For non-lab records, extract appointment date, doctor name, reason, and summary from Claude's formatted response
         const analysis = analysisResult.data.analysis;
-        const dateMatch = analysis.match(/APPOINTMENT\s+DATE:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+
+        // Try multiple date formats
+        let dateMatch = analysis.match(/APPOINTMENT\s+DATE:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
+        if (!dateMatch) {
+          dateMatch = analysis.match(/APPOINTMENT\s+DATE:\s*(\d{4})-(\d{1,2})-(\d{1,2})/i);
+          if (dateMatch) {
+            // Swap to [month, day, year] format
+            const [, year, month, day] = dateMatch;
+            dateMatch = [dateMatch[0], month, day, year];
+          }
+        }
+        if (!dateMatch) {
+          dateMatch = analysis.match(/DATE[\s:]+([\d]{1,2})[\/\-]([\d]{1,2})[\/\-]([\d]{4})/i);
+        }
+
         const doctorMatch = analysis.match(/DOCTOR:\s*(.+?)(?:\n|$)/i);
         const reasonMatch = analysis.match(/REASON:\s*(.+?)(?:\n|$)/i);
         const summaryMatch = analysis.match(/SUMMARY:\s*(.+?)(?:KEY POINTS|$)/is);
@@ -631,8 +645,12 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         if (dateMatch) {
           const [, month, day, year] = dateMatch;
           appointmentDateISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
-          console.log(`📅 Extracted appointment date: ${dateMatch[0]} → ${appointmentDateISO}`);
+          console.log(`📅 Extracted appointment date: ${dateMatch[0].trim()} → ${appointmentDateISO}`);
+        } else {
+          console.log(`⚠️ No appointment date found in analysis. Using upload date as fallback.`);
+          console.log(`📝 Analysis snippet: ${analysis.substring(0, 200)}`);
         }
+
         if (doctorMatch) {
           doctorName = doctorMatch[1].trim();
           console.log(`👨‍⚕️ Extracted doctor: ${doctorName}`);
