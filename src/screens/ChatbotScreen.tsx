@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { chatbotService } from '@/services/chatbotService';
+import { useRecords } from '@/context/RecordsContext';
 
 interface Message {
   id: string;
@@ -21,6 +22,7 @@ interface Message {
 }
 
 export default function ChatbotScreen() {
+  const { records } = useRecords();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,6 +60,35 @@ export default function ChatbotScreen() {
     }
   };
 
+  const buildMedicalContext = (): string => {
+    if (!records || records.length === 0) {
+      return '';
+    }
+
+    let context = 'The patient has the following medical records:\n\n';
+
+    // Group records by type
+    const recordsBySpecialty: Record<string, typeof records> = {};
+    records.forEach(record => {
+      if (!recordsBySpecialty[record.specialty]) {
+        recordsBySpecialty[record.specialty] = [];
+      }
+      recordsBySpecialty[record.specialty].push(record);
+    });
+
+    // Add summaries for each specialty
+    Object.entries(recordsBySpecialty).forEach(([specialty, specialtyRecords]) => {
+      context += `${specialty}:\n`;
+      specialtyRecords.forEach(record => {
+        const date = new Date(record.appointmentDate || record.uploadDate).toLocaleDateString();
+        context += `- ${date}: ${record.reasonForVisit || record.summary}\n`;
+      });
+      context += '\n';
+    });
+
+    return context;
+  };
+
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
@@ -81,7 +112,8 @@ export default function ChatbotScreen() {
     setLoading(true);
 
     try {
-      const response = await chatbotService.askHealthQuestion(inputText);
+      const medicalContext = buildMedicalContext();
+      const response = await chatbotService.askHealthQuestion(inputText, medicalContext);
 
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),

@@ -54,17 +54,24 @@ export const chatbotService = {
     return count < 20;
   },
 
-  async askHealthQuestion(question: string): Promise<string> {
+  async askHealthQuestion(question: string, medicalContext?: string): Promise<string> {
     const count = await this.getQuestionCountForToday();
     if (count >= 20) {
       throw new Error('Daily question limit (20) has been reached. Please try again tomorrow.');
     }
 
     try {
+      let userContent = question;
+
+      // Add medical records context if provided
+      if (medicalContext) {
+        userContent = `Medical Records Context:\n${medicalContext}\n\nUser Question: ${question}`;
+      }
+
       const messages: ChatMessage[] = [
         {
           role: 'user',
-          content: question,
+          content: userContent,
         },
       ];
 
@@ -73,7 +80,7 @@ export const chatbotService = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify({ messages, hasMedicalContext: !!medicalContext }),
       });
 
       if (!response.ok) {
