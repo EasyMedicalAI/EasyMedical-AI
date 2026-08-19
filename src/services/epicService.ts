@@ -487,6 +487,13 @@ class EpicService {
       const data = await response.json();
       console.log('✅ Token retrieved from backend');
 
+      // Store patient ID if returned from backend
+      if (data.patient) {
+        console.log('📝 Storing patient ID:', data.patient);
+        await AsyncStorage.setItem('epic_patient_id', data.patient);
+        this.setPatientId(data.patient);
+      }
+
       return data.access_token;
     } catch (error) {
       console.error('Error retrieving token:', error);
