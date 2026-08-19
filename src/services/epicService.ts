@@ -325,7 +325,9 @@ class EpicService {
       Object.entries(obsGroupedByDate).forEach(([date, obsList]) => {
         const testResults: { [key: string]: string } = {};
         obsList.forEach((obs: Observation) => {
-          testResults[obs.code] = `${obs.value} ${obs.unit}`;
+          const value = obs.value || '';
+          const unit = obs.unit ? ` ${obs.unit}` : '';
+          testResults[obs.code] = `${value}${unit}`.trim();
         });
 
         records.push({
