@@ -147,7 +147,6 @@ export default function HomeScreen() {
 
   // Epic FHIR data
   const [epicMedications, setEpicMedications] = useState<Medication[]>([]);
-  const [epicObservations, setEpicObservations] = useState<Observation[]>([]);
   const [epicAppointments, setEpicAppointments] = useState<Appointment[]>([]);
   const [epicObservations, setEpicObservations] = useState<Observation[]>([]);
   const [epicAllergies, setEpicAllergies] = useState<Allergy[]>([]);
@@ -175,16 +174,14 @@ export default function HomeScreen() {
   const loadEpicData = async () => {
     setEpicLoading(true);
     try {
-      const [meds, appts, obs, allergies, conditions] = await Promise.all([
+      const [meds, appts, allergies, conditions] = await Promise.all([
         epicService.getMedications(),
         epicService.getAppointments(),
-        epicService.getObservations(),
         epicService.getAllergies(),
         epicService.getConditions(),
       ]);
       setEpicMedications(meds);
       setEpicAppointments(appts);
-      setEpicObservations(obs);
       setEpicAllergies(allergies);
       setEpicConditions(conditions);
     } catch (error) {
@@ -1015,31 +1012,6 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               )}
             </View>
-
-            {/* Epic Vital Signs & Labs */}
-            {epicObservations.length > 0 && (
-              <>
-                <View style={styles.divider} />
-                <Text style={[styles.vitalLabel, { marginTop: 16, marginBottom: 12, fontWeight: '600', fontSize: 14 }]}>
-                  📊 From Epic EHR
-                </Text>
-                {epicObservations.map((obs, idx) => (
-                  <View key={`epic-obs-${idx}`} style={styles.vitalRow}>
-                    <View style={styles.vitalContent}>
-                      <Text style={styles.vitalLabel}>
-                        <Text>{obs.code || 'Unknown'}</Text>
-                      </Text>
-                      <Text style={[styles.vitalValue, { marginTop: 4 }]}>
-                        {obs.value} {obs.unit}
-                      </Text>
-                      <Text style={[styles.vitalLabel, { fontSize: 12, marginTop: 4, opacity: 0.6 }]}>
-                        {new Date(obs.date).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </>
-            )}
           </View>
         </View>
 
