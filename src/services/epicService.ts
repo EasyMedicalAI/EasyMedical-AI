@@ -241,10 +241,12 @@ class EpicService {
       console.log('📥 Fetching patient data from backend...');
 
       const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://easymedical-backend-new-production.up.railway.app';
+      const patientId = await AsyncStorage.getItem('epic_patient_id');
+
       const response = await fetch(`${backendUrl}/api/auth/epic/patient-data`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accessToken: this.accessToken }),
+        body: JSON.stringify({ accessToken: this.accessToken, patientId }),
       });
 
       if (!response.ok) {
