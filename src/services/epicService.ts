@@ -558,6 +558,17 @@ class EpicService {
     }
   }
 
+  // Get stored access token from AsyncStorage
+  async getStoredAccessToken(): Promise<string | null> {
+    try {
+      const token = await AsyncStorage.getItem('epic_access_token');
+      return token;
+    } catch (error) {
+      console.error('Error retrieving stored access token:', error);
+      return null;
+    }
+  }
+
   // Helper to generate random string for state parameter
   private generateRandomString(length: number): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
