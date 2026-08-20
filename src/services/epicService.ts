@@ -118,6 +118,12 @@ class EpicService {
         `${FHIR_SERVER_URL}/MedicationRequest?patient=${this.patientId}&status=active`,
         { headers: this.getAuthHeaders() }
       );
+
+      if (!response.ok) {
+        console.warn(`⚠️ MedicationRequest query returned ${response.status}. No medications available.`);
+        return [];
+      }
+
       const data = await response.json();
 
       return data.entry?.map((entry: any) => ({
@@ -128,8 +134,8 @@ class EpicService {
         status: entry.resource.status || 'active',
       })) || [];
     } catch (error) {
-      console.error('Error fetching medications:', error);
-      throw error;
+      console.warn('⚠️ Failed to load medications. Using empty list.', error);
+      return [];
     }
   }
 
@@ -139,6 +145,12 @@ class EpicService {
         `${FHIR_SERVER_URL}/Appointment?patient=${this.patientId}`,
         { headers: this.getAuthHeaders() }
       );
+
+      if (!response.ok) {
+        console.warn(`⚠️ Appointment query returned ${response.status}. No appointments available.`);
+        return [];
+      }
+
       const data = await response.json();
 
       return data.entry?.map((entry: any) => {
@@ -152,8 +164,8 @@ class EpicService {
         };
       }) || [];
     } catch (error) {
-      console.error('Error fetching appointments:', error);
-      throw error;
+      console.warn('⚠️ Failed to load appointments. Using empty list.', error);
+      return [];
     }
   }
 
@@ -163,6 +175,12 @@ class EpicService {
         `${FHIR_SERVER_URL}/Observation?patient=${this.patientId}`,
         { headers: this.getAuthHeaders() }
       );
+
+      if (!response.ok) {
+        console.warn(`⚠️ Observation query returned ${response.status}. No observations available.`);
+        return [];
+      }
+
       const data = await response.json();
 
       return data.entry?.map((entry: any) => {
@@ -186,8 +204,8 @@ class EpicService {
         };
       }) || [];
     } catch (error) {
-      console.error('Error fetching observations:', error);
-      throw error;
+      console.warn('⚠️ Failed to load observations. Using empty list.', error);
+      return [];
     }
   }
 
@@ -197,6 +215,12 @@ class EpicService {
         `${FHIR_SERVER_URL}/AllergyIntolerance?patient=${this.patientId}`,
         { headers: this.getAuthHeaders() }
       );
+
+      if (!response.ok) {
+        console.warn(`⚠️ AllergyIntolerance query returned ${response.status}. No allergies available.`);
+        return [];
+      }
+
       const data = await response.json();
 
       return data.entry?.map((entry: any) => ({
@@ -205,8 +229,8 @@ class EpicService {
         reaction: entry.resource.reaction?.[0]?.manifestation?.[0]?.coding?.[0]?.display || 'Unknown',
       })) || [];
     } catch (error) {
-      console.error('Error fetching allergies:', error);
-      throw error;
+      console.warn('⚠️ Failed to load allergies. Using empty list.', error);
+      return [];
     }
   }
 
@@ -216,6 +240,12 @@ class EpicService {
         `${FHIR_SERVER_URL}/Condition?patient=${this.patientId}`,
         { headers: this.getAuthHeaders() }
       );
+
+      if (!response.ok) {
+        console.warn(`⚠️ Condition query returned ${response.status}. No conditions available.`);
+        return [];
+      }
+
       const data = await response.json();
 
       return data.entry?.map((entry: any) => ({
@@ -225,8 +255,8 @@ class EpicService {
         status: entry.resource.status || 'unknown',
       })) || [];
     } catch (error) {
-      console.error('Error fetching conditions:', error);
-      throw error;
+      console.warn('⚠️ Failed to load conditions. Using empty list.', error);
+      return [];
     }
   }
 
@@ -260,15 +290,17 @@ class EpicService {
         - Medications: ${data.medications?.length || 0}
         - Observations: ${data.observations?.length || 0}
         - Procedures: ${data.procedures?.length || 0}
-        - Diagnostics: ${data.diagnostics?.length || 0}`);
+        - Diagnostics: ${data.diagnostics?.length || 0}
+        - Conditions: ${data.conditions?.length || 0}
+        - Allergies: ${data.allergies?.length || 0}`);
 
       return {
         patient: data.patient,
         medications: data.medications || [],
         appointments: [],
         observations: data.observations || [],
-        allergies: [],
-        conditions: [],
+        allergies: data.allergies || [],
+        conditions: data.conditions || [],
         procedures: data.procedures || [],
         diagnostics: data.diagnostics || [],
       };

@@ -336,6 +336,38 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
+      // Merge medications, conditions, and allergies into userData
+      let hasHealthDataChanges = false;
+      let mergedUserData = { ...userData };
+
+      if (epicData.medications && epicData.medications.length > 0) {
+        const medNames = epicData.medications.map((m: any) => m.name || m.medicationCodeableConcept?.coding?.[0]?.display || 'Unknown');
+        console.log(`💊 Found ${medNames.length} medications from Epic`);
+        mergedUserData.medications = Array.from(new Set([...mergedUserData.medications, ...medNames]));
+        mergedUserData.prescriptionMedications = Array.from(new Set([...mergedUserData.prescriptionMedications, ...medNames]));
+        hasHealthDataChanges = true;
+      }
+
+      if (epicData.allergies && epicData.allergies.length > 0) {
+        const allergyNames = epicData.allergies.map((a: any) => a.allergen || a.code?.coding?.[0]?.display || 'Unknown');
+        console.log(`⚠️ Found ${allergyNames.length} allergies from Epic`);
+        mergedUserData.allergies = Array.from(new Set([...mergedUserData.allergies, ...allergyNames]));
+        hasHealthDataChanges = true;
+      }
+
+      if (epicData.conditions && epicData.conditions.length > 0) {
+        const conditionNames = epicData.conditions.map((c: any) => c.name || c.code?.coding?.[0]?.display || 'Unknown');
+        console.log(`🏥 Found ${conditionNames.length} conditions from Epic`);
+        mergedUserData.conditions = Array.from(new Set([...mergedUserData.conditions, ...conditionNames]));
+        hasHealthDataChanges = true;
+      }
+
+      // Save merged health data all at once
+      if (hasHealthDataChanges) {
+        console.log('📝 Updating user health data with Epic info...');
+        await updateUserData(mergedUserData);
+      }
+
       console.log(`✅ Epic sync complete: ${added} added, ${duplicates} duplicates skipped`);
       return { added, duplicates };
     } catch (error) {

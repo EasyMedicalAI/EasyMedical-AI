@@ -256,6 +256,35 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
     records.forEach(record => {
       if (record.specialty?.toLowerCase().includes('lab') || record.specialty === 'Lab') {
+        // First, check for extracted test results (from Epic or other structured sources)
+        if (record.extractedData?.testResults && typeof record.extractedData.testResults === 'object') {
+          const testDate = record.uploadDate;
+          console.log(`📊 Found structured testResults from ${record.provider}`);
+
+          Object.entries(record.extractedData.testResults).forEach(([testName, testValue]) => {
+            if (testName && testValue) {
+              const cleanValue = String(testValue).trim();
+              console.log(`✅ Found lab from testResults: ${testName} = ${cleanValue}`);
+
+              if (!labMap.has(testName)) {
+                labMap.set(testName, {
+                  value: cleanValue,
+                  date: testDate,
+                  history: [{ value: cleanValue, date: testDate }],
+                });
+              } else {
+                const existing = labMap.get(testName)!;
+                existing.history.push({ value: cleanValue, date: testDate });
+                if (new Date(testDate) > new Date(existing.date)) {
+                  existing.value = cleanValue;
+                  existing.date = testDate;
+                }
+              }
+            }
+          });
+        }
+
+        // Also parse the summary field for text-based lab results (manual uploads, etc.)
         if (record.summary) {
           console.log(`📋 Processing lab record with ${record.summary.split('\n').length} lines`);
           console.log(`📄 Full summary length: ${record.summary.length} characters`);
