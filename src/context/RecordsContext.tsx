@@ -308,6 +308,9 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
       const epicRecords = await epicService.convertEpicDataToMedicalRecords(epicData);
 
       console.log(`📊 Got ${epicRecords.length} records from Epic`);
+      if (epicRecords.length > 0) {
+        console.log('🔍 First Epic record:', JSON.stringify(epicRecords[0], null, 2));
+      }
 
       // Merge with existing records (no deletion)
       let added = 0;
