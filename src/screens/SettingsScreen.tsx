@@ -14,108 +14,96 @@ import {
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { useRecords } from '@/context/RecordsContext';
-import { epicService } from '@/services/epicService';
+import { ehrService, EhrSystem } from '@/services/ehrService';
 
 export default function SettingsScreen() {
-  const { records, clearAllData, syncWithEpic } = useRecords();
-  const [showEpicModal, setShowEpicModal] = useState(false);
-  const [epicConnected, setEpicConnected] = useState(false);
-  const [epicLoading, setEpicLoading] = useState(false);
+  const { records, clearAllData, syncWithEHR } = useRecords();
+  const [systems, setSystems] = useState<EhrSystem[]>([]);
+  const [connectedIds, setConnectedIds] = useState<string[]>([]);
+  const [busySystemId, setBusySystemId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
-    checkEpicConnection();
-
-    // Check for Epic connection status every time the screen comes into focus
-    // This handles the case where user just completed Epic OAuth
-    const interval = setInterval(checkEpicConnection, 1000);
-    return () => clearInterval(interval);
+    loadSystems();
   }, []);
 
-  const checkEpicConnection = async () => {
-    const connected = await epicService.isConnected();
-    setEpicConnected(connected);
+  const refreshConnections = async () => {
+    const connections = await ehrService.getConnections();
+    setConnectedIds(connections.map((c) => c.systemId));
   };
 
-  const handleConnectEpic = async () => {
+  const loadSystems = async () => {
     try {
-      setEpicLoading(true);
+      setSystems(await ehrService.listSystems());
+    } catch (error) {
+      console.error('Could not load EHR systems:', error);
+    }
+    await refreshConnections();
+  };
+
+  const handleConnect = async (system: EhrSystem) => {
+    try {
+      setBusySystemId(system.id);
 
       // Get authorization URL and state from backend
-      const { url: authUrl, state } = await epicService.generateAuthorizationUrl();
-      console.log('✅ Got authorization URL with state:', state);
+      const { url: authUrl, state } = await ehrService.generateAuthorizationUrl(system.id);
 
       if (Platform.OS === 'web') {
         // For web, use window.open to open the OAuth URL
         if (typeof window !== 'undefined') {
           window.open(authUrl, '_blank');
         }
+        return;
+      }
+
+      // For native mobile, use WebBrowser, then pick up the token by state once it closes
+      await WebBrowser.openBrowserAsync(authUrl);
+      const connection = await ehrService.retrieveTokenByState(state);
+
+      if (connection) {
+        await ehrService.saveConnection(connection);
+        await refreshConnections();
+        Alert.alert('Connected', `Your ${system.name} account has been connected.`);
       } else {
-        // For native mobile, use WebBrowser
-        console.log('Opening browser for Epic OAuth...');
-        const result = await WebBrowser.openBrowserAsync(authUrl);
-        console.log('Browser closed, result type:', result.type);
-
-        // Browser closed - retrieve token using state
-        console.log('Retrieving token for state:', state);
-        const token = await epicService.retrieveTokenByState(state);
-
-        if (token) {
-          console.log('✅ Token retrieved, saving...');
-          await epicService.handleOAuthCallback(token);
-          console.log('✅ Token saved successfully');
-          setEpicConnected(true);
-          Alert.alert('Success', 'Your Epic account has been connected successfully!');
-        } else {
-          console.log('Token not found - authorization may have been cancelled');
-          Alert.alert('Authorization Cancelled', 'Epic authorization was cancelled or timed out.');
-        }
+        Alert.alert('Authorization Cancelled', `${system.name} authorization was cancelled or timed out.`);
       }
     } catch (error) {
-      console.error('Error connecting to Epic:', error);
-      Alert.alert('Error', 'Failed to connect to Epic. Please try again.');
+      console.error(`Error connecting to ${system.name}:`, error);
+      Alert.alert('Error', `Failed to connect to ${system.name}. Please try again.`);
     } finally {
-      setEpicLoading(false);
+      setBusySystemId(null);
     }
   };
 
-  const handleDisconnectEpic = () => {
+  const handleDisconnect = (system: EhrSystem) => {
     Alert.alert(
-      'Disconnect Epic Account',
-      'Are you sure you want to disconnect your Epic account?',
+      `Disconnect ${system.name}`,
+      `Stop syncing your ${system.name} records? Records already imported stay on this device.`,
       [
-        { text: 'Cancel', onPress: () => {} },
+        { text: 'Cancel', style: 'cancel' },
         {
           text: 'Disconnect',
-          onPress: async () => {
-            await epicService.disconnect();
-            setEpicConnected(false);
-            Alert.alert('Disconnected', 'Your Epic account has been disconnected');
-          },
           style: 'destructive',
+          onPress: async () => {
+            await ehrService.disconnect(system.id);
+            await refreshConnections();
+          },
         },
       ]
     );
   };
 
-  const handleSyncEpic = async () => {
+  const handleSync = async () => {
     try {
-      console.log('🔄 Starting Epic sync...');
       setSyncing(true);
-      console.log('📥 Calling syncWithEpic()...');
-      const result = await syncWithEpic();
-      console.log('✅ Sync result:', result);
-
+      const result = await syncWithEHR();
       Alert.alert(
         'Sync Complete',
-        `✅ Added ${result.added} records from Epic\n⏭️ Skipped ${result.duplicates} duplicates\n\nYour local records are preserved.`,
+        `✅ Added ${result.added} records\n⏭️ Skipped ${result.duplicates} duplicates\n\nYour local records are preserved.`,
         [{ text: 'OK' }]
       );
     } catch (error) {
-      Alert.alert(
-        'Sync Failed',
-        'Error syncing with Epic: ' + String(error)
-      );
+      Alert.alert('Sync Failed', 'Error syncing records: ' + String(error));
     } finally {
       setSyncing(false);
     }
@@ -175,46 +163,52 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Epic EHR Integration</Text>
-        <TouchableOpacity
-          style={[styles.card, epicConnected && styles.connectedCard]}
-          onPress={() => epicConnected ? handleDisconnectEpic() : handleConnectEpic()}
-          disabled={epicLoading}
-        >
-          <View style={styles.epicRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.epicTitle}>
-                {epicConnected ? '🏥 Epic Account Connected' : '🔗 Connect Epic Account'}
-              </Text>
-              <Text style={styles.epicSubtitle}>
-                {epicConnected
-                  ? 'Access your health data from Epic EHR'
-                  : 'Access medications, appointments & health data'}
-              </Text>
-            </View>
-            {epicLoading ? (
-              <ActivityIndicator size="small" color="#007AFF" />
-            ) : (
-              <Text style={styles.statusBadge}>
-                {epicConnected ? '✓' : '+'}
-              </Text>
-            )}
-          </View>
-        </TouchableOpacity>
+        <Text style={styles.sectionTitle}>Health Record Connections</Text>
+        {systems.length === 0 && (
+          <Text style={styles.epicSubtitle}>Couldn't load health systems. Check your connection and reopen Settings.</Text>
+        )}
 
-        {epicConnected && (
-          <TouchableOpacity
-            style={[styles.card, styles.syncButton]}
-            onPress={handleSyncEpic}
-            disabled={syncing}
-          >
+        {systems.map((system) => {
+          const connected = connectedIds.includes(system.id);
+          const busy = busySystemId === system.id;
+          const unavailable = !system.configured;
+          return (
+            <TouchableOpacity
+              key={system.id}
+              style={[styles.card, styles.systemCard, connected && styles.connectedCard]}
+              onPress={() => (connected ? handleDisconnect(system) : handleConnect(system))}
+              disabled={unavailable || busy}
+            >
+              <View style={styles.epicRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.epicTitle, unavailable && styles.unavailableText]}>{system.name}</Text>
+                  <Text style={styles.epicSubtitle}>
+                    {unavailable
+                      ? 'Not available yet'
+                      : connected
+                      ? 'Connected. Tap to disconnect.'
+                      : 'Tap to connect your patient portal account'}
+                  </Text>
+                </View>
+                {busy ? (
+                  <ActivityIndicator size="small" color="#007AFF" />
+                ) : (
+                  <Text style={styles.statusBadge}>{connected ? '✓' : unavailable ? '–' : '+'}</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+
+        {connectedIds.length > 0 && (
+          <TouchableOpacity style={[styles.card, styles.syncButton]} onPress={handleSync} disabled={syncing}>
             <View style={styles.epicRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.syncTitle}>
-                  🔄 Sync Records from Epic
+                  🔄 Sync Records
                 </Text>
                 <Text style={styles.syncSubtitle}>
-                  Import appointments, labs & conditions
+                  Import labs, medications & conditions from all connected systems
                 </Text>
               </View>
               {syncing ? (
@@ -364,6 +358,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#007AFF',
     fontWeight: '600',
+  },
+  systemCard: {
+    marginTop: 12,
+  },
+  unavailableText: {
+    color: '#999',
   },
   syncButton: {
     marginTop: 12,

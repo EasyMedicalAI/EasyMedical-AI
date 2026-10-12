@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { epicService } from '@/services/epicService';
+import { ehrService } from '@/services/ehrService';
 
 export default function CallbackScreen() {
   const router = useRouter();
@@ -44,7 +44,7 @@ export default function CallbackScreen() {
           }
 
           console.log('✅ Token received from backend, saving...');
-          await epicService.handleOAuthCallback(accessToken);
+          await ehrService.handleOAuthCallback(accessToken);
           console.log('✅ Token saved successfully');
 
           setLoading(false);
@@ -64,7 +64,7 @@ export default function CallbackScreen() {
       // Fallback: old flow with direct token (for backwards compatibility)
       if (token) {
         console.log('✅ Received token directly from Epic OAuth callback, saving...');
-        await epicService.handleOAuthCallback(token);
+        await ehrService.handleOAuthCallback(token);
         console.log('✅ Token saved successfully');
 
         setLoading(false);

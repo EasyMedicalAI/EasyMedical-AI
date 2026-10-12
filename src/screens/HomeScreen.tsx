@@ -17,7 +17,7 @@ import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
 import { claudeService, convertHeicToJpeg } from '@/services/claudeService';
-import { epicService, Medication, Appointment, Observation, Allergy, Condition } from '@/services/epicService';
+import { ehrService, Medication, Appointment, Observation, Allergy, Condition } from '@/services/ehrService';
 
 // Helper to detect media type from URI
 const getMediaTypeFromUri = (uri: string, assetType?: string): string => {
@@ -160,9 +160,9 @@ export default function HomeScreen() {
   const initializeEpic = async () => {
     try {
       // Initialize Epic service with stored access token
-      await epicService.initializeWithStoredToken();
+      await ehrService.load();
       // Try to load Epic data if connected
-      const connected = await epicService.isConnected();
+      const connected = await ehrService.hasAnyConnection();
       if (connected) {
         await loadEpicData();
       }
@@ -175,10 +175,10 @@ export default function HomeScreen() {
     setEpicLoading(true);
     try {
       const [meds, appts, allergies, conditions] = await Promise.all([
-        epicService.getMedications(),
-        epicService.getAppointments(),
-        epicService.getAllergies(),
-        epicService.getConditions(),
+        ehrService.getMedications(),
+        ehrService.getAppointments(),
+        ehrService.getAllergies(),
+        ehrService.getConditions(),
       ]);
       setEpicMedications(meds);
       setEpicAppointments(appts);

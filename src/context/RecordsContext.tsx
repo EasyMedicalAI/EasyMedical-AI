@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { MedicalRecord, MedicalHub, UserHealthData, LabMetric } from '../types/medical';
 import { storageService } from '../services/storageService';
-import { epicService } from '../services/epicService';
+import { ehrService } from '../services/ehrService';
 
 // Empty initial state - will be populated from storage or user input
 const EMPTY_USER_DATA: UserHealthData = {
@@ -48,7 +48,7 @@ interface RecordsContextType {
   updateUserData: (data: UserHealthData) => Promise<void>;
   refreshRecords: () => Promise<void>;
   clearAllData: () => Promise<void>;
-  syncWithEpic: () => Promise<{ added: number; duplicates: number }>;
+  syncWithEHR: () => Promise<{ added: number; duplicates: number }>;
   getRecordsBySpecialty: (specialty: string) => MedicalRecord[];
   getUniqueSpecialties: () => string[];
   getAllMedications: () => string[];
@@ -288,90 +288,65 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const syncWithEpic = async (): Promise<{ added: number; duplicates: number }> => {
+  // Syncs every connected EHR system (Epic, Oracle Health, ...) into records. Dedupes against existing records.
+  const syncWithEHR = async (): Promise<{ added: number; duplicates: number }> => {
     try {
-      console.log('🔄 Syncing with Epic...');
-      const token = await epicService.getStoredAccessToken();
-      console.log('Access token:', token ? 'Present' : 'Missing');
+      console.log('🔄 Syncing with connected EHR systems...');
+      const sources = await ehrService.fetchAllPatientData();
 
-      // Fetch all data from Epic
-      console.log('📥 About to fetch all patient data...');
-      const epicData = await epicService.fetchAllPatientData();
-      console.log('📊 Epic data received:', epicData);
-
-      // Show debug info
-      if (!epicData || Object.keys(epicData).length === 0) {
-        console.error('❌ No Epic data returned!');
-      }
-
-      // Convert Epic data to MedicalRecords
-      const epicRecords = await epicService.convertEpicDataToMedicalRecords(epicData);
-
-      console.log(`📊 Got ${epicRecords.length} records from Epic`);
-      if (epicRecords.length > 0) {
-        console.log('🔍 First Epic record:', JSON.stringify(epicRecords[0], null, 2));
-      }
-
-      // Merge with existing records (no deletion)
       let added = 0;
       let duplicates = 0;
+      const medNames: string[] = [];
+      const allergyNames: string[] = [];
+      const conditionNames: string[] = [];
 
-      for (const epicRecord of epicRecords) {
-        // Check for duplicates based on date + provider + summary
-        const isDuplicate = records.some(
-          (r) =>
-            new Date(r.appointmentDate || r.uploadDate).toDateString() ===
-              new Date(epicRecord.appointmentDate || epicRecord.uploadDate).toDateString() &&
-            r.provider === epicRecord.provider &&
-            r.summary === epicRecord.summary
-        );
+      for (const source of sources) {
+        const ehrRecords = await ehrService.convertToMedicalRecords(source.data, source.label, source.systemId);
 
-        if (isDuplicate) {
-          console.log(`⏭️ Skipping duplicate: ${epicRecord.summary}`);
-          duplicates++;
-        } else {
-          console.log(`➕ Adding: ${epicRecord.summary}`);
-          await addRecord(epicRecord);
-          added++;
+        for (const ehrRecord of ehrRecords) {
+          // Check for duplicates based on date + provider + summary
+          const isDuplicate = records.some(
+            (r) =>
+              new Date(r.appointmentDate || r.uploadDate).toDateString() ===
+                new Date(ehrRecord.appointmentDate || ehrRecord.uploadDate).toDateString() &&
+              r.provider === ehrRecord.provider &&
+              r.summary === ehrRecord.summary
+          );
+
+          if (isDuplicate) {
+            console.log(`⏭️ Skipping duplicate: ${ehrRecord.summary}`);
+            duplicates++;
+          } else {
+            console.log(`➕ Adding: ${ehrRecord.summary}`);
+            await addRecord(ehrRecord);
+            added++;
+          }
         }
+
+        const data = source.data;
+        (data.medications || []).forEach((m: any) =>
+          medNames.push(m.name || m.medicationCodeableConcept?.coding?.[0]?.display || 'Unknown'));
+        (data.allergies || []).forEach((a: any) =>
+          allergyNames.push(a.allergen || a.code?.coding?.[0]?.display || 'Unknown'));
+        (data.conditions || []).forEach((c: any) =>
+          conditionNames.push(c.name || c.code?.coding?.[0]?.display || 'Unknown'));
       }
 
-      // Merge medications, conditions, and allergies into userData
-      let hasHealthDataChanges = false;
-      let mergedUserData = { ...userData };
-
-      if (epicData.medications && epicData.medications.length > 0) {
-        const medNames = epicData.medications.map((m: any) => m.name || m.medicationCodeableConcept?.coding?.[0]?.display || 'Unknown');
-        console.log(`💊 Found ${medNames.length} medications from Epic`);
-        mergedUserData.medications = Array.from(new Set([...mergedUserData.medications, ...medNames]));
-        mergedUserData.prescriptionMedications = Array.from(new Set([...mergedUserData.prescriptionMedications, ...medNames]));
-        hasHealthDataChanges = true;
+      // Merge medications, allergies and conditions from all systems into userData in one save
+      if (medNames.length || allergyNames.length || conditionNames.length) {
+        await updateUserData({
+          ...userData,
+          medications: Array.from(new Set([...userData.medications, ...medNames])),
+          prescriptionMedications: Array.from(new Set([...userData.prescriptionMedications, ...medNames])),
+          allergies: Array.from(new Set([...userData.allergies, ...allergyNames])),
+          conditions: Array.from(new Set([...userData.conditions, ...conditionNames])),
+        });
       }
 
-      if (epicData.allergies && epicData.allergies.length > 0) {
-        const allergyNames = epicData.allergies.map((a: any) => a.allergen || a.code?.coding?.[0]?.display || 'Unknown');
-        console.log(`⚠️ Found ${allergyNames.length} allergies from Epic`);
-        mergedUserData.allergies = Array.from(new Set([...mergedUserData.allergies, ...allergyNames]));
-        hasHealthDataChanges = true;
-      }
-
-      if (epicData.conditions && epicData.conditions.length > 0) {
-        const conditionNames = epicData.conditions.map((c: any) => c.name || c.code?.coding?.[0]?.display || 'Unknown');
-        console.log(`🏥 Found ${conditionNames.length} conditions from Epic`);
-        mergedUserData.conditions = Array.from(new Set([...mergedUserData.conditions, ...conditionNames]));
-        hasHealthDataChanges = true;
-      }
-
-      // Save merged health data all at once
-      if (hasHealthDataChanges) {
-        console.log('📝 Updating user health data with Epic info...');
-        await updateUserData(mergedUserData);
-      }
-
-      console.log(`✅ Epic sync complete: ${added} added, ${duplicates} duplicates skipped`);
+      console.log(`✅ EHR sync complete: ${added} added, ${duplicates} duplicates skipped`);
       return { added, duplicates };
     } catch (error) {
-      console.error('❌ Error syncing with Epic:', error);
+      console.error('❌ Error syncing with EHR:', error);
       throw error;
     }
   };
@@ -386,7 +361,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     updateUserData,
     refreshRecords,
     clearAllData,
-    syncWithEpic,
+    syncWithEHR,
     getRecordsBySpecialty,
     getUniqueSpecialties,
     getAllMedications,

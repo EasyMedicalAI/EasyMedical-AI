@@ -10,6 +10,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
+import { toPlainText, ExtractedRecord } from '@/services/recordFormat';
 import { cameraService } from '@/services/cameraService';
 import { photoStorageService } from '@/services/photoStorageService';
 
@@ -100,8 +101,11 @@ export default function CameraModal({ visible, type, onClose, onPhotoSaved }: Ca
       }
 
       if (result.success) {
+        // Records come back structured; show them as the same plain text the records screen uses
         const analysisText = typeof result.data === 'string'
           ? result.data
+          : result.data?.summary !== undefined
+          ? toPlainText(result.data as ExtractedRecord)
           : JSON.stringify(result.data, null, 2);
         setAnalysisResult(analysisText);
       } else {

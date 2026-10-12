@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useRecords } from '@/context/RecordsContext';
 import { MedicalRecord } from '@/types/medical';
+import RecordSummary from '@/components/RecordSummary';
 
 interface RecordDetailScreenProps {
   record: MedicalRecord;
@@ -93,58 +94,12 @@ export default function RecordDetailScreen({ record, onBack }: RecordDetailScree
           <Text style={styles.provider}>{record.provider}</Text>
         </View>
 
-        {/* Image */}
-        {record.imageUri && (
-          <View style={styles.imageContainer}>
-            <Image
-              source={{ uri: record.imageUri }}
-              style={styles.image}
-              resizeMode="contain"
-            />
-          </View>
-        )}
+        {/* Same layout for every record */}
+        <RecordSummary record={record} />
 
-        {/* Summary Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Summary</Text>
-          <Text style={styles.summaryText}>{record.summary}</Text>
-        </View>
-
-        {/* Formatted Data Table */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Record Details</Text>
-          <View style={styles.dataTable}>
-            <View style={styles.dataRow}>
-              <Text style={styles.dataLabel}>Date</Text>
-              <Text style={styles.dataValue}>
-                {new Date(record.appointmentDate || record.uploadDate).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
-              </Text>
-            </View>
-            <View style={[styles.dataRow, styles.dataRowBorder]}>
-              <Text style={styles.dataLabel}>Provider</Text>
-              <Text style={styles.dataValue}>{record.provider}</Text>
-            </View>
-            <View style={[styles.dataRow, styles.dataRowBorder]}>
-              <Text style={styles.dataLabel}>Reason</Text>
-              <Text style={styles.dataValue}>{record.reasonForVisit || '—'}</Text>
-            </View>
-            <View style={[styles.dataRow, styles.dataRowBorder]}>
-              <Text style={styles.dataLabel}>Findings</Text>
-              <Text style={styles.dataValue}>{record.findings || '—'}</Text>
-            </View>
-            <View style={[styles.dataRow, styles.dataRowBorder]}>
-              <Text style={styles.dataLabel}>Next Steps</Text>
-              <Text style={styles.dataValue}>{record.nextSteps || '—'}</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.editButton} onPress={handleEditReason}>
-            <Text style={styles.editButtonText}>Edit Reason for Visit</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.editButton} onPress={handleEditReason}>
+          <Text style={styles.editButtonText}>Edit Reason for Visit</Text>
+        </TouchableOpacity>
 
         {/* Notes Section */}
         <View style={styles.section}>
@@ -161,17 +116,7 @@ export default function RecordDetailScreen({ record, onBack }: RecordDetailScree
           </View>
         </View>
 
-        {/* Original Content if needed */}
-        {record.originalText && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Original Text</Text>
-            <View style={styles.originalTextBox}>
-              <Text style={styles.originalText}>{record.originalText}</Text>
-            </View>
-          </View>
-        )}
       </View>
-
       {/* Edit Reason Modal */}
       <Modal visible={editingReason} animationType="slide" onRequestClose={() => setEditingReason(false)}>
         <View style={styles.modalContainer}>

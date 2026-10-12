@@ -18,9 +18,11 @@ import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import { claudeService, convertHeicToJpeg } from '@/services/claudeService';
 import { cameraService } from '@/services/cameraService';
-import { epicService, Appointment } from '@/services/epicService';
+import { ehrService, Appointment } from '@/services/ehrService';
 import { MedicalRecord } from '@/types/medical';
 import MetricDetailScreen from '@/screens/MetricDetailScreen';
+import RecordSummary from '@/components/RecordSummary';
+import { toMedicalRecord, ExtractedRecord } from '@/services/recordFormat';
 
 // Simple UUID generator that works in React Native (no crypto dependency)
 const generateUUID = (): string => {
@@ -128,7 +130,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
   const loadAppointments = async () => {
     try {
-      const appointments = await epicService.getAppointments();
+      const appointments = await ehrService.getAppointments();
       setEpicAppointments(appointments);
     } catch (error) {
       console.error('Failed to load appointments:', error);
@@ -256,6 +258,26 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
     records.forEach(record => {
       if (record.specialty?.toLowerCase().includes('lab') || record.specialty === 'Lab') {
+        // Structured records carry their own lab table, with reference ranges
+        const structuredLabs = record.extractedData?.structured?.labResults;
+        if (Array.isArray(structuredLabs)) {
+          const labDate = record.appointmentDate || record.uploadDate;
+          structuredLabs.forEach((lab: any) => {
+            const labValue = [lab.value, lab.unit].filter(Boolean).join(' ');
+            const existing = labMap.get(lab.name);
+            if (!existing) {
+              labMap.set(lab.name, { value: labValue, range: lab.referenceRange || undefined, date: labDate, history: [{ value: labValue, date: labDate }] });
+            } else {
+              existing.history.push({ value: labValue, date: labDate });
+              if (new Date(labDate) > new Date(existing.date)) {
+                existing.value = labValue;
+                existing.date = labDate;
+                existing.range = lab.referenceRange || existing.range;
+              }
+            }
+          });
+          return;
+        }
         // First, check for extracted test results (from Epic or other structured sources)
         if (record.extractedData?.testResults && typeof record.extractedData.testResults === 'object') {
           const testDate = record.uploadDate;
@@ -633,137 +655,22 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                    uploadingSpecialty?.toLowerCase().includes('pathology');
       const recordType = isLab ? 'lab' : 'other';
 
-      // Analyze using backend endpoint
-      console.log(`🤖 Sending to backend for analysis (recordType: ${recordType})...`);
-      const analysisResult = await cameraService.analyzeHealthRecord(processedUris[0], recordType);
+      // Every document (all pages together) goes through the same structured extraction
+      console.log(`🤖 Sending ${processedUris.length} page(s) for extraction (recordType: ${recordType})...`);
+      const analysisResult = await cameraService.analyzeHealthRecord(processedUris, recordType);
 
       if (!analysisResult.success) {
         throw new Error(analysisResult.error || 'Failed to analyze record');
       }
 
-      // Parse response based on record type
-      let summary = 'Medical record';
-      let title = uploadingSpecialty || 'Record';
-
-      let doctorName = 'Unknown';
-      let reasonForVisit = '';
-      let appointmentDateISO = new Date().toISOString(); // Fallback to current date
-
-      if (!isLab && analysisResult.data?.analysis) {
-        // For non-lab records, extract appointment date, doctor name, reason, and summary from Claude's formatted response
-        const analysis = analysisResult.data.analysis;
-
-        console.log(`🔍 Parsing analysis for appointment info...`);
-        console.log(`📝 Analysis length: ${analysis.length} chars`);
-
-        // Try multiple date formats - be very flexible
-        let dateMatch = null;
-        let dateFound = false;
-
-        // Format 1: APPOINTMENT DATE: MM/DD/YYYY
-        dateMatch = analysis.match(/APPOINTMENT\s+DATE:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/i);
-        if (dateMatch) {
-          dateFound = true;
-          const [, month, day, year] = dateMatch;
-          appointmentDateISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
-          console.log(`✅ Format 1 matched: ${dateMatch[0].trim()} → ${appointmentDateISO}`);
-        }
-
-        // Format 2: APPOINTMENT DATE: YYYY-MM-DD
-        if (!dateFound) {
-          dateMatch = analysis.match(/APPOINTMENT\s+DATE:\s*(\d{4})-(\d{1,2})-(\d{1,2})/i);
-          if (dateMatch) {
-            dateFound = true;
-            const [, year, month, day] = dateMatch;
-            appointmentDateISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
-            console.log(`✅ Format 2 matched: ${dateMatch[0].trim()} → ${appointmentDateISO}`);
-          }
-        }
-
-        // Format 3: Any DATE line with numbers
-        if (!dateFound) {
-          dateMatch = analysis.match(/DATE[\s:]+(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/i);
-          if (dateMatch) {
-            dateFound = true;
-            const [, month, day, year] = dateMatch;
-            appointmentDateISO = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00.000Z`;
-            console.log(`✅ Format 3 matched: ${dateMatch[0].trim()} → ${appointmentDateISO}`);
-          }
-        }
-
-        if (!dateFound) {
-          // Last resort: try to find date mentioned anywhere in the text
-          // Look for common date patterns: "January 15, 2026", "01/15/2026", "01-15-2026", etc.
-          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                             'July', 'August', 'September', 'October', 'November', 'December'];
-          const monthPattern = monthNames.join('|');
-          const datePatterns = [
-            new RegExp(`(${monthPattern})\\s+(\\d{1,2}),?\\s+(\\d{4})`),
-            new RegExp(`(\\d{1,2})\\s+(${monthPattern})\\s+(\\d{4})`),
-          ];
-
-          for (const pattern of datePatterns) {
-            const match = analysis.match(pattern);
-            if (match) {
-              dateFound = true;
-              const monthStr = match[1];
-              let month = monthNames.indexOf(monthStr) + 1;
-              if (isNaN(month) || month === 0) {
-                month = parseInt(monthStr);
-              }
-              const day = parseInt(match[2] || match[3]);
-              const year = parseInt(match[3] || match[4]);
-
-              if (!isNaN(month) && !isNaN(day) && !isNaN(year)) {
-                appointmentDateISO = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T00:00:00.000Z`;
-                console.log(`✅ Format 4 (from summary): ${match[0].trim()} → ${appointmentDateISO}`);
-                break;
-              }
-            }
-          }
-
-          if (!dateFound) {
-            console.warn(`⚠️ No appointment date found in analysis. Showing upload date as fallback.`);
-            console.log(`📝 Full analysis:\n${analysis}`);
-          }
-        }
-
-        const doctorMatch = analysis.match(/DOCTOR:\s*(.+?)(?:\n|$)/i);
-        const reasonMatch = analysis.match(/REASON:\s*(.+?)(?:\n|$)/i);
-        const summaryMatch = analysis.match(/SUMMARY:\s*(.+?)(?:KEY POINTS|$)/is);
-
-        if (doctorMatch) {
-          doctorName = doctorMatch[1].trim();
-          console.log(`👨‍⚕️ Extracted doctor: ${doctorName}`);
-        }
-        if (reasonMatch) {
-          reasonForVisit = reasonMatch[1].trim();
-          console.log(`📋 Extracted reason: ${reasonForVisit}`);
-        }
-        if (summaryMatch) {
-          summary = summaryMatch[1].trim();
-        }
-      } else if (isLab && analysisResult.data?.analysis) {
-        // For labs, use analysis as summary
-        summary = analysisResult.data.analysis;
-      }
-
-      await addRecord({
-        id: recordId,
-        uploadDate: new Date().toISOString(),
-        appointmentDate: appointmentDateISO,
-        imageUri: processedUris[0],
-        originalText: analysisResult.data?.analysis || '',
-        specialty: uploadingSpecialty,
-        provider: doctorName,
-        summary: summary,
-        reasonForVisit: reasonForVisit || summary,
-        findings: analysisResult.data?.analysis,
-        nextSteps: undefined,
-        extractedData: { recordType, analysis: analysisResult.data?.analysis },
-        processed: true,
-        isTeamMember: true,
-      });
+      await addRecord(
+        toMedicalRecord(analysisResult.data as ExtractedRecord, {
+          id: recordId,
+          uploadDate: new Date().toISOString(),
+          imageUris: processedUris,
+          chosenSpecialty: uploadingSpecialty,
+        })
+      );
 
       setUploadingSpecialty(null);
       setPhotoUri(null);
@@ -1539,7 +1446,8 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
           </View>
 
           <ScrollView style={styles.modalContent}>
-            {selectedRecord && (
+            {selectedRecord && !isEditingRecord && <RecordSummary record={selectedRecord} />}
+            {selectedRecord && isEditingRecord && (
               <>
                 <View style={{ marginBottom: 20 }}>
                   <Text style={styles.label}>Date</Text>

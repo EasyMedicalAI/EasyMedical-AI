@@ -162,7 +162,8 @@ export const cameraService = {
       // Compress images before converting to base64 to avoid payload size limits
       console.log(`📸 Compressing ${uriArray.length} image(s) before encoding (recordType: ${recordType})...`);
       const compressedUris = await Promise.all(
-        uriArray.map(uri => this.compressImage(uri, recordType === 'lab'))
+        // Keep full detail for every document so small print in lab tables stays readable
+        uriArray.map(uri => this.compressImage(uri, true))
       );
 
       // Convert all images to base64
@@ -174,19 +175,17 @@ export const cameraService = {
         throw new Error('Failed to convert one or more images to base64');
       }
 
-      const url = `${BACKEND_URL}/api/vision/analyze-record`;
+      // Every document goes through the same structured extraction, so the result has one shape
+      const url = `${BACKEND_URL}/api/vision/extract-record`;
       console.log(`🌐 Calling backend: ${url}`);
-      console.log(`📦 Payload: ${base64Images.length} images, recordType: ${recordType}`);
+      console.log(`📦 Payload: ${base64Images.length} image(s) for ${recordType}`);
 
       let response;
       try {
         response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            images: base64Images,
-            recordType: recordType,
-          }),
+          body: JSON.stringify({ images: base64Images }),
         });
       } catch (fetchError) {
         console.error(`❌ Network error calling backend:`, fetchError);

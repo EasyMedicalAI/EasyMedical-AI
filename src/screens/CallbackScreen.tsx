@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { epicService } from '../services/epicService';
+import { ehrService } from '../services/ehrService';
 
 export function CallbackScreen() {
   const router = useRouter();
@@ -32,7 +32,7 @@ export function CallbackScreen() {
       }
 
       // Exchange code for access token
-      await epicService.exchangeCodeForToken(code, state);
+      await ehrService.exchangeCodeForToken(code, state);
 
       // Success! Navigate to home
       setLoading(false);
