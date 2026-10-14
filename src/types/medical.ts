@@ -59,6 +59,14 @@ export interface UserHealthData {
   bloodType?: string;
   height?: string;
   weight?: string;
+  weightHistory?: { date: string; value: number }[];
+  bloodPressureHistory?: { date: string; systolic: number; diastolic: number }[];
+  sleepHistory?: { date: string; hours: number }[];
+  exerciseHistory?: { date: string; minutes: number; activity?: string }[];
+  mealHistory?: { date: string; description: string; mealType?: string; tags?: string[] }[];
+  drinkHistory?: { date: string; kind: 'water' | 'coffee' | 'alcohol' | 'sugary' }[];
+  dietProfile?: string[];
+  medicationHistory?: { name: string; dose?: string; instructions?: string; startDate?: string; endDate?: string }[];
   conditions?: string[];
   allergies?: string[];
   medications?: string[];

@@ -16,8 +16,14 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { useRecords } from '@/context/RecordsContext';
 import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
+import LifestyleCard from '@/components/LifestyleCard';
 import { claudeService, convertHeicToJpeg } from '@/services/claudeService';
-import { ehrService, Medication, Appointment, Observation, Allergy, Condition } from '@/services/ehrService';
+import { ehrService, Medication, Appointment, Observation, Allergy, Condition, EpicOverride } from '@/services/ehrService';
+import LabTrendChart from '@/components/LabTrendChart';
+import QuickLogBox from '@/components/QuickLogBox';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { rowIconSize } from '@/components/rowIcons';
+import { applyLogEntries, LogEntry } from '@/services/quickLog';
 
 // Helper to detect media type from URI
 const getMediaTypeFromUri = (uri: string, assetType?: string): string => {
@@ -47,11 +53,88 @@ const getMediaTypeFromUri = (uri: string, assetType?: string): string => {
   return 'image/jpeg';
 };
 
+// A detail page that opens from a row. Sections bring their own headers, so the title is optional.
+function DetailModal({
+  visible,
+  title,
+  onClose,
+  onDismiss,
+  action,
+  children,
+}: {
+  visible: boolean;
+  title?: string;
+  onClose: () => void;
+  onDismiss?: () => void;
+  action?: { label: string; onPress: () => void };
+  children: React.ReactNode;
+}) {
+  return (
+    <Modal visible={visible} animationType="slide" onRequestClose={onClose} onDismiss={onDismiss}>
+      <View style={styles.detailModal}>
+        <View style={styles.detailHeader}>
+          {action ? (
+            <TouchableOpacity onPress={action.onPress}>
+              <Text style={styles.detailAction}>{action.label}</Text>
+            </TouchableOpacity>
+          ) : (
+            <View />
+          )}
+          <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Text style={styles.detailClose}>✕</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={styles.detailContent}>
+          {title ? <Text style={styles.detailTitle}>{title}</Text> : null}
+          {children}
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+}
+
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+// One tappable row in the vitals group: icon, label, value, and a chevron. Edit appears only in edit mode.
+function VitalRow({
+  icon,
+  label,
+  value,
+  hint,
+  iconColor = '#666',
+  onPress,
+}: {
+  icon: IconName;
+  iconColor?: string;
+  label: string;
+  value: string;
+  hint?: string;
+  onPress: () => void;
+}) {
+  return (
+    <View style={styles.vitalRow}>
+      <TouchableOpacity style={styles.vitalTouch} onPress={onPress}>
+        <MaterialCommunityIcons name={icon} size={rowIconSize(icon)} color={iconColor} style={styles.rowIcon} />
+        <View style={styles.vitalContent}>
+          <Text style={styles.vitalLabel}>{label}</Text>
+          {hint ? <Text style={styles.vitalHint}>{hint}</Text> : null}
+        </View>
+        <Text style={styles.vitalValue}>{value}</Text>
+        <MaterialCommunityIcons name="chevron-right" size={20} color="#C7C7CC" style={styles.rowChevron} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
-  const { records, userData, loading, getAbnormalResults, updateUserData } = useRecords();
+  const { records, userData, loading, getAbnormalResults, patchUserData } = useRecords();
   const router = useRouter();
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editData, setEditData] = useState(userData);
+  // Keep the editing copy in step with saved data, so a later save never writes back older readings
+  useEffect(() => {
+    setEditData(userData);
+  }, [userData]);
   const [medicationPhoto, setMedicationPhoto] = useState<string | null>(null);
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
   const [appointmentDateTime, setAppointmentDateTime] = useState('');
@@ -137,9 +220,6 @@ export default function HomeScreen() {
   const [medicationPhotoUri, setMedicationPhotoUri] = useState<string | null>(null);
   const [medicationPhotoMediaType, setMedicationPhotoMediaType] = useState<string>('image/jpeg');
   const [analyzingMedication, setAnalyzingMedication] = useState(false);
-  const [isCurrentHealthEditMode, setIsCurrentHealthEditMode] = useState(false);
-  const [isVitalsEditMode, setIsVitalsEditMode] = useState(false);
-  const [isHealthHistoryEditMode, setIsHealthHistoryEditMode] = useState(false);
   const [cameraModalType, setCameraModalType] = useState<'medication' | 'document' | 'record' | null>(null);
   const [medicationPhotos, setMedicationPhotos] = useState<string[]>([]);
   const [documentPhotos, setDocumentPhotos] = useState<string[]>([]);
@@ -151,7 +231,23 @@ export default function HomeScreen() {
   const [epicObservations, setEpicObservations] = useState<Observation[]>([]);
   const [epicAllergies, setEpicAllergies] = useState<Allergy[]>([]);
   const [epicConditions, setEpicConditions] = useState<Condition[]>([]);
+  const [openPage, setOpenPage] = useState<string | null>(null);
+  const [pendingMedicationAdd, setPendingMedicationAdd] = useState<'prescription' | 'otc' | null>(null);
   const [epicLoading, setEpicLoading] = useState(false);
+  const [epicOverrides, setEpicOverrides] = useState<Record<string, EpicOverride>>({});
+  const [addingReading, setAddingReading] = useState<'weight' | 'bp' | null>(null);
+  const [newWeight, setNewWeight] = useState('');
+  const [newSystolic, setNewSystolic] = useState('');
+  const [newDiastolic, setNewDiastolic] = useState('');
+  const [vitalDetail, setVitalDetail] = useState<'weight' | 'bp' | null>(null);
+  const [newReadingDate, setNewReadingDate] = useState('');
+  const [epicExpired, setEpicExpired] = useState(false);
+  // Each time the add form opens, start from today
+  useEffect(() => {
+    if (addingReading) setNewReadingDate(todayInput());
+  }, [addingReading]);
+
+  const [editingEpic, setEditingEpic] = useState<{ key: string; primary: string; secondary: string; primaryLabel: string; secondaryLabel: string } | null>(null);
 
   useEffect(() => {
     initializeEpic();
@@ -184,6 +280,8 @@ export default function HomeScreen() {
       setEpicAppointments(appts);
       setEpicAllergies(allergies);
       setEpicConditions(conditions);
+      setEpicOverrides(await ehrService.getOverrides());
+      setEpicExpired((await ehrService.getExpiredSystemIds()).length > 0);
     } catch (error) {
       console.error('Failed to load Epic data:', error);
     } finally {
@@ -198,6 +296,151 @@ export default function HomeScreen() {
       </View>
     );
   }
+
+  // Edits to Epic items on this screen. Epic's data is never changed; the edit is shown in its place.
+  const epicText = (key: string, original: string, field: 'primary' | 'secondary') =>
+    epicOverrides[key]?.[field] || original;
+
+  const openEpicEdit = (key: string, kind: 'medication' | 'allergy' | 'appointment' | 'condition', primary: string, secondary: string) => {
+    const labels = {
+      medication: ['Medication name', 'Dosage'],
+      allergy: ['Allergy', 'Reaction'],
+      condition: ['Condition', 'Status'],
+      appointment: ['Visit description', 'Doctor'],
+    }[kind];
+    setEditingEpic({ key, primary, secondary, primaryLabel: labels[0], secondaryLabel: labels[1] });
+  };
+
+  const saveEpicEdit = async () => {
+    if (!editingEpic) return;
+    const overrides = await ehrService.saveOverride(editingEpic.key, {
+      primary: editingEpic.primary.trim(),
+      secondary: editingEpic.secondary.trim(),
+    });
+    setEpicOverrides(overrides);
+    setEditingEpic(null);
+  };
+
+  const restoreEpicEdit = async () => {
+    if (!editingEpic) return;
+    setEpicOverrides(await ehrService.clearOverride(editingEpic.key));
+    setEditingEpic(null);
+  };
+
+  // Each new reading is saved with today's date and added to the history
+  const saveNewReading = async () => {
+    const chosen = parseReadingDate(newReadingDate);
+    if (!chosen) {
+      Alert.alert('Check the date', 'Please use MM/DD/YYYY, for example 10/14/2026. The date cannot be in the future.');
+      return;
+    }
+    // Today keeps the current time; any other day is stored at midday so it doesn't shift
+    const isToday = chosen.toDateString() === new Date().toDateString();
+    const now = (isToday ? new Date() : chosen).toISOString();
+    if (addingReading === 'weight') {
+      const value = Number(newWeight);
+      if (!newWeight.trim() || isNaN(value)) {
+        Alert.alert('Enter a weight', 'Please enter a number, for example 182.');
+        return;
+      }
+      await patchUserData({
+        weight: `${value} lbs`,
+        weightHistory: [...(userData.weightHistory || []), { date: now, value }],
+      });
+    } else if (addingReading === 'bp') {
+      const systolic = Number(newSystolic);
+      const diastolic = Number(newDiastolic);
+      if (!newSystolic.trim() || !newDiastolic.trim() || isNaN(systolic) || isNaN(diastolic)) {
+        Alert.alert('Enter both numbers', 'Please enter the top (systolic) and bottom (diastolic) numbers.');
+        return;
+      }
+      await patchUserData({
+        vitals: { ...userData.vitals, bloodPressure: `${systolic}/${diastolic} mmHg` },
+        bloodPressureHistory: [...(userData.bloodPressureHistory || []), { date: now, systolic, diastolic }],
+      });
+    }
+    setAddingReading(null);
+  };
+
+  // Oldest first, so the last item is the most recent reading
+  const sortedByDate = <T extends { date: string }>(list: T[] = []) =>
+    [...list].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  // Short note comparing the latest reading with the one before it
+  const trendHint = (values: number[], unit: string) => {
+    if (values.length < 2) return '';
+    const diff = Math.round((values[values.length - 1] - values[values.length - 2]) * 10) / 10;
+    if (diff === 0) return 'No change since the last reading';
+    return `${diff > 0 ? '↑' : '↓'} ${Math.abs(diff)} ${unit} since the last reading`;
+  };
+
+  const formatReadingDate = (iso: string) =>
+    new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  const weightSorted = sortedByDate(userData.weightHistory);
+  const bpSorted = sortedByDate(userData.bloodPressureHistory);
+  const weightHint = trendHint(weightSorted.map((r) => r.value), 'lbs');
+  const bpHint = trendHint(bpSorted.map((r) => r.systolic), 'mmHg (top number)');
+
+  // Newest first in the list, keeping each reading's original index for deleting
+  const weightList = weightSorted.map((r) => ({ ...r, index: (userData.weightHistory || []).indexOf(r) })).reverse();
+  const bpList = bpSorted.map((r) => ({ ...r, index: (userData.bloodPressureHistory || []).indexOf(r) })).reverse();
+
+  const deleteWeightReading = (index: number) => {
+    Alert.alert('Delete reading', 'Remove this weight reading?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const remaining = (userData.weightHistory || []).filter((_, i) => i !== index);
+          const latest = sortedByDate(remaining).slice(-1)[0];
+          await patchUserData({ weightHistory: remaining, weight: latest ? `${latest.value} lbs` : userData.weight });
+        },
+      },
+    ]);
+  };
+
+  const deleteBpReading = (index: number) => {
+    Alert.alert('Delete reading', 'Remove this blood pressure reading?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const remaining = (userData.bloodPressureHistory || []).filter((_, i) => i !== index);
+          const latest = sortedByDate(remaining).slice(-1)[0];
+          await patchUserData({
+            bloodPressureHistory: remaining,
+            vitals: latest
+              ? { ...userData.vitals, bloodPressure: `${latest.systolic}/${latest.diastolic} mmHg` }
+              : userData.vitals,
+          });
+        },
+      },
+    ]);
+  };
+
+  // Dates on the add form are typed as MM/DD/YYYY and default to today
+  const todayInput = () => {
+    const d = new Date();
+    return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`;
+  };
+
+  // Returns the typed date at midday, or null if it isn't a real date or is in the future
+  const parseReadingDate = (text: string): Date | null => {
+    const match = text.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!match) return null;
+    const month = parseInt(match[1], 10);
+    const day = parseInt(match[2], 10);
+    const year = parseInt(match[3], 10);
+    const date = new Date(year, month - 1, day, 12, 0, 0);
+    if (date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+    if (date.getTime() > Date.now() + 24 * 60 * 60 * 1000) return null;
+    return date;
+  };
+
+  const todayLabel = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 
   const abnormalResults = getAbnormalResults();
 
@@ -369,7 +612,7 @@ export default function HomeScreen() {
           updatedAppointments = [...(editData.appointments || []), newAppointment];
         }
 
-        await updateUserData({ ...editData, appointments: updatedAppointments });
+        await patchUserData({ appointments: updatedAppointments });
         setAppointmentDateTime('');
         setAppointmentDoctorName('');
         setAppointmentSpecialty('');
@@ -394,7 +637,7 @@ export default function HomeScreen() {
           updatedInsurances = [...(editData.insurances || []), newInsurance];
         }
 
-        await updateUserData({ ...editData, insurances: updatedInsurances });
+        await patchUserData({ insurances: updatedInsurances });
         setInsuranceProvider('');
         setInsuranceMemberId('');
         setInsuranceGroupNumber('');
@@ -419,13 +662,12 @@ export default function HomeScreen() {
           updatedContacts = [...(editData.emergencyContacts || []), newContact];
         }
 
-        await updateUserData({ ...editData, emergencyContacts: updatedContacts });
+        await patchUserData({ emergencyContacts: updatedContacts });
         setEmergencyContactName('');
         setEmergencyContactRelationship('');
         setEmergencyContactPhone('');
       } else if (editingSection === 'pharmacy' && pharmacyName && pharmacyPhone) {
-        await updateUserData({
-          ...editData,
+        await patchUserData({
           pharmacy: {
             name: pharmacyName,
             address: pharmacyAddress,
@@ -454,7 +696,7 @@ export default function HomeScreen() {
           updatedScreenings = [...(editData.screenings || []), newScreening];
         }
 
-        await updateUserData({ ...editData, screenings: updatedScreenings });
+        await patchUserData({ screenings: updatedScreenings });
         setScreeningType('');
         setScreeningDate('');
         setScreeningNotes('');
@@ -467,7 +709,7 @@ export default function HomeScreen() {
         } else {
           surgicalHistory.push({ surgeryName, date: formattedDate });
         }
-        await updateUserData({ ...editData, surgicalHistory });
+        await patchUserData({ surgicalHistory });
         setSurgeryName('');
         setSurgeryDate('');
       } else if (editingHistoryType === 'family' && familyMember && familyCondition) {
@@ -477,7 +719,7 @@ export default function HomeScreen() {
         } else {
           familyHistory.push({ familyMember, condition: familyCondition });
         }
-        await updateUserData({ ...editData, familyHistory });
+        await patchUserData({ familyHistory });
         setFamilyMember('');
         setFamilyCondition('');
       } else if (editingHistoryType === 'conditions' && conditionName) {
@@ -487,7 +729,7 @@ export default function HomeScreen() {
         } else {
           pastConditions.push(conditionName);
         }
-        await updateUserData({ ...editData, pastConditions });
+        await patchUserData({ pastConditions });
         setConditionName('');
       } else if (editingHistoryType === 'hospitalization' && hospitalizationReason) {
         const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -498,11 +740,15 @@ export default function HomeScreen() {
         } else {
           hospitalizations.push({ reason: hospitalizationReason, date: formattedDate });
         }
-        await updateUserData({ ...editData, hospitalizations });
+        await patchUserData({ hospitalizations });
         setHospitalizationReason('');
         setHospitalizationDate('');
       } else {
-        await updateUserData(editData);
+        // Save only what differs from the current profile, so nothing else is written back
+        const changes = Object.fromEntries(
+          Object.entries(editData).filter(([key, value]) => (userData as any)[key] !== value)
+        );
+        await patchUserData(changes);
       }
       setEditingSection(null);
       setEditingHistoryType(null);
@@ -657,14 +903,14 @@ export default function HomeScreen() {
                     prescriptionMedications: [...(editData.prescriptionMedications || []), medicationEntry]
                   };
                   setEditData(updatedData);
-                  await updateUserData(updatedData);
+                  await patchUserData({ prescriptionMedications: updatedData.prescriptionMedications });
                 } else {
                   const updatedData = {
                     ...editData,
                     otcMedications: [...(editData.otcMedications || []), medicationEntry]
                   };
                   setEditData(updatedData);
-                  await updateUserData(updatedData);
+                  await patchUserData({ otcMedications: updatedData.otcMedications });
                 }
 
                 setMedicationInputMode(null);
@@ -699,14 +945,14 @@ export default function HomeScreen() {
           prescriptionMedications: [...(editData.prescriptionMedications || []), medicationInputText.trim()]
         };
         setEditData(updatedData);
-        await updateUserData(updatedData);
+        await patchUserData({ prescriptionMedications: updatedData.prescriptionMedications });
       } else {
         const updatedData = {
           ...editData,
           otcMedications: [...(editData.otcMedications || []), medicationInputText.trim()]
         };
         setEditData(updatedData);
-        await updateUserData(updatedData);
+        await patchUserData({ otcMedications: updatedData.otcMedications });
       }
 
       setMedicationInputMode(null);
@@ -722,35 +968,35 @@ export default function HomeScreen() {
     try {
       if (editingSection === 'appointments' && editingAppointmentId) {
         const updatedAppointments = (editData.appointments || []).filter(apt => apt.id !== editingAppointmentId);
-        await updateUserData({ ...editData, appointments: updatedAppointments });
+        await patchUserData({ appointments: updatedAppointments });
         Alert.alert('Success', 'Appointment deleted');
         setEditingSection(null);
         setEditingAppointmentId(null);
       } else if (editingSection === 'emergency' && editingEmergencyContactId !== null) {
         const updatedContacts = (editData.emergencyContacts || []).filter((_, idx) => idx !== editingEmergencyContactId);
-        await updateUserData({ ...editData, emergencyContacts: updatedContacts });
+        await patchUserData({ emergencyContacts: updatedContacts });
         Alert.alert('Success', 'Emergency contact deleted');
         setEditingSection(null);
         setEditingEmergencyContactId(null);
       } else if (editingSection === 'insurance' && editingInsuranceId !== null) {
         const updatedInsurances = (editData.insurances || []).filter((_, idx) => idx !== editingInsuranceId);
-        await updateUserData({ ...editData, insurances: updatedInsurances });
+        await patchUserData({ insurances: updatedInsurances });
         Alert.alert('Success', 'Insurance deleted');
         setEditingSection(null);
         setEditingInsuranceId(null);
       } else if (editingHistoryType && editingIndex !== null) {
         if (editingHistoryType === 'surgical') {
           const updated = (editData.surgicalHistory || []).filter((_, i) => i !== editingIndex);
-          await updateUserData({ ...editData, surgicalHistory: updated });
+          await patchUserData({ surgicalHistory: updated });
         } else if (editingHistoryType === 'family') {
           const updated = (editData.familyHistory || []).filter((_, i) => i !== editingIndex);
-          await updateUserData({ ...editData, familyHistory: updated });
+          await patchUserData({ familyHistory: updated });
         } else if (editingHistoryType === 'conditions') {
           const updated = (editData.pastConditions || []).filter((_, i) => i !== editingIndex);
-          await updateUserData({ ...editData, pastConditions: updated });
+          await patchUserData({ pastConditions: updated });
         } else if (editingHistoryType === 'hospitalization') {
           const updated = (editData.hospitalizations || []).filter((_, i) => i !== editingIndex);
-          await updateUserData({ ...editData, hospitalizations: updated });
+          await patchUserData({ hospitalizations: updated });
         }
         Alert.alert('Success', 'Entry deleted');
         setEditingHistoryType(null);
@@ -838,6 +1084,75 @@ export default function HomeScreen() {
     Alert.alert('Success', 'Photo saved and analyzed successfully!');
   };
 
+  // Values shown on the Health, Care, and Profile rows
+  const closeDetail = () => setOpenPage(null);
+  // These pages have no Edit toggle, so their edit and remove controls are always shown
+  const showHealthControls = true;
+  // The medications page has no Edit toggle, so its edit and remove controls are always shown
+  const showMedicationControls = true;
+  const medicationCount =
+    new Set([...(userData.prescriptionMedications || []), ...epicMedications.map((m) => m.name)]).size +
+    (userData.otcMedications || []).length;
+  const allergyNames = [...new Set([...(userData.allergies || []), ...epicAllergies.map((a) => a.allergen)])];
+  const allergyValue = allergyNames.length === 1 ? allergyNames[0] : String(allergyNames.length);
+  const conditionCount = new Set([...(userData.conditions || []), ...epicConditions.map((c) => c.name)]).size;
+  const historyCount =
+    (userData.surgicalHistory || []).length +
+    (userData.familyHistory || []).length +
+    (userData.pastConditions || []).length +
+    (userData.hospitalizations || []).length;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const upcoming = [
+    ...(userData.appointments || []).map((a) => (a.dateTime || '').split('•')[0].trim()),
+    ...epicAppointments.map((a) => a.date),
+  ]
+    .map((text) => new Date(text))
+    .filter((d) => !isNaN(d.getTime()) && d.getTime() >= todayStart.getTime())
+    .sort((a, b) => a.getTime() - b.getTime());
+  const appointmentValue = upcoming.length
+    ? upcoming[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : 'None scheduled';
+  const vaccinesValue = String(getRecommendedVaccines().length) + ' recommended';
+  const screeningsValue = String(getRecommendedScreenings().length) + ' recommended';
+  const insuranceValue = (userData.insurances || []).length ? String((userData.insurances || []).length) + ' plans' : 'None';
+  const pharmacyValue = userData.pharmacy ? 'On file' : 'Not set';
+  const emergencyValue = String((userData.emergencyContacts || []).length);
+
+  const openBirthdayEdit = () => {
+    setEditData(userData);
+    if (userData.birthday) {
+      const parts = userData.birthday.split(' ');
+      const monthStr = parts[0];
+      const dayStr = parseInt(parts[1]);
+      const yearStr = parseInt(parts[2]);
+      const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      const monthIdx = months.indexOf(monthStr);
+      setSelectedBirthdayMonth(monthIdx >= 0 ? monthIdx : 0);
+      setSelectedBirthdayDay(dayStr || 1);
+      setSelectedBirthdayYear(yearStr || 1990);
+    }
+    setEditingSection('birthday');
+  };
+
+  const openGenderEdit = () => {
+    setEditData(userData);
+    const currentGender = userData.gender || 'Other';
+    if (['Male', 'Female', 'Other'].includes(currentGender)) {
+      setSelectedGender(currentGender);
+      setCustomGender('');
+    } else {
+      setSelectedGender('Other');
+      setCustomGender(currentGender);
+    }
+    setEditingSection('gender');
+  };
+
+  const openSimpleEdit = (section: string) => {
+    setEditData(userData);
+    setEditingSection(section);
+  };
+
   return (
     <>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
@@ -848,211 +1163,184 @@ export default function HomeScreen() {
 
         {/* Your Health Snapshot Title */}
         <View style={styles.snapshotHeader}>
-          <Text style={styles.snapshotTitle}>Your Health Snapshot</Text>
+          <Text style={styles.snapshotTitle}>Home</Text>
         </View>
+
+        {epicExpired && (
+          <View style={styles.expiredBanner}>
+            <Text style={styles.expiredText}>
+              Your Epic sign-in has expired, so Epic data isn't updating. Go to Settings to reconnect Epic.
+            </Text>
+          </View>
+        )}
+
+        {/* Quick log: type or dictate a reading or medication change, then confirm */}
+        <QuickLogBox
+          userData={userData}
+          onSave={async (entries: LogEntry[]) => {
+            const updated = applyLogEntries(userData, entries);
+            const changed = Object.fromEntries(
+              Object.entries(updated).filter(([key, value]) => (userData as any)[key] !== value)
+            );
+            await patchUserData(changed);
+          }}
+        />
 
         {/* VITALS & METRICS Section */}
         <View style={styles.section}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.cardIcon}>📊</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>Vitals & Metrics</Text>
+              <Text style={styles.cardTitle}>Vitals</Text>
             </View>
-            <TouchableOpacity onPress={() => setIsVitalsEditMode(!isVitalsEditMode)}>
-              <Text style={styles.editButton}>{isVitalsEditMode ? 'Done' : 'Edit'}</Text>
-            </TouchableOpacity>
           </View>
 
-          <View style={styles.card}>
+          <View style={styles.listCard}>
             {/* Birthday */}
-            <View style={styles.vitalRow}>
-              <View style={styles.vitalContent}>
-                <Text style={styles.vitalLabel}>
-                  <Text style={styles.vitalEmoji}>🎂</Text>
-                  <Text>{' Birthday: '}</Text>
-                  <Text style={styles.vitalValue}>
-                    {userData.birthday ? `${userData.birthday} (${calculateAge(userData.birthday)})` : '—'}
-                  </Text>
-                </Text>
-              </View>
-              {isVitalsEditMode && (
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  if (userData.birthday) {
-                    const parts = userData.birthday.split(' ');
-                    const monthStr = parts[0];
-                    const dayStr = parseInt(parts[1]);
-                    const yearStr = parseInt(parts[2]);
-                    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                    const monthIdx = months.indexOf(monthStr);
-                    setSelectedBirthdayMonth(monthIdx >= 0 ? monthIdx : 0);
-                    setSelectedBirthdayDay(dayStr || 1);
-                    setSelectedBirthdayYear(yearStr || 1990);
-                  }
-                  setEditingSection('birthday');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <VitalRow
+              icon="gift-outline"
+              label="Birthday"
+              value={userData.birthday ? `${userData.birthday} (${calculateAge(userData.birthday)})` : '—'}
+              onPress={openBirthdayEdit}
+            />
 
             <View style={styles.divider} />
 
             {/* Gender */}
-            <View style={styles.vitalRow}>
-              <View style={styles.vitalContent}>
-                <Text style={styles.vitalLabel}>
-                  <Text style={styles.vitalEmoji}>👥</Text>
-                  <Text>{' Gender: '}</Text>
-                  <Text style={styles.vitalValue}>{userData.gender || '—'}</Text>
-                </Text>
-              </View>
-              {isVitalsEditMode && (
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  const currentGender = userData.gender || 'Other';
-                  if (['Male', 'Female', 'Other'].includes(currentGender)) {
-                    setSelectedGender(currentGender);
-                    setCustomGender('');
-                  } else {
-                    setSelectedGender('Other');
-                    setCustomGender(currentGender);
-                  }
-                  setEditingSection('gender');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <VitalRow
+              icon="account-outline"
+              label="Gender"
+              value={userData.gender || '—'}
+              onPress={openGenderEdit}
+            />
 
             <View style={styles.divider} />
 
             {/* Height */}
-            <View style={styles.vitalRow}>
-              <View style={styles.vitalContent}>
-                <Text style={styles.vitalLabel}>
-                  <Text style={styles.vitalEmoji}>📏</Text>
-                  <Text>{' Height: '}</Text>
-                  <Text style={styles.vitalValue}>
-                    {userData.height?.includes("'") ? userData.height : (userData.height ? `${userData.height.replace(/\s/g, "'")}\"` : '0\'0"')}
-                  </Text>
-                </Text>
-              </View>
-              {isVitalsEditMode && (
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('height');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <VitalRow
+              icon="human-male-height"
+              label="Height"
+              value={userData.height?.includes("'") ? userData.height : (userData.height ? `${userData.height.replace(/\s/g, "'")}"` : '0\'0"')}
+              onPress={() => openSimpleEdit('height')}
+            />
 
             <View style={styles.divider} />
 
             {/* Weight */}
-            <View style={styles.vitalRow}>
-              <View style={styles.vitalContent}>
-                <Text style={styles.vitalLabel}>
-                  <Text style={styles.vitalEmoji}>⚖️</Text>
-                  <Text>{' Weight: '}</Text>
-                  <Text style={styles.vitalValue}>
-                    {userData.weight?.includes('lbs') ? userData.weight : `${userData.weight} lbs`}
-                  </Text>
-                </Text>
-              </View>
-              {isVitalsEditMode && (
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('weight');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <VitalRow
+              icon="scale-bathroom"
+              label="Weight"
+              value={userData.weight?.includes('lbs') ? userData.weight : `${userData.weight} lbs`}
+              hint={weightHint || undefined}
+              onPress={() => setVitalDetail('weight')}
+            />
 
             <View style={styles.divider} />
 
             {/* Blood Pressure */}
-            <View style={styles.vitalRow}>
-              <View style={styles.vitalContent}>
-                <Text style={styles.vitalLabel}>
-                  <Text style={styles.vitalEmoji}>💉</Text>
-                  <Text>{' Blood Pressure: '}</Text>
-                  <Text style={styles.vitalValue}>{userData.vitals?.bloodPressure}</Text>
-                </Text>
-              </View>
-              {isVitalsEditMode && (
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('bloodPressure');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <VitalRow
+              icon="heart-pulse"
+              label="Blood pressure"
+              value={userData.vitals?.bloodPressure || '—'}
+              hint={bpHint || undefined}
+              onPress={() => setVitalDetail('bp')}
+            />
 
             <View style={styles.divider} />
 
             {/* Blood Type */}
-            <View style={styles.vitalRow}>
-              <View style={styles.vitalContent}>
-                <Text style={styles.vitalLabel}>
-                  <Text style={styles.vitalEmoji}>🩸</Text>
-                  <Text>{' Blood Type: '}</Text>
-                  <Text style={styles.vitalValue}>{userData.bloodType}</Text>
-                </Text>
-              </View>
-              {isVitalsEditMode && (
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('bloodType');
-                }}>
-                  <Text style={styles.editLink}>Edit</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            <VitalRow
+              icon="water-outline"
+              label="Blood type"
+              value={userData.bloodType || '—'}
+              onPress={() => openSimpleEdit('bloodType')}
+            />
+
+            <View style={styles.divider} />
+
+            <WearableVitals />
           </View>
         </View>
 
-        {/* WEARABLE VITALS Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Wearable Devices</Text>
-          <WearableVitals />
-        </View>
 
+        {/* LIFESTYLE: sleep, exercise, food */}
+        <LifestyleCard />
 
-        {/* CURRENT HEALTH Section */}
+        {/* HEALTH: summary rows, each opens its detail page */}
         <View style={styles.section}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.cardIcon}>❤️</Text>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>Current Health</Text>
-              <Text style={styles.cardMeta}>Complete health profile</Text>
+              <Text style={styles.cardTitle}>Health</Text>
             </View>
-            <TouchableOpacity onPress={() => setIsCurrentHealthEditMode(!isCurrentHealthEditMode)}>
-              <Text style={styles.editButton}>{isCurrentHealthEditMode ? 'Done' : 'Edit'}</Text>
-            </TouchableOpacity>
           </View>
+          <View style={styles.listCard}>
+            <VitalRow icon="pill" label="Medications" value={String(medicationCount)} onPress={() => setOpenPage('meds')} />
+            <View style={styles.divider} />
+            <VitalRow icon="alert-outline" iconColor="#FF9500" label="Allergies" value={allergyValue} onPress={() => setOpenPage('allergies')} />
+            <View style={styles.divider} />
+            <VitalRow icon="stethoscope" label="Conditions" value={String(conditionCount)} onPress={() => setOpenPage('conditions')} />
+            <View style={styles.divider} />
+            <VitalRow icon="book-open-page-variant-outline" label="Medical history" value={String(historyCount)} onPress={() => setOpenPage('history')} />
+          </View>
+        </View>
 
+        {/* CARE */}
+        <View style={styles.section}>
+          <View style={styles.cardTitleRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>Care</Text>
+            </View>
+          </View>
+          <View style={styles.listCard}>
+            <VitalRow icon="calendar-outline" label="Appointments" value={appointmentValue} onPress={() => setOpenPage('appointments')} />
+            <View style={styles.divider} />
+            <VitalRow icon="needle" label="Vaccines" value={vaccinesValue} onPress={() => setOpenPage('vaccines')} />
+            <View style={styles.divider} />
+            <VitalRow icon="clipboard-pulse-outline" label="Screenings" value={screeningsValue} onPress={() => setOpenPage('screenings')} />
+          </View>
+        </View>
+
+        {/* PROFILE */}
+        <View style={styles.section}>
+          <View style={styles.cardTitleRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>Profile</Text>
+            </View>
+          </View>
+          <View style={styles.listCard}>
+            <VitalRow icon="card-account-details-outline" label="Insurance" value={insuranceValue} onPress={() => setOpenPage('insurance')} />
+            <View style={styles.divider} />
+            <VitalRow icon="storefront-outline" label="Pharmacy" value={pharmacyValue} onPress={() => setOpenPage('pharmacy')} />
+            <View style={styles.divider} />
+            <VitalRow icon="phone-alert-outline" label="Emergency contacts" value={emergencyValue} onPress={() => setOpenPage('emergency')} />
+          </View>
+        </View>
+
+        <View style={styles.spacing} />
+      </ScrollView>
+
+      {/* Detail pages for the Health, Care, and Profile rows */}
+      <DetailModal
+        visible={openPage === 'meds'}
+        title="Medications"
+        onClose={closeDetail}
+        onDismiss={() => {
+          if (!pendingMedicationAdd) return;
+          setMedicationType(pendingMedicationAdd);
+          setMedicationInputMode('method');
+          setPendingMedicationAdd(null);
+        }}
+      >
+        <View style={styles.section}>
           <View style={styles.card}>
             {/* Prescription Medications */}
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
-                <Text style={styles.healthSectionTitle}>💊 Prescription Medications</Text>
-                {isCurrentHealthEditMode && (
-                  <TouchableOpacity onPress={() => {
-                    setMedicationType('prescription');
-                    setMedicationInputMode('method');
-                  }}>
-                    <Text style={styles.editLink}>+ Add</Text>
-                  </TouchableOpacity>
-                )}
+                <Text style={styles.healthSectionTitle}>Prescription Medications</Text>
               </View>
               {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) || epicMedications.length > 0 ? (
                 <>
                   {/* Manual medications */}
-                  {userData.prescriptionMedications && userData.prescriptionMedications.map((med, idx) => (
+                  {userData.prescriptionMedications && userData.prescriptionMedications.map((med, idx) => new Set(epicMedications.map((m) => m.name.trim().toLowerCase())).has(med.trim().toLowerCase()) ? null : (
                     <View key={`manual-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
                       {editingPrescriptionMedIdx === idx ? (
                         <TextInput
@@ -1071,7 +1359,7 @@ export default function HomeScreen() {
                               updated[idx] = editingPrescriptionMedValue;
                               const updatedData = { ...editData, prescriptionMedications: updated };
                               setEditData(updatedData);
-                              await updateUserData(updatedData);
+                              await patchUserData({ prescriptionMedications: updatedData.prescriptionMedications });
                               setEditingPrescriptionMedIdx(null);
                             }}
                           >
@@ -1085,14 +1373,14 @@ export default function HomeScreen() {
                               const updated = (userData.prescriptionMedications || []).filter((_, i) => i !== idx);
                               const updatedData = { ...editData, prescriptionMedications: updated };
                               setEditData(updatedData);
-                              await updateUserData(updatedData);
+                              await patchUserData({ prescriptionMedications: updatedData.prescriptionMedications });
                               setEditingPrescriptionMedIdx(null);
                             }}
                           >
                             <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
                           </TouchableOpacity>
                         </>
-                      ) : isCurrentHealthEditMode ? (
+                      ) : showMedicationControls ? (
                         <TouchableOpacity onPress={() => {
                           setEditingPrescriptionMedIdx(idx);
                           setEditingPrescriptionMedValue(med);
@@ -1103,32 +1391,41 @@ export default function HomeScreen() {
                     </View>
                   ))}
                   {/* Epic medications */}
-                  {epicMedications.map((med) => (
-                    <View key={med.id} style={{ marginVertical: 4 }}>
-                      <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{med.name}</Text></Text>
-                      <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
-                        {med.dosage}
-                      </Text>
-                    </View>
-                  ))}
+                  {epicMedications.map((med, index) => {
+                    const key = `medication:${med.id}`;
+                    const name = epicText(key, String(med.name ?? ''), 'primary');
+                    const dosage = epicText(key, String(med.dosage ?? ''), 'secondary');
+                    return (
+                      <View key={`epic-med-${index}`} style={{ marginVertical: 4 }}>
+                        <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{name}</Text></Text>
+                        <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
+                          {dosage}
+                        </Text>
+                        {showMedicationControls && (
+                        <TouchableOpacity onPress={() => openEpicEdit(key, 'medication', name, dosage)}>
+                          <Text style={styles.epicEditLink}>Edit</Text>
+                        </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })}
                 </>
               ) : (
                 <Text style={styles.emptyText}>No prescription medications added</Text>
               )}
+
+              <TouchableOpacity style={styles.addButton} onPress={() => {
+                setPendingMedicationAdd('prescription');
+                setOpenPage(null);
+              }}>
+                <Text style={styles.addButtonText}>+ Add prescription</Text>
+              </TouchableOpacity>
             </View>
 
             {/* OTC Medications and Supplements */}
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
-                <Text style={styles.healthSectionTitle}>🌿 OTC Medications & Supplements</Text>
-                {isCurrentHealthEditMode && (
-                  <TouchableOpacity onPress={() => {
-                    setMedicationType('otc');
-                    setMedicationInputMode('method');
-                  }}>
-                    <Text style={styles.editLink}>+ Add</Text>
-                  </TouchableOpacity>
-                )}
+                <Text style={styles.healthSectionTitle}>OTC Medications & Supplements</Text>
               </View>
               {(userData.otcMedications && userData.otcMedications.length > 0) ? (
                 userData.otcMedications.map((med, idx) => (
@@ -1150,7 +1447,7 @@ export default function HomeScreen() {
                             updated[idx] = editingOtcMedValue;
                             const updatedData = { ...editData, otcMedications: updated };
                             setEditData(updatedData);
-                            await updateUserData(updatedData);
+                            await patchUserData({ otcMedications: updatedData.otcMedications });
                             setEditingOtcMedIdx(null);
                           }}
                         >
@@ -1164,14 +1461,14 @@ export default function HomeScreen() {
                             const updated = (userData.otcMedications || []).filter((_, i) => i !== idx);
                             const updatedData = { ...editData, otcMedications: updated };
                             setEditData(updatedData);
-                            await updateUserData(updatedData);
+                            await patchUserData({ otcMedications: updatedData.otcMedications });
                             setEditingOtcMedIdx(null);
                           }}
                         >
                           <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
                         </TouchableOpacity>
                       </>
-                    ) : isCurrentHealthEditMode ? (
+                    ) : showMedicationControls ? (
                       <TouchableOpacity onPress={() => {
                         setEditingOtcMedIdx(idx);
                         setEditingOtcMedValue(med);
@@ -1184,21 +1481,31 @@ export default function HomeScreen() {
               ) : (
                 <Text style={styles.emptyText}>No OTC medications added</Text>
               )}
+
+              <TouchableOpacity style={styles.addButton} onPress={() => {
+                setPendingMedicationAdd('otc');
+                setOpenPage(null);
+              }}>
+                <Text style={styles.addButtonText}>+ Add supplement or OTC medication</Text>
+              </TouchableOpacity>
             </View>
 
 
+          </View>
+        </View>
+      </DetailModal>
+
+      <DetailModal visible={openPage === 'conditions'} title="Conditions" onClose={closeDetail}>
+        <View style={styles.section}>
+          <View style={styles.card}>
             {/* Conditions */}
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
-                <Text style={styles.healthSectionTitle}>⚕️ Conditions</Text>
-                {isCurrentHealthEditMode && (
-                  <TouchableOpacity onPress={() => setAddingCondition(!addingCondition)}>
-                    <Text style={styles.editLink}>+ Add</Text>
-                  </TouchableOpacity>
-                )}
+                <Text style={styles.healthSectionTitle}>Conditions</Text>
               </View>
-              {(userData.conditions && userData.conditions.length > 0) ? (
-                userData.conditions.map((condition, idx) => (
+              {(userData.conditions && userData.conditions.length > 0) || epicConditions.length > 0 ? (
+                <>
+                {userData.conditions.map((condition, idx) => new Set(epicConditions.map((c) => c.name.trim().toLowerCase())).has(condition.trim().toLowerCase()) ? null : (
                   <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
                     {editingConditionIdx === idx ? (
                       <TextInput
@@ -1217,7 +1524,7 @@ export default function HomeScreen() {
                             updated[idx] = editingConditionValue;
                             const updatedData = { ...editData, conditions: updated };
                             setEditData(updatedData);
-                            await updateUserData(updatedData);
+                            await patchUserData({ conditions: updatedData.conditions });
                             setEditingConditionIdx(null);
                           }}
                         >
@@ -1231,14 +1538,14 @@ export default function HomeScreen() {
                             const updated = (userData.conditions || []).filter((_, i) => i !== idx);
                             const updatedData = { ...editData, conditions: updated };
                             setEditData(updatedData);
-                            await updateUserData(updatedData);
+                            await patchUserData({ conditions: updatedData.conditions });
                             setEditingConditionIdx(null);
                           }}
                         >
                           <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
                         </TouchableOpacity>
                       </>
-                    ) : isCurrentHealthEditMode ? (
+                    ) : showHealthControls ? (
                       <TouchableOpacity onPress={() => {
                         setEditingConditionIdx(idx);
                         setEditingConditionValue(condition);
@@ -1247,10 +1554,32 @@ export default function HomeScreen() {
                       </TouchableOpacity>
                     ) : null}
                   </View>
-                ))
+                ))}
+                {epicConditions.map((cond, index) => {
+                  const key = `condition:${cond.id}`;
+                  const name = epicText(key, cond.name, 'primary');
+                  const detail = epicText(key, cond.status ? `Status: ${cond.status}` : '', 'secondary');
+                  return (
+                    <View key={`epic-cond-${index}`} style={{ marginVertical: 4 }}>
+                      <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{name}</Text></Text>
+                      {detail ? (
+                        <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>{detail}</Text>
+                      ) : null}
+{showHealthControls && (
+                      <TouchableOpacity onPress={() => openEpicEdit(key, 'condition', name, detail)}>
+                        <Text style={styles.epicEditLink}>Edit</Text>
+                      </TouchableOpacity>
+                        )}
+                    </View>
+                  );
+                })}
+                </>
               ) : (
                 <Text style={styles.emptyText}>No conditions added</Text>
               )}
+              <TouchableOpacity style={styles.addButton} onPress={() => setAddingCondition(!addingCondition)}>
+                <Text style={styles.addButtonText}>+ Add condition</Text>
+              </TouchableOpacity>
               {addingCondition && (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
                   <TextInput
@@ -1269,7 +1598,7 @@ export default function HomeScreen() {
                           conditions: [...(editData.conditions || []), newCondition.trim()]
                         };
                         setEditData(updatedData);
-                        await updateUserData(updatedData);
+                        await patchUserData({ conditions: updatedData.conditions });
                         setNewCondition('');
                         setAddingCondition(false);
                       }
@@ -1281,20 +1610,22 @@ export default function HomeScreen() {
               )}
             </View>
 
+          </View>
+        </View>
+      </DetailModal>
+
+      <DetailModal visible={openPage === 'allergies'} title="Allergies" onClose={closeDetail}>
+        <View style={styles.section}>
+          <View style={styles.card}>
             {/* Allergies */}
             <View style={styles.healthSection}>
               <View style={styles.healthSectionHeader}>
-                <Text style={styles.healthSectionTitle}>⚠️ Allergies</Text>
-                {isCurrentHealthEditMode && (
-                  <TouchableOpacity onPress={() => setAddingAllergy(!addingAllergy)}>
-                    <Text style={styles.editLink}>+ Add</Text>
-                  </TouchableOpacity>
-                )}
+                <Text style={styles.healthSectionTitle}>Allergies</Text>
               </View>
               {(userData.allergies && userData.allergies.length > 0) || epicAllergies.length > 0 ? (
                 <>
                   {/* Manual allergies */}
-                  {userData.allergies && userData.allergies.map((allergy, idx) => (
+                  {userData.allergies && userData.allergies.map((allergy, idx) => new Set(epicAllergies.map((a) => a.allergen.trim().toLowerCase())).has(allergy.trim().toLowerCase()) ? null : (
                     <View key={`manual-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
                       {editingAllergyIdx === idx ? (
                         <TextInput
@@ -1313,7 +1644,7 @@ export default function HomeScreen() {
                               updated[idx] = editingAllergyValue;
                               const updatedData = { ...editData, allergies: updated };
                               setEditData(updatedData);
-                              await updateUserData(updatedData);
+                              await patchUserData({ allergies: updatedData.allergies });
                               setEditingAllergyIdx(null);
                             }}
                           >
@@ -1327,14 +1658,14 @@ export default function HomeScreen() {
                               const updated = (userData.allergies || []).filter((_, i) => i !== idx);
                               const updatedData = { ...editData, allergies: updated };
                               setEditData(updatedData);
-                              await updateUserData(updatedData);
+                              await patchUserData({ allergies: updatedData.allergies });
                               setEditingAllergyIdx(null);
                             }}
                           >
                             <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
                           </TouchableOpacity>
                         </>
-                      ) : isCurrentHealthEditMode ? (
+                      ) : showHealthControls ? (
                         <TouchableOpacity onPress={() => {
                           setEditingAllergyIdx(idx);
                           setEditingAllergyValue(allergy);
@@ -1345,18 +1676,31 @@ export default function HomeScreen() {
                     </View>
                   ))}
                   {/* Epic allergies */}
-                  {epicAllergies.map((allergy) => (
-                    <View key={allergy.id} style={{ marginVertical: 4 }}>
-                      <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{allergy.allergen}</Text></Text>
-                      <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
-                        Reaction: {allergy.reaction}
-                      </Text>
-                    </View>
-                  ))}
+                  {epicAllergies.map((allergy) => {
+                    const key = `allergy:${allergy.id}`;
+                    const allergen = epicText(key, allergy.allergen, 'primary');
+                    const reaction = epicText(key, allergy.reaction, 'secondary');
+                    return (
+                      <View key={allergy.id} style={{ marginVertical: 4 }}>
+                        <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{allergen}</Text></Text>
+                        <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
+                          Reaction: {reaction}
+                        </Text>
+{showHealthControls && (
+                        <TouchableOpacity onPress={() => openEpicEdit(key, 'allergy', allergen, reaction)}>
+                          <Text style={styles.epicEditLink}>Edit</Text>
+                        </TouchableOpacity>
+                        )}
+                      </View>
+                    );
+                  })}
                 </>
               ) : (
                 <Text style={styles.emptyText}>No allergies added</Text>
               )}
+              <TouchableOpacity style={styles.addButton} onPress={() => setAddingAllergy(!addingAllergy)}>
+                <Text style={styles.addButtonText}>+ Add allergy</Text>
+              </TouchableOpacity>
               {addingAllergy && (
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
                   <TextInput
@@ -1375,7 +1719,7 @@ export default function HomeScreen() {
                           allergies: [...(editData.allergies || []), newAllergy.trim()]
                         };
                         setEditData(updatedData);
-                        await updateUserData(updatedData);
+                        await patchUserData({ allergies: updatedData.allergies });
                         setNewAllergy('');
                         setAddingAllergy(false);
                       }
@@ -1390,35 +1734,22 @@ export default function HomeScreen() {
 
           </View>
         </View>
+      </DetailModal>
 
+      <DetailModal visible={openPage === 'history'} onClose={closeDetail}>
         {/* HEALTH HISTORY Section */}
         <View style={styles.section}>
           <View style={styles.cardTitleRow}>
-            <Text style={styles.cardIcon}>📚</Text>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>Health History</Text>
             </View>
-            <TouchableOpacity onPress={() => setIsHealthHistoryEditMode(!isHealthHistoryEditMode)}>
-              <Text style={styles.editButton}>{isHealthHistoryEditMode ? 'Done' : 'Edit'}</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.card}>
             {/* Surgical History */}
             <View style={styles.historyCategory}>
               <View style={styles.historyCategoryHeader}>
-                <Text style={styles.historyCategoryTitle}>🔧 Surgical History</Text>
-                {isHealthHistoryEditMode && (
-                  <TouchableOpacity onPress={() => {
-                    setEditData(userData);
-                    setEditingHistoryType('surgical');
-                    setEditingIndex(null);
-                    setSurgeryDate('');
-                    setSurgeryName('');
-                  }}>
-                    <Text style={styles.addLink}>+ Add</Text>
-                  </TouchableOpacity>
-                )}
+                <Text style={styles.historyCategoryTitle}>Surgical History</Text>
               </View>
               {userData.surgicalHistory && userData.surgicalHistory.length > 0 ? (
                 userData.surgicalHistory.map((surgery, idx) => (
@@ -1427,7 +1758,7 @@ export default function HomeScreen() {
                       <Text style={styles.entryTitle}>{surgery.surgeryName}</Text>
                       <Text style={styles.entryMeta}>{surgery.date}</Text>
                     </View>
-                    {isHealthHistoryEditMode && (
+                    {showHealthControls && (
                       <TouchableOpacity onPress={() => {
                         setEditData(userData);
                         setEditingHistoryType('surgical');
@@ -1443,6 +1774,15 @@ export default function HomeScreen() {
               ) : (
                 <Text style={styles.emptyText}>No surgical history added</Text>
               )}
+              <TouchableOpacity style={styles.addButton} onPress={() => {
+                setEditData(userData);
+                setEditingHistoryType('surgical');
+                setEditingIndex(null);
+                setSurgeryDate('');
+                setSurgeryName('');
+              }}>
+                <Text style={styles.addButtonText}>+ Add surgery</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.divider} />
@@ -1450,18 +1790,7 @@ export default function HomeScreen() {
             {/* Family History */}
             <View style={styles.historyCategory}>
               <View style={styles.historyCategoryHeader}>
-                <Text style={styles.historyCategoryTitle}>👨‍👩‍👧 Family History</Text>
-                {isHealthHistoryEditMode && (
-                  <TouchableOpacity onPress={() => {
-                    setEditData(userData);
-                    setEditingHistoryType('family');
-                    setEditingIndex(null);
-                    setFamilyMember('');
-                    setFamilyCondition('');
-                  }}>
-                    <Text style={styles.addLink}>+ Add</Text>
-                  </TouchableOpacity>
-                )}
+                <Text style={styles.historyCategoryTitle}>Family History</Text>
               </View>
               {userData.familyHistory && userData.familyHistory.length > 0 ? (
                 Object.entries(
@@ -1479,7 +1808,7 @@ export default function HomeScreen() {
                       {conditions.map((item, condIdx) => (
                         <View key={item.idx} style={{ marginTop: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Text style={styles.entryMeta}>{condIdx + 1}. {item.condition}</Text>
-                          {isHealthHistoryEditMode && (
+                          {showHealthControls && (
                             <TouchableOpacity onPress={() => {
                               setEditData(userData);
                               setEditingHistoryType('family');
@@ -1498,6 +1827,15 @@ export default function HomeScreen() {
               ) : (
                 <Text style={styles.emptyText}>No family history added</Text>
               )}
+              <TouchableOpacity style={styles.addButton} onPress={() => {
+                setEditData(userData);
+                setEditingHistoryType('family');
+                setEditingIndex(null);
+                setFamilyMember('');
+                setFamilyCondition('');
+              }}>
+                <Text style={styles.addButtonText}>+ Add family history</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.divider} />
@@ -1505,23 +1843,13 @@ export default function HomeScreen() {
             {/* Past Conditions */}
             <View style={styles.historyCategory}>
               <View style={styles.historyCategoryHeader}>
-                <Text style={styles.historyCategoryTitle}>📋 Past Conditions</Text>
-                {isHealthHistoryEditMode && (
-                  <TouchableOpacity onPress={() => {
-                    setEditData(userData);
-                    setEditingHistoryType('conditions');
-                    setEditingIndex(null);
-                    setConditionName('');
-                  }}>
-                    <Text style={styles.addLink}>+ Add</Text>
-                  </TouchableOpacity>
-                )}
+                <Text style={styles.historyCategoryTitle}>Past Conditions</Text>
               </View>
               {userData.pastConditions && userData.pastConditions.length > 0 ? (
                 userData.pastConditions.map((condition, idx) => (
                   <View key={idx} style={styles.historyEntry}>
                     <Text style={styles.entryTitle}>{condition}</Text>
-                    {isHealthHistoryEditMode && (
+                    {showHealthControls && (
                       <TouchableOpacity onPress={() => {
                         setEditData(userData);
                         setEditingHistoryType('conditions');
@@ -1536,6 +1864,14 @@ export default function HomeScreen() {
               ) : (
                 <Text style={styles.emptyText}>No past conditions added</Text>
               )}
+              <TouchableOpacity style={styles.addButton} onPress={() => {
+                setEditData(userData);
+                setEditingHistoryType('conditions');
+                setEditingIndex(null);
+                setConditionName('');
+              }}>
+                <Text style={styles.addButtonText}>+ Add past condition</Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.divider} />
@@ -1543,18 +1879,7 @@ export default function HomeScreen() {
             {/* Hospitalizations */}
             <View style={styles.historyCategory}>
               <View style={styles.historyCategoryHeader}>
-                <Text style={styles.historyCategoryTitle}>🏥 Hospitalizations</Text>
-                {isHealthHistoryEditMode && (
-                  <TouchableOpacity onPress={() => {
-                    setEditData(userData);
-                    setEditingHistoryType('hospitalization');
-                    setEditingIndex(null);
-                    setHospitalizationDate('');
-                    setHospitalizationReason('');
-                  }}>
-                    <Text style={styles.addLink}>+ Add</Text>
-                  </TouchableOpacity>
-                )}
+                <Text style={styles.historyCategoryTitle}>Hospitalizations</Text>
               </View>
               {userData.hospitalizations && userData.hospitalizations.length > 0 ? (
                 userData.hospitalizations.map((hospitalization, idx) => (
@@ -1563,7 +1888,7 @@ export default function HomeScreen() {
                       <Text style={styles.entryTitle}>{hospitalization.reason}</Text>
                       <Text style={styles.entryMeta}>{hospitalization.date}</Text>
                     </View>
-                    {isHealthHistoryEditMode && (
+                    {showHealthControls && (
                       <TouchableOpacity onPress={() => {
                         setEditData(userData);
                         setEditingHistoryType('hospitalization');
@@ -1579,15 +1904,120 @@ export default function HomeScreen() {
               ) : (
                 <Text style={styles.emptyText}>No hospitalizations added</Text>
               )}
+              <TouchableOpacity style={styles.addButton} onPress={() => {
+                setEditData(userData);
+                setEditingHistoryType('hospitalization');
+                setEditingIndex(null);
+                setHospitalizationDate('');
+                setHospitalizationReason('');
+              }}>
+                <Text style={styles.addButtonText}>+ Add hospitalization</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
 
+      </DetailModal>
+
+      <DetailModal visible={openPage === 'appointments'} onClose={closeDetail}>
+        <View style={styles.section}>
+          {/* Appointments */}
+          <View style={styles.cardWrapper}>
+            <View style={styles.cardTitleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Upcoming Appointments</Text>
+                <Text style={styles.cardMeta}>{(userData.appointments?.length || 0) + epicAppointments.length} total</Text>
+              </View>
+              {epicAppointments.length > 0 && (
+                <TouchableOpacity onPress={loadEpicData}>
+                  <Text style={styles.editLink}>Sync</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <View style={styles.card}>
+              {(userData.appointments && userData.appointments.length > 0) || epicAppointments.length > 0 ? (
+                <>
+                  {/* Manual appointments */}
+                  {userData.appointments && [...userData.appointments]
+                    .sort((a, b) => parseAppointmentDate(a.dateTime).getTime() - parseAppointmentDate(b.dateTime).getTime())
+                    .map((apt, idx) => (
+                      <View key={apt.id}>
+                        <View style={styles.appointmentItemRow}>
+                          <View style={styles.appointmentItem}>
+                            <Text style={styles.appointmentDate}>{apt.dateTime}</Text>
+                            <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
+                            <Text style={styles.appointmentSpecialty}>{apt.specialty}</Text>
+                          </View>
+                          <TouchableOpacity onPress={() => {
+                            setEditData(userData);
+                            setEditingSection('appointments');
+                            setEditingAppointmentId(apt.id);
+                            setAppointmentDateTime(apt.dateTime);
+                            setAppointmentDoctorName(apt.doctorName);
+                            setAppointmentSpecialty(apt.specialty);
+                          }}>
+                            <Text style={styles.editLink}>Edit</Text>
+                          </TouchableOpacity>
+                        </View>
+                        {idx < (userData.appointments?.length || 0) - 1 && <View style={styles.divider} />}
+                      </View>
+                    ))}
+                  {/* Epic appointments */}
+                  {epicAppointments.map((apt, idx) => {
+                    const key = `appointment:${apt.id}`;
+                    const description = epicText(key, apt.description, 'primary');
+                    const doctor = epicText(key, apt.provider, 'secondary');
+                    return (
+                      <View key={apt.id}>
+                        <View style={styles.appointmentItemRow}>
+                          <View style={styles.appointmentItem}>
+                            <Text style={styles.appointmentDate}>{apt.date} at {apt.time}</Text>
+                            <Text style={styles.appointmentDoctor}>{doctor}</Text>
+                            <Text style={styles.appointmentSpecialty}>{description}</Text>
+                            <TouchableOpacity onPress={() => openEpicEdit(key, 'appointment', description, doctor)}>
+                              <Text style={styles.epicEditLink}>Edit</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                        {idx < epicAppointments.length - 1 && <View style={styles.divider} />}
+                      </View>
+                    );
+                  })}
+                </>
+              ) : (
+                <Text style={styles.emptyText}>No upcoming appointments</Text>
+              )}
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => {
+                  setEditData(userData);
+                  setAppointmentDateTime('');
+                  setAppointmentDoctorName('');
+                  setAppointmentSpecialty('');
+                  setEditingAppointmentId(null);
+                  setSelectedMonth(7);
+                  setSelectedDay(15);
+                  setSelectedYear(new Date().getFullYear());
+                  setSelectedHour(2);
+                  setSelectedMinute(0);
+                  setSelectedPeriod('PM');
+                  setEditingSection('appointments');
+                }}
+              >
+                <Text style={styles.addButtonText}>+ Add Appointment</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+
+        </View>
+      </DetailModal>
+
+      <DetailModal visible={openPage === 'screenings'} onClose={closeDetail}>
         {/* SCREENINGS Card */}
         <View style={styles.section}>
           <View style={styles.cardWrapper}>
             <View style={styles.cardTitleRow}>
-              <Text style={styles.cardIcon}>🏥</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>Health Screenings</Text>
               </View>
@@ -1679,11 +2109,13 @@ export default function HomeScreen() {
         </View>
         </View>
 
+      </DetailModal>
+
+      <DetailModal visible={openPage === 'vaccines'} onClose={closeDetail}>
         {/* VACCINES Card */}
         <View style={styles.section}>
           <View style={styles.cardWrapper}>
             <View style={styles.cardTitleRow}>
-              <Text style={styles.cardIcon}>💉</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>Vaccines</Text>
               </View>
@@ -1763,94 +2195,13 @@ export default function HomeScreen() {
         </View>
         </View>
 
-        {/* APPOINTMENTS & INSURANCE Section */}
+      </DetailModal>
+
+      <DetailModal visible={openPage === 'insurance'} onClose={closeDetail}>
         <View style={styles.section}>
-          {/* Appointments */}
-          <View style={styles.cardWrapper}>
-            <View style={styles.cardTitleRow}>
-              <Text style={styles.cardIcon}>📅</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Upcoming Appointments</Text>
-                <Text style={styles.cardMeta}>{(userData.appointments?.length || 0) + epicAppointments.length} total</Text>
-              </View>
-              {epicAppointments.length > 0 && (
-                <TouchableOpacity onPress={loadEpicData}>
-                  <Text style={styles.editLink}>Sync</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-            <View style={styles.card}>
-              {(userData.appointments && userData.appointments.length > 0) || epicAppointments.length > 0 ? (
-                <>
-                  {/* Manual appointments */}
-                  {userData.appointments && [...userData.appointments]
-                    .sort((a, b) => parseAppointmentDate(a.dateTime).getTime() - parseAppointmentDate(b.dateTime).getTime())
-                    .map((apt, idx) => (
-                      <View key={apt.id}>
-                        <View style={styles.appointmentItemRow}>
-                          <View style={styles.appointmentItem}>
-                            <Text style={styles.appointmentDate}>{apt.dateTime}</Text>
-                            <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
-                            <Text style={styles.appointmentSpecialty}>{apt.specialty}</Text>
-                          </View>
-                          <TouchableOpacity onPress={() => {
-                            setEditData(userData);
-                            setEditingSection('appointments');
-                            setEditingAppointmentId(apt.id);
-                            setAppointmentDateTime(apt.dateTime);
-                            setAppointmentDoctorName(apt.doctorName);
-                            setAppointmentSpecialty(apt.specialty);
-                          }}>
-                            <Text style={styles.editLink}>Edit</Text>
-                          </TouchableOpacity>
-                        </View>
-                        {idx < (userData.appointments?.length || 0) - 1 && <View style={styles.divider} />}
-                      </View>
-                    ))}
-                  {/* Epic appointments */}
-                  {epicAppointments.map((apt, idx) => (
-                    <View key={apt.id}>
-                      <View style={styles.appointmentItemRow}>
-                        <View style={styles.appointmentItem}>
-                          <Text style={styles.appointmentDate}>{apt.date} at {apt.time}</Text>
-                          <Text style={styles.appointmentDoctor}>{apt.provider}</Text>
-                          <Text style={styles.appointmentSpecialty}>{apt.description}</Text>
-                        </View>
-                      </View>
-                      {idx < epicAppointments.length - 1 && <View style={styles.divider} />}
-                    </View>
-                  ))}
-                </>
-              ) : (
-                <Text style={styles.emptyText}>No upcoming appointments</Text>
-              )}
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => {
-                  setEditData(userData);
-                  setAppointmentDateTime('');
-                  setAppointmentDoctorName('');
-                  setAppointmentSpecialty('');
-                  setEditingAppointmentId(null);
-                  setSelectedMonth(7);
-                  setSelectedDay(15);
-                  setSelectedYear(new Date().getFullYear());
-                  setSelectedHour(2);
-                  setSelectedMinute(0);
-                  setSelectedPeriod('PM');
-                  setEditingSection('appointments');
-                }}
-              >
-                <Text style={styles.addButtonText}>+ Add Appointment</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-
           {/* Insurance */}
           <View style={styles.cardWrapper}>
             <View style={styles.cardTitleRow}>
-              <Text style={styles.cardIcon}>🏥</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>Insurance</Text>
                 <Text style={styles.cardMeta}>{userData.insurances?.length || 0} plans</Text>
@@ -1908,10 +2259,14 @@ export default function HomeScreen() {
             </View>
           </View>
 
+        </View>
+      </DetailModal>
+
+      <DetailModal visible={openPage === 'pharmacy'} onClose={closeDetail}>
+        <View style={styles.section}>
           {/* Pharmacy */}
           <View style={styles.cardWrapper}>
             <View style={styles.cardTitleRow}>
-              <Text style={styles.cardIcon}>💊</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>Pharmacy</Text>
               </View>
@@ -1987,10 +2342,14 @@ export default function HomeScreen() {
             </View>
           </View>
 
+        </View>
+      </DetailModal>
+
+      <DetailModal visible={openPage === 'emergency'} onClose={closeDetail}>
+        <View style={styles.section}>
           {/* Emergency Contacts */}
           <View style={styles.cardWrapper}>
             <View style={styles.cardTitleRow}>
-              <Text style={styles.cardIcon}>📞</Text>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>Emergency Contacts</Text>
                 <Text style={styles.cardMeta}>{userData.emergencyContacts?.length || 0} contacts</Text>
@@ -2039,13 +2398,217 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
-
-        <View style={styles.spacing} />
-      </ScrollView>
+      </DetailModal>
 
       {/* EDIT MODALS */}
       {/* Blood Type Modal */}
       {/* Birthday Modal */}
+      {/* Weight and blood pressure history */}
+      <Modal visible={vitalDetail !== null} animationType="slide" onRequestClose={() => setVitalDetail(null)}>
+        <View style={styles.modalContainer}>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingTop: 60, paddingHorizontal: 20 }}>
+            <TouchableOpacity onPress={() => setVitalDetail(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={{ fontSize: 26, color: '#007AFF', fontWeight: '600' }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={{ paddingTop: 16, paddingHorizontal: 20, paddingBottom: 60 }}>
+          {vitalDetail === 'weight' && (
+            <>
+              <Text style={styles.epicEditTitle}>Weight</Text>
+              <Text style={styles.detailCurrent}>
+                {weightSorted.length > 0 ? `${weightSorted[weightSorted.length - 1].value} lbs` : (userData.weight || 'No weight yet')}
+              </Text>
+              {weightHint ? <Text style={styles.vitalHint}>{weightHint}</Text> : null}
+
+              {weightSorted.length > 0 && (
+                <View style={{ marginTop: 16 }}>
+                  <LabTrendChart history={weightSorted.map((w) => ({ value: String(w.value), date: w.date }))} />
+                </View>
+              )}
+
+              <Text style={styles.epicEditLabel}>All readings</Text>
+              {weightList.length === 0 && <Text style={styles.emptyText}>No readings saved yet.</Text>}
+              {weightList.map((r) => (
+                <View key={`w-${r.index}`} style={styles.readingRow}>
+                  <View>
+                    <Text style={styles.readingValue}>{r.value} lbs</Text>
+                    <Text style={styles.readingDate}>{formatReadingDate(r.date)}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => deleteWeightReading(r.index)}>
+                    <Text style={styles.epicEditLink}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              <TouchableOpacity
+                style={styles.epicEditSave}
+                onPress={() => {
+                  setVitalDetail(null);
+                  setNewWeight('');
+                  setAddingReading('weight');
+                }}
+              >
+                <Text style={styles.epicEditSaveText}>+ Add weight</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {vitalDetail === 'bp' && (
+            <>
+              <Text style={styles.epicEditTitle}>Blood pressure</Text>
+              <Text style={styles.detailCurrent}>{userData.vitals?.bloodPressure || 'No reading yet'}</Text>
+              {bpHint ? <Text style={styles.vitalHint}>{bpHint}</Text> : null}
+
+              {bpSorted.length > 0 && (
+                <>
+                  <Text style={styles.vitalChartLabel}>Systolic (top number), mmHg</Text>
+                  <LabTrendChart
+                    history={bpSorted.map((b) => ({ value: String(b.systolic), date: b.date }))}
+                    range="Below 120 mmHg (normal)"
+                  />
+                  <Text style={styles.vitalChartLabel}>Diastolic (bottom number), mmHg</Text>
+                  <LabTrendChart
+                    history={bpSorted.map((b) => ({ value: String(b.diastolic), date: b.date }))}
+                    range="Below 80 mmHg (normal)"
+                  />
+                  <Text style={styles.sourceNote}>
+                    Normal values from MedlinePlus (National Library of Medicine). Your provider can tell you what your readings mean.
+                  </Text>
+                </>
+              )}
+
+              <Text style={styles.epicEditLabel}>All readings</Text>
+              {bpList.length === 0 && <Text style={styles.emptyText}>No readings saved yet.</Text>}
+              {bpList.map((r) => (
+                <View key={`b-${r.index}`} style={styles.readingRow}>
+                  <View>
+                    <Text style={styles.readingValue}>{r.systolic}/{r.diastolic} mmHg</Text>
+                    <Text style={styles.readingDate}>{formatReadingDate(r.date)}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => deleteBpReading(r.index)}>
+                    <Text style={styles.epicEditLink}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              <TouchableOpacity
+                style={styles.epicEditSave}
+                onPress={() => {
+                  setVitalDetail(null);
+                  setNewSystolic('');
+                  setNewDiastolic('');
+                  setAddingReading('bp');
+                }}
+              >
+                <Text style={styles.epicEditSaveText}>+ Add blood pressure</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Add a weight or blood pressure reading */}
+      <Modal visible={addingReading !== null} animationType="slide" onRequestClose={() => setAddingReading(null)}>
+        <View style={styles.modalContainer}>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingTop: 60, paddingHorizontal: 20 }}>
+            <TouchableOpacity onPress={() => setAddingReading(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={{ fontSize: 26, color: '#007AFF', fontWeight: '600' }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ paddingTop: 16, paddingHorizontal: 20 }}>
+            <Text style={styles.epicEditTitle}>
+              {addingReading === 'weight' ? 'Add a weight' : 'Add a blood pressure'}
+            </Text>
+            <Text style={styles.epicEditLabel}>Date (MM/DD/YYYY)</Text>
+            <TextInput
+              style={styles.epicEditInput}
+              keyboardType="numbers-and-punctuation"
+              placeholder="e.g. 10/14/2026"
+              placeholderTextColor="#999"
+              value={newReadingDate}
+              onChangeText={setNewReadingDate}
+            />
+
+            {addingReading === 'weight' ? (
+              <>
+                <Text style={styles.epicEditLabel}>Weight (lbs)</Text>
+                <TextInput
+                  style={styles.epicEditInput}
+                  keyboardType="decimal-pad"
+                  placeholder="e.g. 182"
+                  placeholderTextColor="#999"
+                  value={newWeight}
+                  onChangeText={setNewWeight}
+                />
+              </>
+            ) : (
+              <>
+                <Text style={styles.epicEditLabel}>Top number (systolic)</Text>
+                <TextInput
+                  style={styles.epicEditInput}
+                  keyboardType="number-pad"
+                  placeholder="e.g. 120"
+                  placeholderTextColor="#999"
+                  value={newSystolic}
+                  onChangeText={setNewSystolic}
+                />
+                <Text style={styles.epicEditLabel}>Bottom number (diastolic)</Text>
+                <TextInput
+                  style={styles.epicEditInput}
+                  keyboardType="number-pad"
+                  placeholder="e.g. 80"
+                  placeholderTextColor="#999"
+                  value={newDiastolic}
+                  onChangeText={setNewDiastolic}
+                />
+              </>
+            )}
+
+            <TouchableOpacity style={styles.epicEditSave} onPress={saveNewReading}>
+              <Text style={styles.epicEditSaveText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit an Epic item shown on this screen */}
+      <Modal visible={editingEpic !== null} animationType="slide" onRequestClose={() => setEditingEpic(null)}>
+        <View style={styles.modalContainer}>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingTop: 60, paddingHorizontal: 20 }}>
+            <TouchableOpacity onPress={() => setEditingEpic(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={{ fontSize: 26, color: '#007AFF', fontWeight: '600' }}>✕</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ paddingTop: 16, paddingHorizontal: 20 }}>
+            <Text style={styles.epicEditTitle}>Edit this item</Text>
+            <Text style={styles.epicEditHint}>Only this app changes. Epic's record stays as it is.</Text>
+
+            <Text style={styles.epicEditLabel}>{editingEpic?.primaryLabel}</Text>
+            <TextInput
+              style={styles.epicEditInput}
+              value={editingEpic?.primary ?? ''}
+              onChangeText={(text) => setEditingEpic((current) => (current ? { ...current, primary: text } : current))}
+            />
+
+            <Text style={styles.epicEditLabel}>{editingEpic?.secondaryLabel}</Text>
+            <TextInput
+              style={styles.epicEditInput}
+              value={editingEpic?.secondary ?? ''}
+              onChangeText={(text) => setEditingEpic((current) => (current ? { ...current, secondary: text } : current))}
+            />
+
+            <TouchableOpacity style={styles.epicEditSave} onPress={saveEpicEdit}>
+              <Text style={styles.epicEditSaveText}>Save</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={{ marginTop: 16 }} onPress={restoreEpicEdit}>
+              <Text style={styles.epicEditLink}>Restore Epic's version</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={editingSection === 'birthday'} animationType="slide" onRequestClose={handleCancel}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -2120,7 +2683,7 @@ export default function HomeScreen() {
                 onPress={() => {
                   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
                   const formattedBirthday = `${months[selectedBirthdayMonth]} ${selectedBirthdayDay}, ${selectedBirthdayYear}`;
-                  updateUserData({ ...editData, birthday: formattedBirthday });
+                  patchUserData({ birthday: formattedBirthday });
                   setEditingSection(null);
                 }}
               >
@@ -2392,7 +2955,7 @@ export default function HomeScreen() {
                 style={styles.saveButton}
                 onPress={() => {
                   const genderToSave = selectedGender === 'Other' && customGender ? customGender : selectedGender;
-                  updateUserData({ ...editData, gender: genderToSave });
+                  patchUserData({ gender: genderToSave });
                   setCustomGender('');
                   setEditingSection(null);
                 }}
@@ -2499,7 +3062,7 @@ export default function HomeScreen() {
               onPress={async () => {
                 const updatedData = { ...editData, height: `${selectedFeet}'${selectedInches}"` };
                 setEditData(updatedData);
-                await updateUserData(updatedData);
+                await patchUserData({ height: updatedData.height });
                 setEditingSection(null);
               }}
             >
@@ -2542,8 +3105,14 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={styles.datePickerDoneButton}
               onPress={async () => {
-                const updatedData = { ...editData, weight: `${selectedWeight} lbs` };
-                await updateUserData(updatedData);
+                const weightValue = Number(selectedWeight);
+                const updatedData = {
+                  weight: `${selectedWeight} lbs`,
+                  weightHistory: isNaN(weightValue)
+                    ? userData.weightHistory
+                    : [...(userData.weightHistory || []), { date: new Date().toISOString(), value: weightValue }],
+                };
+                await patchUserData(updatedData);
                 setEditingSection(null);
               }}
             >
@@ -2605,10 +3174,13 @@ export default function HomeScreen() {
               style={styles.datePickerDoneButton}
               onPress={async () => {
                 const updatedData = {
-                  ...editData,
-                  vitals: { ...editData.vitals, bloodPressure: `${selectedSystolic}/${selectedDiastolic} mmHg` }
+                  vitals: { ...userData.vitals, bloodPressure: `${selectedSystolic}/${selectedDiastolic} mmHg` },
+                  bloodPressureHistory: [
+                    ...(userData.bloodPressureHistory || []),
+                    { date: new Date().toISOString(), systolic: Number(selectedSystolic), diastolic: Number(selectedDiastolic) },
+                  ],
                 };
-                await updateUserData(updatedData);
+                await patchUserData(updatedData);
                 setEditingSection(null);
                 Alert.alert('Success', 'Blood pressure saved');
               }}
@@ -2795,7 +3367,7 @@ export default function HomeScreen() {
                       <TouchableOpacity
                         onPress={async () => {
                           const updatedVaccines = userData.vaccines!.filter((_, i) => i !== idx);
-                          await updateUserData({ ...editData, vaccines: updatedVaccines });
+                          await patchUserData({ vaccines: updatedVaccines });
                           Alert.alert('Success', 'Vaccine deleted');
                         }}
                         style={{ marginLeft: 12 }}
@@ -2849,7 +3421,7 @@ export default function HomeScreen() {
                       date: newVaccineDate.trim(),
                       nextDue: newVaccineNextDue.trim() || undefined,
                     }];
-                    await updateUserData({ ...editData, vaccines: updatedVaccines });
+                    await patchUserData({ vaccines: updatedVaccines });
                     setNewVaccineName('');
                     setNewVaccineDate('');
                     setNewVaccineNextDue('');
@@ -2918,7 +3490,7 @@ export default function HomeScreen() {
                     nextDue: newVaccineNextDue.trim() || undefined,
                   }];
                   setEditData({ ...editData, vaccines: updatedVaccines });
-                  await updateUserData({ ...editData, vaccines: updatedVaccines });
+                  await patchUserData({ vaccines: updatedVaccines });
                   setNewVaccineName('');
                   setNewVaccineDate('');
                   setNewVaccineNextDue('');
@@ -3422,6 +3994,134 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  expiredBanner: {
+    backgroundColor: '#FFF3CD',
+    borderRadius: 10,
+    padding: 12,
+    marginHorizontal: 20,
+    marginBottom: 14,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F59E0B',
+  },
+  expiredText: {
+    fontSize: 13,
+    color: '#7C4A03',
+    lineHeight: 19,
+  },
+  tapForHistory: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#007AFF',
+    paddingLeft: 8,
+  },
+  vitalHint: {
+    fontSize: 12,
+    color: '#007AFF',
+    marginTop: 2,
+  },
+  detailCurrent: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 4,
+  },
+  readingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  readingValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+  },
+  readingDate: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  sourceNote: {
+    fontSize: 11,
+    color: '#888',
+    marginTop: 8,
+  },
+  addReadingButton: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  addReadingText: {
+    color: '#007AFF',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  addReadingDate: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  vitalChartBox: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  vitalChartLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 4,
+  },
+  epicEditLink: {
+    color: '#007AFF',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  epicEditTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 8,
+  },
+  epicEditHint: {
+    fontSize: 12,
+    color: '#666',
+    marginBottom: 12,
+  },
+  epicEditLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  epicEditInput: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 15,
+    color: '#000',
+    backgroundColor: '#FAFAFA',
+  },
+  epicEditSave: {
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  epicEditSaveText: {
+    color: '#FFF',
+    fontWeight: '700',
+    fontSize: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: '#FAFAFA',
@@ -3448,7 +4148,7 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 20,
-    marginBottom: 48,
+    marginBottom: 32,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -3478,6 +4178,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
   },
+  vitalTouch: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  detailModal: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
+  },
+  detailHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 20,
+  },
+  detailAction: {
+    fontSize: 16,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  detailClose: {
+    fontSize: 26,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  detailContent: {
+    paddingTop: 12,
+    paddingBottom: 60,
+  },
+  detailTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 12,
+    paddingHorizontal: 20,
+  },
+  rowIcon: {
+    width: 22,
+    marginRight: 12,
+  },
+  rowChevron: {
+    marginLeft: 8,
+  },
   vitalContent: {
     flex: 1,
   },
@@ -3492,8 +4236,8 @@ const styles = StyleSheet.create({
   },
   vitalValue: {
     fontSize: 15,
-    fontWeight: '700',
-    color: '#007AFF',
+    fontWeight: '400',
+    color: '#000',
   },
   divider: {
     height: 1,
@@ -3503,10 +4247,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF',
     borderRadius: 12,
     padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E5E5EA',
+  },
+  listCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E5E5EA',
   },
   cardWrapper: {
     marginBottom: 12,
@@ -3514,14 +4263,14 @@ const styles = StyleSheet.create({
   cardTitleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 12,
+    marginBottom: 8,
     gap: 10,
   },
   cardIcon: {
     fontSize: 20,
   },
   cardTitle: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '600',
     color: '#000',
   },

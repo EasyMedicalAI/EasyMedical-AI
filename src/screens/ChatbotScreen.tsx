@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { chatbotService } from '@/services/chatbotService';
 import { useRecords } from '@/context/RecordsContext';
+import { ScreenHeader, Section, ListCard, ListRow, Divider } from '@/components/ScreenKit';
 
 interface Message {
   id: string;
@@ -142,17 +143,8 @@ export default function ChatbotScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       keyboardVerticalOffset={0}
     >
-      <View style={styles.topBar}>
-        <View />
-        <Text style={styles.appName}>EasyMedical AI</Text>
-      </View>
-
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Your Health Chatbot</Text>
-          <Text style={styles.questionsRemaining}>Questions remaining: {20 - questionCount}</Text>
-        </View>
-      </View>
+      <ScreenHeader title="Chatbot" />
+      <Text style={styles.questionsRemaining}>Questions remaining: {20 - questionCount}</Text>
 
       <ScrollView
         ref={scrollViewRef}
@@ -186,18 +178,16 @@ export default function ChatbotScreen() {
         ))}
 
         {messages.length === 1 && !loading && (
-          <View style={styles.sampleQuestionsContainer}>
-            <Text style={styles.sampleQuestionsLabel}>Ask about your records:</Text>
-            {suggestedQuestions.map((question, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.sampleQuestion}
-                onPress={() => setInputText(question)}
-              >
-                <Text style={styles.sampleQuestionText}>{question}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <Section title="Ask about your records">
+            <ListCard>
+              {suggestedQuestions.map((question, index) => (
+                <React.Fragment key={index}>
+                  {index > 0 && <Divider />}
+                  <ListRow icon="message-text-outline" label={question} onPress={() => setInputText(question)} />
+                </React.Fragment>
+              ))}
+            </ListCard>
+          </Section>
         )}
 
         {loading && (
@@ -240,54 +230,14 @@ export default function ChatbotScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
-  topBar: {
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  appName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#999',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  header: {
-    backgroundColor: '#FFF',
-    paddingTop: 16,
-    paddingHorizontal: 20,
-    paddingBottom: 12,
-    borderBottomColor: '#F0F0F0',
-    borderBottomWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#000',
+    backgroundColor: '#FAFAFA',
   },
   questionsRemaining: {
     fontSize: 13,
-    color: '#999',
-    marginTop: 4,
-  },
-  limitBadge: {
-    backgroundColor: '#E8F4FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  limitText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#007AFF',
+    color: '#666',
+    paddingHorizontal: 20,
+    marginTop: -4,
+    marginBottom: 12,
   },
   messagesContainer: {
     flex: 1,
@@ -314,7 +264,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
   },
   botMessage: {
-    backgroundColor: '#E9E9EB',
+    backgroundColor: '#FFF',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E5E5EA',
   },
   messageText: {
     fontSize: 15,
@@ -352,7 +304,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    borderColor: '#DDD',
+    borderColor: '#E5E5EA',
     borderWidth: 1,
     borderRadius: 20,
     paddingHorizontal: 16,
@@ -376,29 +328,5 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '600',
     fontSize: 15,
-  },
-  sampleQuestionsContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 20,
-    gap: 12,
-  },
-  sampleQuestionsLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 8,
-  },
-  sampleQuestion: {
-    backgroundColor: '#F0F0F0',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#007AFF',
-  },
-  sampleQuestionText: {
-    fontSize: 14,
-    color: '#000',
-    lineHeight: 20,
   },
 });

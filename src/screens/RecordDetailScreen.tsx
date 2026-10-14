@@ -1,18 +1,9 @@
-import React, { useMemo, useState } from 'react';
-import {
-  ScrollView,
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Image,
-  Alert,
-  TextInput,
-  Modal,
-} from 'react-native';
+import React, { useState } from 'react';
+import { ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, Modal } from 'react-native';
 import { useRecords } from '@/context/RecordsContext';
 import { MedicalRecord } from '@/types/medical';
 import RecordSummary from '@/components/RecordSummary';
+import { Section, ListCard, ListRow, Divider } from '@/components/ScreenKit';
 
 interface RecordDetailScreenProps {
   record: MedicalRecord;
@@ -77,56 +68,38 @@ export default function RecordDetailScreen({ record, onBack }: RecordDetailScree
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onBack}>
-          <Text style={styles.backArrow}>← Back</Text>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={onBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={styles.backText}>‹ Back</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleDelete}>
-          <Text style={styles.deleteButton}>Delete</Text>
+        <TouchableOpacity onPress={handleDelete} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Text style={styles.deleteText}>Delete</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.content}>
-        {/* Title Section */}
-        <View style={styles.titleSection}>
-          <Text style={styles.specialty}>{record.specialty}</Text>
-          <Text style={styles.provider}>{record.provider}</Text>
-        </View>
+      <RecordSummary record={record} />
 
-        {/* Same layout for every record */}
-        <RecordSummary record={record} />
+      <Section title="Your notes">
+        <ListCard>
+          <ListRow icon="pencil-outline" label="Reason for visit" hint={record.reasonForVisit || 'Not added yet'} onPress={handleEditReason} />
+          <Divider />
+          <ListRow icon="note-text-outline" label="Notes" hint={record.notes || 'No notes added yet'} onPress={handleEditNotes} />
+        </ListCard>
+      </Section>
 
-        <TouchableOpacity style={styles.editButton} onPress={handleEditReason}>
-          <Text style={styles.editButtonText}>Edit Reason for Visit</Text>
-        </TouchableOpacity>
+      <View style={styles.spacing} />
 
-        {/* Notes Section */}
-        <View style={styles.section}>
-          <View style={styles.notesHeader}>
-            <Text style={styles.sectionTitle}>Notes</Text>
-            <TouchableOpacity onPress={handleEditNotes}>
-              <Text style={styles.editButtonText}>Edit</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.notesBox}>
-            <Text style={styles.notesText}>
-              {record.notes || 'No notes added yet. Tap Edit to add notes.'}
-            </Text>
-          </View>
-        </View>
-
-      </View>
       {/* Edit Reason Modal */}
       <Modal visible={editingReason} animationType="slide" onRequestClose={() => setEditingReason(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setEditingReason(false)}>
-              <Text style={styles.modalCloseButton}>Cancel</Text>
+              <Text style={styles.modalCancel}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Edit Reason for Visit</Text>
+            <Text style={styles.modalTitle}>Reason for visit</Text>
             <TouchableOpacity onPress={handleSaveReason}>
-              <Text style={styles.modalSaveButton}>Save</Text>
+              <Text style={styles.modalSave}>Save</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.modalContent}>
@@ -147,11 +120,11 @@ export default function RecordDetailScreen({ record, onBack }: RecordDetailScree
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setEditingNotes(false)}>
-              <Text style={styles.modalCloseButton}>Cancel</Text>
+              <Text style={styles.modalCancel}>Cancel</Text>
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Edit Notes</Text>
+            <Text style={styles.modalTitle}>Notes</Text>
             <TouchableOpacity onPress={handleSaveNotes}>
-              <Text style={styles.modalSaveButton}>Save</Text>
+              <Text style={styles.modalSave}>Save</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.modalContent}>
@@ -175,26 +148,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAFAFA',
   },
-  header: {
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    paddingTop: 50,
+    paddingBottom: 16,
   },
-  backArrow: {
-    fontSize: 16,
+  backText: {
+    fontSize: 17,
     color: '#007AFF',
-    fontWeight: '500',
   },
-  deleteButton: {
-    fontSize: 14,
-    color: '#FF3333',
-    fontWeight: '600',
+  deleteText: {
+    fontSize: 17,
+    color: '#FF3B30',
   },
   centerContent: {
     flex: 1,
@@ -208,16 +176,6 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 20,
   },
-  errorSubtext: {
-    fontSize: 12,
-    color: '#999',
-    marginBottom: 20,
-  },
-  loadingText: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 12,
-  },
   backButton: {
     backgroundColor: '#007AFF',
     paddingHorizontal: 24,
@@ -228,152 +186,34 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontWeight: '600',
   },
-  content: {
-    padding: 20,
-  },
-  titleSection: {
-    marginBottom: 24,
-  },
-  provider: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#000',
-    marginBottom: 4,
-  },
-  specialty: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  imageContainer: {
-    marginBottom: 20,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#FFF',
-  },
-  image: {
-    width: '100%',
-    height: 300,
-  },
-  section: {
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 12,
-  },
-  summaryText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#333',
-  },
-  dataTable: {
-    backgroundColor: '#FFF',
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginBottom: 12,
-  },
-  dataRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FAFAFA',
-  },
-  dataRowBorder: {
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  dataLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#666',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  dataValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#000',
-    flex: 1,
-    textAlign: 'right',
-  },
-  editButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    backgroundColor: '#F0F8FF',
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  editButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#007AFF',
-  },
-  notesHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  notesBox: {
-    backgroundColor: '#FFF',
-    borderRadius: 10,
-    padding: 16,
-    minHeight: 100,
-    borderWidth: 1,
-    borderColor: '#F0F0F0',
-  },
-  notesText: {
-    fontSize: 14,
-    color: '#333',
-    lineHeight: 20,
-  },
-  originalTextBox: {
-    backgroundColor: '#FFF',
-    borderRadius: 8,
-    padding: 12,
-    maxHeight: 200,
-  },
-  originalText: {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 18,
+  spacing: {
+    height: 100,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: '#FAFAFA',
     paddingTop: 50,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
   },
-  modalCloseButton: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#999',
-  },
-  modalSaveButton: {
-    fontSize: 16,
-    fontWeight: '600',
+  modalCancel: {
+    fontSize: 17,
     color: '#007AFF',
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#000',
+  },
+  modalSave: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#007AFF',
   },
   modalContent: {
     flex: 1,
@@ -381,8 +221,10 @@ const styles = StyleSheet.create({
   },
   modalInput: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-    borderRadius: 10,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E5E5EA',
     padding: 16,
     fontSize: 15,
     color: '#000',

@@ -12,6 +12,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useRecords } from '@/context/RecordsContext';
@@ -23,6 +24,12 @@ import { MedicalRecord } from '@/types/medical';
 import MetricDetailScreen from '@/screens/MetricDetailScreen';
 import RecordSummary from '@/components/RecordSummary';
 import { toMedicalRecord, ExtractedRecord } from '@/services/recordFormat';
+import { typicalRangeFor } from '@/services/labReferenceRanges';
+import LabTrendChart from '@/components/LabTrendChart';
+import { explanationFor } from '@/services/labExplanations';
+import LabAskBox from '@/components/LabAskBox';
+import { ScreenHeader, Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 // Simple UUID generator that works in React Native (no crypto dependency)
 const generateUUID = (): string => {
@@ -75,6 +82,7 @@ interface RecordsScreenProps {
 export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) {
   const {
     records,
+    userData,
     loading,
     getUniqueSpecialties,
     addRecord,
@@ -253,7 +261,11 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       'ordering physician', 'physician', 'account number', 'performing lab', 'lab',
       'date collected', 'date received', 'date reported', 'fasting status', 'field',
       'unit', 'reference range', 'reference interval', 'comments', 'notes', 'previous result',
-      'current result', 'flag', 'test', 'result', 'value', 'units'
+      'current result', 'flag', 'test', 'result', 'value', 'units',
+      // Narrative sections of a report, never test results
+      'note', 'notes', 'summary', 'impression', 'interpretation', 'conclusion', 'comment',
+      'recommendation', 'recommendations', 'reason', 'diagnosis', 'findings', 'history',
+      'report', 'assessment', 'plan', 'instructions'
     ]);
 
     records.forEach(record => {
@@ -288,9 +300,12 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               const cleanValue = String(testValue).trim();
               console.log(`✅ Found lab from testResults: ${testName} = ${cleanValue}`);
 
+              // Epic sends the normal range alongside each result
+              const testRange = record.extractedData?.testRanges?.[testName] || undefined;
               if (!labMap.has(testName)) {
                 labMap.set(testName, {
                   value: cleanValue,
+                  range: testRange,
                   date: testDate,
                   history: [{ value: cleanValue, date: testDate }],
                 });
@@ -300,6 +315,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 if (new Date(testDate) > new Date(existing.date)) {
                   existing.value = cleanValue;
                   existing.date = testDate;
+                  existing.range = testRange || existing.range;
                 }
               }
             }
@@ -406,8 +422,11 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
 
               // Check if this is metadata by checking exact match or first word
               const lowerName = labName.toLowerCase();
+              // Real test names are short and values are short. Sentences are narrative text, not results.
               const isMetadata = metadataFields.has(lowerName) ||
-                                metadataFields.has(lowerName.split(/[\/\s-]+/)[0]); // Check first word/part
+                                metadataFields.has(lowerName.split(/[\/\s-]+/)[0]) || // Check first word/part
+                                labName.split(/\s+/).length > 4 ||
+                                cleanValue.length > 40;
 
               // Only include real lab values
               // Exclude header row indicators and metadata
@@ -475,9 +494,11 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       }
     });
 
+    // Report or Epic range first; a typical adult range only when neither gives one
     const result = Array.from(labMap.entries()).map(([name, data]) => ({
       name,
       ...data,
+      range: data.range || typicalRangeFor(name, userData),
     }));
 
     console.log(`🧬 Found ${result.length} unique lab values`);
@@ -782,50 +803,37 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   return (
     <>
     <ScrollView style={styles.container}>
-      <View style={styles.topBar}>
-        <View />
-        <Text style={styles.appName}>EasyMedical AI</Text>
-      </View>
-      <View style={styles.header}>
-        <Text style={styles.title}>My Health Records</Text>
-        <Text style={styles.subtitle}>{specialties.length} specialties available</Text>
-      </View>
+      <ScreenHeader title="Records" />
+      <Text style={styles.headerSubtitle}>{specialties.length} specialties available</Text>
 
       {/* My Records Section */}
       <View style={styles.myRecordsSection}>
-        <Text style={styles.sectionTitle}>My Records</Text>
+        <Text style={styles.sectionTitle}>My records</Text>
         {records.length > 0 ? (
           getOrganizedRecords().map(({ specialty, records: specialtyRecords }) => (
             <View key={specialty} style={styles.specialtyGroup}>
-              <Text style={styles.specialtyGroupTitle}>
-                {getSpecialtyEmoji(specialty)} {specialty}
-              </Text>
-              <View style={styles.recordsCardList}>
-                {specialtyRecords.map(record => (
-                  <TouchableOpacity
-                    key={record.id}
-                    style={styles.myRecordsCard}
-                    onPress={() => {
-                      setSelectedRecord(record);
-                      setShowRecordDetail(true);
-                    }}
-                  >
-                    <View style={styles.recordCardHeader}>
-                      <Text style={styles.recordCardDate}>
-                        {new Date(record.appointmentDate || record.uploadDate).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </Text>
-                    </View>
-                    <Text style={styles.recordCardProvider}>{record.provider}</Text>
-                    <Text style={styles.recordCardReason}>
-                      {record.reasonForVisit || record.summary || 'No description'}
-                    </Text>
-                  </TouchableOpacity>
+              <Text style={styles.specialtyGroupTitle}>{specialty}</Text>
+              <ListCard>
+                {specialtyRecords.map((record, index) => (
+                  <React.Fragment key={record.id}>
+                    {index > 0 && <Divider />}
+                    <ListRow
+                      icon={getSpecialtyIcon(specialty)}
+                      label={record.provider || 'Record'}
+                      hint={record.reasonForVisit || record.summary || 'No description'}
+                      value={new Date(record.appointmentDate || record.uploadDate).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                      onPress={() => {
+                        setSelectedRecord(record);
+                        setShowRecordDetail(true);
+                      }}
+                    />
+                  </React.Fragment>
                 ))}
-              </View>
+              </ListCard>
             </View>
           ))
         ) : (
@@ -836,7 +844,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       {/* Health Metrics Section */}
       {metricCards.length > 0 && (
         <View style={styles.metricsSection}>
-          <Text style={styles.sectionTitle}>📊 Health Metrics</Text>
+          <Text style={styles.sectionTitle}>Health metrics</Text>
           <Text style={styles.metricsSubtitle}>Your latest lab values and trends</Text>
 
           <ScrollView
@@ -885,7 +893,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       {/* My Labs Section */}
       {records.some(r => r.specialty?.toLowerCase().includes('lab')) && (
         <View style={styles.myLabsSection}>
-          <Text style={styles.sectionTitle}>My Labs</Text>
+          <Text style={styles.sectionTitle}>My labs</Text>
           {labValues.length > 0 ? (
           <View style={styles.labsGrid}>
             {labValues.sort((a, b) => a.name.localeCompare(b.name)).map(lab => (
@@ -916,25 +924,17 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         </View>
       )}
 
-      {/* Upload Records Section */}
-      <View style={styles.uploadRecordsSection}>
-        <Text style={styles.uploadRecordsTitle}>Upload Records</Text>
-      </View>
-
-      {/* Specialties for Upload - Always show all */}
-      <View style={styles.uploadSpecialtiesContainer}>
-        {[...defaultSpecialties].sort().map(specialty => (
-          <TouchableOpacity
-            key={`upload-${specialty}`}
-            style={styles.uploadSpecialtyButton}
-            onPress={() => setUploadingSpecialty(specialty)}
-          >
-            <Text style={styles.uploadSpecialtyButtonText}>
-              {getSpecialtyEmoji(specialty)} {specialty}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* Upload Records Section, with all specialties */}
+      <Section title="Upload records">
+        <ListCard>
+          {[...defaultSpecialties].sort().map((specialty, index) => (
+            <React.Fragment key={`upload-${specialty}`}>
+              {index > 0 && <Divider />}
+              <ListRow icon={getSpecialtyIcon(specialty)} label={specialty} onPress={() => setUploadingSpecialty(specialty)} />
+            </React.Fragment>
+          ))}
+        </ListCard>
+      </Section>
 
       <View style={styles.spacing} />
     </ScrollView>
@@ -1427,11 +1427,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       {/* Record Detail Modal */}
       <Modal visible={showRecordDetail && selectedRecord !== null} animationType="slide" onRequestClose={() => { setShowRecordDetail(false); setIsEditingRecord(false); }}>
         <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => { setShowRecordDetail(false); setIsEditingRecord(false); }}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>{isEditingRecord ? 'Edit Record' : 'Record Details'}</Text>
+          <View style={styles.detailHeaderRow}>
             <TouchableOpacity onPress={() => {
               if (isEditingRecord) {
                 setEditedReason('');
@@ -1441,9 +1437,13 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               }
               setIsEditingRecord(!isEditingRecord);
             }}>
-              <Text style={styles.closeButton}>{isEditingRecord ? '✕' : '✎'}</Text>
+              <Text style={styles.detailAction}>{isEditingRecord ? 'Cancel' : 'Edit'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => { setShowRecordDetail(false); setIsEditingRecord(false); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.detailClose}>✕</Text>
             </TouchableOpacity>
           </View>
+          <Text style={styles.detailPageTitle}>{isEditingRecord ? 'Edit record' : 'Record details'}</Text>
 
           <ScrollView style={styles.modalContent}>
             {selectedRecord && !isEditingRecord && <RecordSummary record={selectedRecord} />}
@@ -1743,93 +1743,108 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         </View>
       </Modal>
 
-      {/* Lab History Modal */}
-      <Modal visible={selectedLabName !== null} animationType="slide" onRequestClose={() => setSelectedLabName(null)}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setSelectedLabName(null)}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>
-              {selectedLabName ? `${selectedLabName} History` : 'Lab History'}
-            </Text>
-            <View style={{ width: 24 }} />
-          </View>
+      {/* Lab History Modal: the same layout as the record details */}
+      <DetailPage visible={selectedLabName !== null} title={selectedLabName ?? undefined} onClose={() => setSelectedLabName(null)}>
+        {selectedLabName && (() => {
+          const lab = labValues.find(lab => lab.name === selectedLabName);
+          if (!lab) return null;
 
-          {selectedLabName && (
-            <ScrollView style={styles.labHistoryScrollView}>
-              <View style={styles.labHistoryContent}>
-                {(() => {
-                  const lab = labValues.find(lab => lab.name === selectedLabName);
-                  if (!lab) return null;
+          const sortedHistory = [...lab.history].sort(
+            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+          );
 
-                  const sortedHistory = [...lab.history].sort(
-                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-                  );
+          // Calculate trend
+          let trend = '→';
+          let trendLabel = 'Stable';
+          if (sortedHistory.length >= 2) {
+            const current = parseFloat(sortedHistory[0].value);
+            const previous = parseFloat(sortedHistory[1].value);
+            if (!isNaN(current) && !isNaN(previous)) {
+              if (current > previous) {
+                trend = '↑';
+                trendLabel = 'Trending up';
+              } else if (current < previous) {
+                trend = '↓';
+                trendLabel = 'Trending down';
+              }
+            }
+          }
 
-                  // Calculate trend
-                  let trend = '→';
-                  let trendLabel = 'Stable';
-                  if (sortedHistory.length >= 2) {
-                    const current = parseFloat(sortedHistory[0].value);
-                    const previous = parseFloat(sortedHistory[1].value);
-                    if (!isNaN(current) && !isNaN(previous)) {
-                      if (current > previous) {
-                        trend = '↑';
-                        trendLabel = 'Trending Up';
-                      } else if (current < previous) {
-                        trend = '↓';
-                        trendLabel = 'Trending Down';
-                      }
-                    }
-                  }
+          const explanation = explanationFor(lab.name);
 
-                  return (
+          return (
+            <View style={styles.labPageContent}>
+              <Section title="Current value">
+                <ListCard>
+                  <View style={styles.labPageCurrent}>
+                    <Text style={styles.labPageValue}>{lab.value}</Text>
+                    <Text style={styles.labPageArrow}>{trend}</Text>
+                  </View>
+                  <Text style={styles.labPageTrendText}>{trendLabel}</Text>
+                  {lab.range && (
                     <>
-                      {/* Current Value Section */}
-                      <View style={styles.labDetailCurrentSection}>
-                        <Text style={styles.labDetailLabel}>Current Value</Text>
-                        <View style={styles.labDetailCurrentRow}>
-                          <Text style={styles.labDetailCurrentValue}>{lab.value}</Text>
-                          <Text style={styles.labDetailTrend}>{trend}</Text>
-                        </View>
-                        <Text style={styles.labDetailTrendLabel}>{trendLabel}</Text>
-
-                        {lab.range && (
-                          <View style={styles.labDetailRangeInline}>
-                            <Text style={styles.labDetailRangeLabel}>Normal Range:</Text>
-                            <Text style={styles.labDetailRangeValue}>{lab.range}</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {/* History Section */}
-                      <View style={styles.labDetailHistorySection}>
-                        <Text style={styles.labDetailLabel}>History</Text>
-                        {sortedHistory.map((entry, index) => (
-                          <View key={index} style={styles.labHistoryItem}>
-                            <View style={styles.labHistoryItemLeft}>
-                              <Text style={styles.labHistoryValue}>{entry.value}</Text>
-                              <Text style={styles.labHistoryDate}>
-                                {new Date(entry.date).toLocaleDateString('en-US', {
-                                  year: 'numeric',
-                                  month: 'long',
-                                  day: 'numeric',
-                                })}
-                              </Text>
-                            </View>
-                            {index === 0 && <Text style={styles.labHistoryLatest}>Latest</Text>}
-                          </View>
-                        ))}
-                      </View>
+                      <Divider />
+                      <ListRow icon="arrow-expand-vertical" label="Normal range" value={lab.range} />
                     </>
-                  );
-                })()}
-              </View>
-            </ScrollView>
-          )}
-        </View>
-      </Modal>
+                  )}
+                </ListCard>
+              </Section>
+
+              <Section title="Trend">
+                <ListCard>
+                  <View style={styles.labPageChart}>
+                    <LabTrendChart history={[...sortedHistory].reverse()} range={lab.range} />
+                  </View>
+                </ListCard>
+              </Section>
+
+              <Section title="What this means">
+                <ListCard>
+                  {explanation ? (
+                    <>
+                      <Text style={styles.labPageText}>{explanation.text}</Text>
+                      <Divider />
+                      <ListRow
+                        icon="open-in-new"
+                        label={`Source: ${explanation.sourceName}`}
+                        onPress={() => Linking.openURL(explanation.sourceUrl)}
+                      />
+                    </>
+                  ) : (
+                    <Text style={styles.labPageText}>No explanation is available for this test yet.</Text>
+                  )}
+                </ListCard>
+              </Section>
+
+              {/* Ask the chatbot about this result */}
+              <LabAskBox
+                labName={lab.name}
+                context={`My ${lab.name} result is ${lab.value}${lab.range ? ` (normal range: ${lab.range})` : ''}.`}
+              />
+
+              <Section title="History">
+                <ListCard>
+                  {sortedHistory.map((entry, index) => (
+                    <React.Fragment key={index}>
+                      {index > 0 && <Divider />}
+                      <ListRow
+                        icon="calendar-outline"
+                        label={entry.value}
+                        hint={new Date(entry.date).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        })}
+                        value={index === 0 ? 'Latest' : undefined}
+                      />
+                    </React.Fragment>
+                  ))}
+                </ListCard>
+              </Section>
+            </View>
+          );
+        })()}
+      </DetailPage>
 
       {/* Metric Detail Overlay */}
       {selectedMetricName && (
@@ -1844,29 +1859,85 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   );
 }
 
-function getSpecialtyEmoji(specialty: string): string {
-  const map: Record<string, string> = {
-    cardiology: '❤️',
-    orthopedics: '🦴',
-    dermatology: '🩹',
-    neurology: '🧠',
-    obgyn: '👶',
-    ophthalmology: '👁️',
-    oncology: '🏥',
-    lab: '🔬',
-    imaging: '📷',
-    pharmacy: '💊',
-    'primary care': '👨‍⚕️',
-    dentistry: '🦷',
-    psychiatry: '💭',
-    urology: '🔴',
+// Line icon for each specialty, matching the Home screen's icons
+function getSpecialtyIcon(specialty: string): React.ComponentProps<typeof MaterialCommunityIcons>['name'] {
+  const map: Record<string, React.ComponentProps<typeof MaterialCommunityIcons>['name']> = {
+    cardiology: 'heart-pulse',
+    orthopedics: 'bone',
+    dermatology: 'bandage',
+    neurology: 'brain',
+    obgyn: 'baby-face-outline',
+    ophthalmology: 'eye-outline',
+    oncology: 'hospital-building',
+    lab: 'flask-outline',
+    imaging: 'radiology-box-outline',
+    pharmacy: 'pill',
+    'primary care': 'stethoscope',
+    dentistry: 'tooth-outline',
+    psychiatry: 'head-cog-outline',
   };
-
-  const key = specialty.toLowerCase();
-  return map[key] || '📋';
+  return map[specialty.toLowerCase()] ?? 'file-document-outline';
 }
 
 const styles = StyleSheet.create({
+  labPageContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 40,
+  },
+  labPageCurrent: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+  },
+  labPageValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#000',
+  },
+  labPageArrow: {
+    fontSize: 22,
+    color: '#666',
+  },
+  labPageTrendText: {
+    fontSize: 13,
+    color: '#666',
+    paddingBottom: 14,
+  },
+  labPageChart: {
+    paddingVertical: 12,
+  },
+  labPageText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#222',
+    paddingVertical: 14,
+  },
+  labExplainBox: {
+    backgroundColor: '#F7F9FC',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderLeftWidth: 3,
+    borderLeftColor: '#007AFF',
+  },
+  labExplainTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000',
+    marginBottom: 8,
+  },
+  labExplainText: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#333',
+  },
+  labExplainSource: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginTop: 10,
+  },
   container: {
     flex: 1,
     backgroundColor: '#FAFAFA',
@@ -1904,6 +1975,12 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: '#666',
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    paddingHorizontal: 20,
+    marginBottom: 12,
   },
   quickUploadSection: {
     paddingHorizontal: 20,
@@ -2238,10 +2315,10 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#000',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   teamSpecialtyGroup: {
     marginBottom: 12,
@@ -2295,6 +2372,30 @@ const styles = StyleSheet.create({
   },
   spacing: {
     height: 100,
+  },
+  detailHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 16,
+  },
+  detailAction: {
+    fontSize: 17,
+    color: '#007AFF',
+  },
+  detailClose: {
+    fontSize: 26,
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  detailPageTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#000',
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   modalContainer: {
     flex: 1,
@@ -2720,9 +2821,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#666',
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    marginBottom: 8,
   },
   recordsCardList: {
     gap: 10,

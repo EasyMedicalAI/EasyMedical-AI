@@ -1,25 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import {
-  ScrollView,
-  View,
-  Text,
-  StyleSheet,
-  Alert,
-  TouchableOpacity,
-  Modal,
-  TextInput,
-  ActivityIndicator,
-  Platform,
-} from 'react-native';
+import { ScrollView, View, Text, StyleSheet, Alert, TouchableOpacity, Platform } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
 import { useRecords } from '@/context/RecordsContext';
 import { ehrService, EhrSystem } from '@/services/ehrService';
+import { ScreenHeader, Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
 
 export default function SettingsScreen() {
-  const { records, clearAllData, syncWithEHR } = useRecords();
+  const { records, clearAllData, syncWithEHR, profileBackups, restoreProfileBackup } = useRecords();
+  const [backupsOpen, setBackupsOpen] = useState(false);
+  const [backups, setBackups] = useState<{ savedAt: string; profile: any }[]>([]);
   const [systems, setSystems] = useState<EhrSystem[]>([]);
   const [connectedIds, setConnectedIds] = useState<string[]>([]);
+  const [expiredIds, setExpiredIds] = useState<string[]>([]);
   const [busySystemId, setBusySystemId] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
 
@@ -30,6 +22,7 @@ export default function SettingsScreen() {
   const refreshConnections = async () => {
     const connections = await ehrService.getConnections();
     setConnectedIds(connections.map((c) => c.systemId));
+    setExpiredIds(await ehrService.getExpiredSystemIds());
   };
 
   const loadSystems = async () => {
@@ -135,112 +128,139 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.topBar}>
-        <View />
-        <Text style={styles.appName}>EasyMedical AI</Text>
-      </View>
-      <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
-      </View>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <ScreenHeader title="Settings" />
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>App Information</Text>
-        <View style={styles.card}>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Stored Records</Text>
-            <Text style={styles.value}>{records.length}</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>App Version</Text>
-            <Text style={styles.value}>1.0.0</Text>
-          </View>
-          <View style={styles.infoRow}>
-            <Text style={styles.label}>Storage</Text>
-            <Text style={styles.value}>Local Device</Text>
-          </View>
-        </View>
-      </View>
+      <Section title="App information">
+        <ListCard>
+          <ListRow icon="database-outline" label="Stored records" value={String(records.length)} />
+          <Divider />
+          <ListRow icon="information-outline" label="App version" value="1.0.0" />
+          <Divider />
+          <ListRow icon="harddisk" label="Storage" value="Local device" />
+        </ListCard>
+      </Section>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Health Record Connections</Text>
+      <Section title="Health record connections">
         {systems.length === 0 && (
-          <Text style={styles.epicSubtitle}>Couldn't load health systems. Check your connection and reopen Settings.</Text>
+          <Text style={styles.note}>Couldn't load health systems. Check your connection and reopen Settings.</Text>
         )}
+        <ListCard>
+          {systems.map((system, index) => {
+            const connected = connectedIds.includes(system.id);
+            const expired = expiredIds.includes(system.id);
+            const busy = busySystemId === system.id;
+            const unavailable = !system.configured;
+            const status = busy
+              ? 'Connecting…'
+              : unavailable
+              ? 'Not available'
+              : connected && !expired
+              ? 'Connected'
+              : expired
+              ? 'Sign-in expired'
+              : 'Connect';
+            const hint = unavailable
+              ? 'Not available yet'
+              : expired
+              ? 'Tap to reconnect'
+              : connected
+              ? 'Tap to disconnect'
+              : 'Your patient portal account';
+            return (
+              <React.Fragment key={system.id}>
+                {index > 0 && <Divider />}
+                <ListRow
+                  icon="hospital-building"
+                  label={system.name}
+                  hint={hint}
+                  value={status}
+                  onPress={unavailable || busy ? undefined : () => (connected && !expired ? handleDisconnect(system) : handleConnect(system))}
+                />
+              </React.Fragment>
+            );
+          })}
+          {connectedIds.length > 0 && (
+            <>
+              {systems.length > 0 && <Divider />}
+              <ListRow
+                icon="sync"
+                label="Sync records"
+                hint="Import labs, medications & conditions from all connected systems"
+                value={syncing ? 'Syncing…' : undefined}
+                onPress={syncing ? undefined : handleSync}
+              />
+            </>
+          )}
+        </ListCard>
+      </Section>
 
-        {systems.map((system) => {
-          const connected = connectedIds.includes(system.id);
-          const busy = busySystemId === system.id;
-          const unavailable = !system.configured;
-          return (
-            <TouchableOpacity
-              key={system.id}
-              style={[styles.card, styles.systemCard, connected && styles.connectedCard]}
-              onPress={() => (connected ? handleDisconnect(system) : handleConnect(system))}
-              disabled={unavailable || busy}
-            >
-              <View style={styles.epicRow}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.epicTitle, unavailable && styles.unavailableText]}>{system.name}</Text>
-                  <Text style={styles.epicSubtitle}>
-                    {unavailable
-                      ? 'Not available yet'
-                      : connected
-                      ? 'Connected. Tap to disconnect.'
-                      : 'Tap to connect your patient portal account'}
-                  </Text>
-                </View>
-                {busy ? (
-                  <ActivityIndicator size="small" color="#007AFF" />
-                ) : (
-                  <Text style={styles.statusBadge}>{connected ? '✓' : unavailable ? '–' : '+'}</Text>
-                )}
-              </View>
-            </TouchableOpacity>
-          );
-        })}
+      <Section title="Data management">
+        <ListCard>
+          <ListRow
+            icon="backup-restore"
+            label="Restore an earlier profile"
+            hint="Undo a save by choosing a copy of your profile from before it"
+            onPress={async () => {
+              setBackups(await profileBackups());
+              setBackupsOpen(true);
+            }}
+          />
+          <Divider />
+          <ListRow icon="trash-can-outline" label="Clear all data" danger onPress={handleClearAllData} />
+        </ListCard>
+      </Section>
 
-        {connectedIds.length > 0 && (
-          <TouchableOpacity style={[styles.card, styles.syncButton]} onPress={handleSync} disabled={syncing}>
-            <View style={styles.epicRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.syncTitle}>
-                  🔄 Sync Records
-                </Text>
-                <Text style={styles.syncSubtitle}>
-                  Import labs, medications & conditions from all connected systems
-                </Text>
-              </View>
-              {syncing ? (
-                <ActivityIndicator size="small" color="#007AFF" />
-              ) : (
-                <Text style={styles.syncIcon}>→</Text>
-              )}
-            </View>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Data Management</Text>
-        <TouchableOpacity style={styles.card} onPress={handleClearAllData}>
-          <Text style={styles.deleteText}>🗑️ Clear All Data</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>About</Text>
-        <View style={styles.card}>
-          <Text style={styles.aboutText}>
-            EasyMedical AI helps you organize and understand your medical records in one place.
-          </Text>
-          <Text style={styles.aboutSubtext}>
-            All records are stored securely on your device.
-          </Text>
-        </View>
-      </View>
+      <Section title="About">
+        <ListCard>
+          <View style={styles.aboutBlock}>
+            <Text style={styles.aboutText}>EasyMedical AI helps you organize and understand your medical records in one place.</Text>
+            <Text style={styles.aboutSubtext}>All records are stored securely on your device.</Text>
+          </View>
+        </ListCard>
+      </Section>
 
       <View style={styles.spacing} />
+
+      <DetailPage visible={backupsOpen} title="Earlier profiles" onClose={() => setBackupsOpen(false)}>
+        <View style={styles.pagePadding}>
+          <Text style={styles.note}>
+            A copy is saved before each change. Restoring one replaces your current profile, and the current one is saved as a copy too.
+          </Text>
+          {backups.length === 0 && <Text style={styles.note}>No earlier copies yet.</Text>}
+          {backups.length > 0 && (
+            <ListCard>
+              {backups.map((b, index) => (
+                <React.Fragment key={b.savedAt}>
+                  {index > 0 && <Divider />}
+                  <ListRow
+                    icon="history"
+                    label={new Date(b.savedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                    value="Restore"
+                    onPress={() =>
+                      Alert.alert('Restore this profile?', 'Your current profile will be replaced. The current one is saved as a copy first.', [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Restore',
+                          onPress: async () => {
+                            try {
+                              await restoreProfileBackup(b.savedAt);
+                              setBackupsOpen(false);
+                              Alert.alert('Restored', 'Your profile was restored.');
+                            } catch (error) {
+                              Alert.alert('Could not restore', String(error));
+                            }
+                          },
+                        },
+                      ])
+                    }
+                  />
+                </React.Fragment>
+              ))}
+            </ListCard>
+          )}
+        </View>
+      </DetailPage>
     </ScrollView>
   );
 }
@@ -250,234 +270,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAFAFA',
   },
-  topBar: {
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  appName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#999',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  header: {
-    padding: 20,
-    paddingTop: 50,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#000',
-  },
-  section: {
-    paddingHorizontal: 20,
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#999',
-    marginBottom: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  card: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  label: {
-    fontSize: 14,
+  note: {
+    fontSize: 13,
     color: '#666',
-    fontWeight: '500',
-  },
-  value: {
-    fontSize: 14,
-    color: '#000',
-    fontWeight: '600',
-  },
-  deleteText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FF3333',
-    textAlign: 'center',
-  },
-  aboutText: {
-    fontSize: 14,
-    color: '#333',
-    lineHeight: 20,
+    lineHeight: 19,
     marginBottom: 8,
   },
+  aboutBlock: {
+    paddingVertical: 14,
+  },
+  aboutText: {
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 22,
+  },
   aboutSubtext: {
-    fontSize: 12,
-    color: '#999',
-    lineHeight: 18,
+    fontSize: 13,
+    color: '#666',
+    marginTop: 6,
+  },
+  pagePadding: {
+    paddingHorizontal: 20,
   },
   spacing: {
     height: 100,
-  },
-  epicRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
-  },
-  epicTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 4,
-  },
-  epicSubtitle: {
-    fontSize: 12,
-    color: '#666',
-  },
-  connectedCard: {
-    backgroundColor: '#F0F8FF',
-    borderWidth: 1,
-    borderColor: '#007AFF',
-  },
-  statusBadge: {
-    fontSize: 24,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  systemCard: {
-    marginTop: 12,
-  },
-  unavailableText: {
-    color: '#999',
-  },
-  syncButton: {
-    marginTop: 12,
-    backgroundColor: '#F0F8FF',
-    borderWidth: 1,
-    borderColor: '#007AFF',
-  },
-  syncTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#007AFF',
-    marginBottom: 4,
-  },
-  syncSubtitle: {
-    fontSize: 12,
-    color: '#0051BA',
-  },
-  syncIcon: {
-    fontSize: 20,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#FFF',
-    paddingTop: 50,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  closeButton: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-  },
-  connectButton: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '600',
-  },
-  modalContent: {
-    flex: 1,
-    paddingVertical: 20,
-  },
-  modalDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 24,
-    lineHeight: 20,
-  },
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#999',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  textInput: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
-    color: '#000',
-    marginBottom: 24,
-    backgroundColor: '#FAFAFA',
-  },
-  infoBox: {
-    backgroundColor: '#F5F5F5',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    borderLeftWidth: 3,
-    borderLeftColor: '#007AFF',
-  },
-  infoTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#007AFF',
-    marginBottom: 4,
-  },
-  infoText: {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 16,
-  },
-  securityBox: {
-    backgroundColor: '#F0FFF4',
-    borderRadius: 8,
-    padding: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: '#27AE60',
-  },
-  securityTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#27AE60',
-    marginBottom: 4,
-  },
-  securityText: {
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 16,
   },
 });

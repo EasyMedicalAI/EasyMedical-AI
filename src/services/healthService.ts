@@ -1,134 +1,109 @@
+// Apple Health (HealthKit) reads. Nothing here generates made-up numbers: a metric with no data shows as "no data yet".
 import { Platform } from 'react-native';
 
-// Mock data generator for wearable health metrics
-// This provides realistic simulated data for development/testing
-// Real HealthKit integration can replace these methods later without changing the component interface
-
-// Types for health data
-export interface HealthData {
-  heartRate?: number;
-  bloodOxygen?: number;
-  bodyTemperature?: number;
-  respiratoryRate?: number;
-  hrv?: number;
-  vo2Max?: number;
-  restingHeartRate?: number;
-  timestamp?: Date;
+export interface HealthMetric {
+  id: string;
+  label: string;
+  // "latest" shows the most recent reading; "today" adds up everything recorded since midnight
+  kind: 'latest' | 'today';
 }
 
-export const healthService = {
-  /**
-   * Request permissions (mock - always succeeds)
-   * Real HealthKit permissions will be handled when react-native-health is integrated
-   */
-  async requestPermissions(): Promise<boolean> {
-    return new Promise((resolve) => {
-      setTimeout(() => resolve(true), 500);
-    });
-  },
+export const HEALTH_METRICS: HealthMetric[] = [
+  { id: 'HKQuantityTypeIdentifierHeartRate', label: 'Heart rate', kind: 'latest' },
+  { id: 'HKQuantityTypeIdentifierRestingHeartRate', label: 'Resting heart rate', kind: 'latest' },
+  { id: 'HKQuantityTypeIdentifierHeartRateVariabilitySDNN', label: 'Heart rate variability', kind: 'latest' },
+  { id: 'HKQuantityTypeIdentifierOxygenSaturation', label: 'Blood oxygen', kind: 'latest' },
+  { id: 'HKQuantityTypeIdentifierRespiratoryRate', label: 'Respiratory rate', kind: 'latest' },
+  { id: 'HKQuantityTypeIdentifierBodyTemperature', label: 'Body temperature', kind: 'latest' },
+  { id: 'HKQuantityTypeIdentifierVO2Max', label: 'VO2 max', kind: 'latest' },
+  { id: 'HKQuantityTypeIdentifierBodyMass', label: 'Body weight', kind: 'latest' },
+  { id: 'HKQuantityTypeIdentifierStepCount', label: 'Steps', kind: 'today' },
+  { id: 'HKQuantityTypeIdentifierActiveEnergyBurned', label: 'Active energy', kind: 'today' },
+  { id: 'HKQuantityTypeIdentifierDistanceWalkingRunning', label: 'Walking and running distance', kind: 'today' },
+];
 
-  /**
-   * Fetch latest heart rate data (mock)
-   * Returns realistic heart rate between 60-100 bpm with natural variation
-   */
-  async getHeartRate(): Promise<number | undefined> {
-    const baseHR = 72;
-    const variance = Math.sin(Date.now() / 5000) * 8;
-    const noise = (Math.random() - 0.5) * 6;
-    return Math.round(baseHR + variance + noise);
-  },
+// The HealthKit module is loaded only if this build includes it, so the rest of the app still runs without it
+let healthKitModule: any | null | undefined;
+const healthKit = (): any | null => {
+  if (healthKitModule !== undefined) return healthKitModule;
+  try {
+    healthKitModule = require('@kingstinct/react-native-healthkit');
+  } catch {
+    healthKitModule = null;
+  }
+  return healthKitModule;
+};
 
-  /**
-   * Fetch latest blood oxygen (SpO2) data (mock)
-   * Returns realistic SpO2 between 95-99%
-   */
-  async getBloodOxygen(): Promise<number | undefined> {
-    return 96 + Math.random() * 3;
-  },
+export type HealthStatus = { ready: boolean; message?: string };
 
-  /**
-   * Fetch latest body temperature data (mock)
-   * Returns realistic body temperature between 36.5-37.5°C
-   */
-  async getBodyTemperature(): Promise<number | undefined> {
-    return parseFloat((36.8 + (Math.random() - 0.5) * 0.6).toFixed(1));
-  },
+export const healthStatus = (): HealthStatus => {
+  if (Platform.OS !== 'ios') return { ready: false, message: 'Apple Health is only available on iPhone.' };
+  const hk = healthKit();
+  if (!hk) return { ready: false, message: 'Apple Health is not set up in this version of the app yet.' };
+  try {
+    return hk.isHealthDataAvailable()
+      ? { ready: true }
+      : { ready: false, message: 'Health data is not available on this device.' };
+  } catch {
+    return { ready: false, message: 'Apple Health could not be reached.' };
+  }
+};
 
-  /**
-   * Fetch latest respiratory rate data (mock)
-   * Returns realistic respiratory rate between 12-20 breaths/min
-   */
-  async getRespiratoryRate(): Promise<number | undefined> {
-    return Math.round(16 + (Math.random() - 0.5) * 6);
-  },
+// Opens the iPhone permission sheet. Returns false if Apple Health can't be reached.
+export const requestAccess = async (): Promise<boolean> => {
+  const hk = healthKit();
+  if (!hk) return false;
+  return hk.requestAuthorization({ toRead: HEALTH_METRICS.map((m) => m.id) });
+};
 
-  /**
-   * Fetch latest HRV (Heart Rate Variability) data (mock)
-   * Returns realistic HRV between 20-80ms
-   */
-  async getHRV(): Promise<number | undefined> {
-    return Math.round(50 + (Math.random() - 0.5) * 40);
-  },
+export interface MetricReading {
+  label: string;
+  value?: string;
+  date?: string; // when the latest reading was taken, or the day for totals
+}
 
-  /**
-   * Fetch latest VO2 Max data (mock)
-   * Returns realistic VO2 Max between 30-50 ml/kg/min
-   */
-  async getVO2Max(): Promise<number | undefined> {
-    return Math.round(42 + (Math.random() - 0.5) * 12);
-  },
+const round = (n: number) => Math.round(n * 10) / 10;
 
-  /**
-   * Fetch latest resting heart rate data (mock)
-   * Returns realistic resting heart rate between 50-70 bpm
-   */
-  async getRestingHeartRate(): Promise<number | undefined> {
-    return Math.round(58 + (Math.random() - 0.5) * 12);
-  },
+const startOfToday = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
 
-  /**
-   * Fetch all health data at once
-   */
-  async getAllHealthData(): Promise<HealthData> {
-    try {
-      const [
-        heartRate,
-        bloodOxygen,
-        bodyTemperature,
-        respiratoryRate,
-        hrv,
-        vo2Max,
-        restingHeartRate,
-      ] = await Promise.all([
-        this.getHeartRate(),
-        this.getBloodOxygen(),
-        this.getBodyTemperature(),
-        this.getRespiratoryRate(),
-        this.getHRV(),
-        this.getVO2Max(),
-        this.getRestingHeartRate(),
-      ]);
+// Reads every metric. Denied or missing data shows as "no data yet" (iPhone doesn't say which).
+export const readAllMetrics = async (): Promise<MetricReading[]> => {
+  const hk = healthKit();
+  if (!hk) return HEALTH_METRICS.map((m) => ({ label: m.label }));
 
-      return {
-        heartRate,
-        bloodOxygen,
-        bodyTemperature,
-        respiratoryRate,
-        hrv,
-        vo2Max,
-        restingHeartRate,
-        timestamp: new Date(),
-      };
-    } catch (error) {
-      console.error('Error fetching all health data:', error);
-      return { timestamp: new Date() };
-    }
-  },
+  return Promise.all(
+    HEALTH_METRICS.map(async (metric): Promise<MetricReading> => {
+      try {
+        if (metric.kind === 'latest') {
+          const samples = await hk.queryQuantitySamples(metric.id, { limit: 1 });
+          const sample = samples[0];
+          if (!sample) return { label: metric.label };
+          return {
+            label: metric.label,
+            value: `${round(sample.quantity)} ${sample.unit}`,
+            date: new Date(sample.endDate).toISOString(),
+          };
+        }
 
-  /**
-   * Check if HealthKit is available (mock - always true for development)
-   */
-  async isHealthDataAvailable(): Promise<boolean> {
-    return Platform.OS === 'ios';
-  },
+        const now = new Date();
+        const samples = await hk.queryQuantitySamples(metric.id, {
+          limit: -1,
+          filter: { date: { startDate: startOfToday(), endDate: now } },
+        });
+        if (!samples.length) return { label: metric.label };
+        const total = samples.reduce((sum: number, s: any) => sum + s.quantity, 0);
+        return {
+          label: metric.label,
+          value: `${round(total)} ${samples[0].unit}`,
+          date: now.toISOString(),
+        };
+      } catch {
+        return { label: metric.label };
+      }
+    })
+  );
 };

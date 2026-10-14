@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import HomeScreen from '@/screens/HomeScreen';
 import RecordsScreen from '@/screens/RecordsScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
@@ -33,25 +34,25 @@ export default function TabLayout() {
       </View>
       <View style={styles.tabBar}>
         <TabButton
-          icon="📊"
+          icon="view-dashboard-outline"
           label="Home"
           active={activeTab === 'home'}
           onPress={() => setActiveTab('home')}
         />
         <TabButton
-          icon="🏥"
+          icon="file-document-multiple-outline"
           label="Records"
           active={activeTab === 'records'}
           onPress={() => setActiveTab('records')}
         />
         <TabButton
-          icon="🤖"
+          icon="robot-outline"
           label="Chatbot"
           active={activeTab === 'chatbot'}
           onPress={() => setActiveTab('chatbot')}
         />
         <TabButton
-          icon="⚙️"
+          icon="cog-outline"
           label="Settings"
           active={activeTab === 'settings'}
           onPress={() => setActiveTab('settings')}
@@ -67,7 +68,7 @@ function TabButton({
   active,
   onPress,
 }: {
-  icon: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
   label: string;
   active: boolean;
   onPress: () => void;
@@ -77,7 +78,7 @@ function TabButton({
       style={[styles.tabButton, active && styles.activeTabButton]}
       onPress={onPress}
     >
-      <Text style={styles.tabIcon}>{icon}</Text>
+      <MaterialCommunityIcons name={icon} size={24} color={active ? '#007AFF' : '#999'} style={styles.tabIcon} />
       <Text style={[styles.tabLabel, active && styles.activeTabLabel]}>
         {label}
       </Text>
@@ -110,7 +111,6 @@ const styles = StyleSheet.create({
   },
   activeTabButton: {},
   tabIcon: {
-    fontSize: 18,
     marginBottom: 2,
   },
   tabLabel: {

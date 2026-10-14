@@ -1,9 +1,11 @@
 // Connects EasyMedical to one or more EHR systems (Epic, Oracle Health, ...) over SMART on FHIR.
 // Several systems can be connected at once. Reads and sync merge results from all of them.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { medicationNameFrom } from './medicationName';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://easymedical-backend-new-production.up.railway.app';
 const CONNECTIONS_KEY = 'ehr_connections';
+const OVERRIDES_KEY = 'ehr_overrides';
 const EPIC_FHIR_BASE = 'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4';
 
 export interface EhrSystem {
@@ -21,6 +23,7 @@ export interface EhrConnection {
   accessToken: string;
   patientId: string;
   connectedAt: string;
+  expired?: boolean; // set when Epic refuses the sign-in; cleared by reconnecting
 }
 
 // One system's data as returned by the backend, kept separate so records can be labelled by source
@@ -58,8 +61,18 @@ export interface Observation {
   code: string;
   value: string;
   unit: string;
+  referenceRange?: string;
+  systolic?: number;
+  diastolic?: number;
   date: string;
 }
+
+// Vital signs are tracked on the Home screen, not as lab results
+export const isVitalObservation = (obs: Observation) =>
+  /weight|blood pressure|heart rate|temperature|respiratory|oxygen|spo2/i.test(obs.code);
+
+export const isWeightObservation = (obs: Observation) =>
+  /body weight|^weight/i.test(obs.code) && !/height/i.test(obs.code);
 
 export interface Allergy {
   id: string;
@@ -72,6 +85,12 @@ export interface Condition {
   name: string;
   onsetDate: string;
   status: string;
+}
+
+// Edits made in this app to items that come from Epic. Epic's own data is never changed.
+export interface EpicOverride {
+  primary?: string;
+  secondary?: string;
 }
 
 class EhrService {
@@ -147,6 +166,7 @@ class EhrService {
       const res = await fetch(`${BACKEND_URL}/api/ehr/token/${state}`);
       if (!res.ok) return null;
       const data = await res.json();
+      console.log('🔐 Granted scopes:', data.scope);
       if (!data.access_token || !data.system_id) return null;
 
       return {
@@ -192,17 +212,74 @@ class EhrService {
     });
   }
 
+  async getOverrides(): Promise<Record<string, EpicOverride>> {
+    try {
+      const raw = await AsyncStorage.getItem(OVERRIDES_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (error) {
+      console.error('Error loading edits:', error);
+      return {};
+    }
+  }
+
+  async saveOverride(key: string, override: EpicOverride): Promise<Record<string, EpicOverride>> {
+    const all = await this.getOverrides();
+    all[key] = override;
+    await AsyncStorage.setItem(OVERRIDES_KEY, JSON.stringify(all));
+    return all;
+  }
+
+  async clearOverride(key: string): Promise<Record<string, EpicOverride>> {
+    const all = await this.getOverrides();
+    delete all[key];
+    await AsyncStorage.setItem(OVERRIDES_KEY, JSON.stringify(all));
+    return all;
+  }
+
   // Reads one FHIR resource path from one connected system. Returns null on any failure.
+  // Marks a connection as expired so the app can ask the person to reconnect
+  private async markExpired(systemId: string): Promise<void> {
+    await this.load();
+    this.connections = this.connections.map((c) => (c.systemId === systemId ? { ...c, expired: true } : c));
+    await this.persist();
+  }
+
+  async getExpiredSystemIds(): Promise<string[]> {
+    return (await this.load()).filter((c) => c.expired).map((c) => c.systemId);
+  }
+
+  // Reads a FHIR search and follows its "next" links, so long result lists aren't cut off after one page
   private async fhirGet(c: EhrConnection, resourcePath: string): Promise<any | null> {
     if (!c.patientId) return null;
-    const res = await fetch(`${c.fhirBase}${resourcePath}`, {
-      headers: { Authorization: `Bearer ${c.accessToken}`, Accept: 'application/fhir+json' },
-    });
-    if (!res.ok) {
-      console.warn(`⚠️ ${c.systemName}: ${resourcePath.split('?')[0]} returned ${res.status}`);
-      return null;
+    const headers = { Authorization: `Bearer ${c.accessToken}`, Accept: 'application/fhir+json' };
+    const MAX_PAGES = 20;
+    let url: string | undefined = `${c.fhirBase}${resourcePath}`;
+    let bundle: any = null;
+    let pages = 0;
+    while (url && pages < MAX_PAGES) {
+      const res = await fetch(url, { headers });
+      if (res.status === 401) {
+        await this.markExpired(c.systemId);
+        return bundle;
+      }
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        console.warn(`⚠️ ${c.systemName}: ${resourcePath.split('?')[0]} returned ${res.status}${body ? ` — ${body.slice(0, 400)}` : ''}`);
+        return bundle;
+      }
+      const page = await res.json();
+      pages++;
+      if (!Array.isArray(page.entry)) {
+        // A single resource, not a search result
+        return bundle ?? page;
+      }
+      bundle = bundle
+        ? { ...bundle, entry: [...(bundle.entry || []), ...page.entry] }
+        : page;
+      url = page.link?.find((l: any) => l.relation === 'next')?.url;
     }
-    return res.json();
+    if (url) console.warn(`⚠️ ${c.systemName}: stopped after ${MAX_PAGES} pages`);
+    return bundle;
   }
 
   // Runs a read against every connected system and merges the results. A failing system contributes nothing.
@@ -212,16 +289,34 @@ class EhrService {
     return results.reduce((all, r) => all.concat(r), [] as T[]);
   }
 
+  // Some Epic prescriptions only point to a separate Medication record, which holds the name
+  private async medicationNameFromReference(c: EhrConnection, request: any): Promise<string> {
+    const reference: string | undefined = request?.medicationReference?.reference;
+    if (!reference) return '';
+    const medication = await this.fhirGet(c, `/${reference}`).catch(() => null);
+    return medication?.code?.coding?.[0]?.display || medication?.code?.text || '';
+  }
+
   async getMedications(): Promise<Medication[]> {
     return this.forEachConnection(async (c) => {
       const data = await this.fhirGet(c, `/MedicationRequest?patient=${c.patientId}&status=active`);
-      return (data?.entry || []).map((e: any) => ({
-        id: e.resource.id,
-        name: e.resource.medicationCodeableConcept?.coding?.[0]?.display || 'Unknown',
-        dosage: e.resource.dosageInstruction?.[0]?.text || 'No dosage info',
-        date: e.resource.authoredOn || '',
-        status: e.resource.status || 'active',
-      }));
+      const entries: any[] = data?.entry || [];
+      // Medications without a name (from Epic or its linked record) are left out, since they can't be identified
+      const resolved = await Promise.all(
+        entries.map(async (e: any) => ({
+          entry: e,
+          name: medicationNameFrom(e.resource) || (await this.medicationNameFromReference(c, e.resource)),
+        }))
+      );
+      return resolved
+        .filter(({ name }) => name)
+        .map(({ entry, name }) => ({
+          id: entry.resource.id,
+          name,
+          dosage: entry.resource.dosageInstruction?.[0]?.text || 'No dosage info',
+          date: entry.resource.authoredOn || '',
+          status: entry.resource.status || 'active',
+        }));
     });
   }
 
@@ -309,6 +404,10 @@ class EhrService {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ accessToken: c.accessToken, patientId: c.patientId }),
         });
+        if (res.status === 401) {
+          await this.markExpired(c.systemId);
+          throw new Error('Epic sign-in has expired. Reconnect Epic in Settings.');
+        }
         if (!res.ok) {
           throw new Error(`Backend returned ${res.status}: ${await res.text()}`);
         }
@@ -361,7 +460,7 @@ class EhrService {
     // Lab observations, grouped by date into one record per date
     if (epicData.observations && epicData.observations.length > 0) {
       const obsGroupedByDate: { [key: string]: any[] } = {};
-      epicData.observations.forEach((obs: Observation) => {
+      epicData.observations.filter((obs: Observation) => !isVitalObservation(obs)).forEach((obs: Observation) => {
         if (!obsGroupedByDate[obs.date]) {
           obsGroupedByDate[obs.date] = [];
         }
@@ -370,10 +469,14 @@ class EhrService {
 
       Object.entries(obsGroupedByDate).forEach(([date, obsList]) => {
         const testResults: { [key: string]: string } = {};
+        const testRanges: { [key: string]: string } = {};
         obsList.forEach((obs: Observation) => {
           const value = obs.value || '';
           const unit = obs.unit ? ` ${obs.unit}` : '';
           testResults[obs.code] = `${value}${unit}`.trim();
+          if (obs.referenceRange) {
+            testRanges[obs.code] = obs.referenceRange;
+          }
         });
 
         records.push({
@@ -392,6 +495,7 @@ class EhrService {
             allergies: [],
             conditions: [],
             testResults,
+            testRanges,
             dates: { 'Test Date': date },
           },
           processed: true,

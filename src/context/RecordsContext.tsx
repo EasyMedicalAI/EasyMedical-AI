@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { MedicalRecord, MedicalHub, UserHealthData, LabMetric } from '../types/medical';
 import { storageService } from '../services/storageService';
-import { ehrService } from '../services/ehrService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ehrService, isWeightObservation } from '../services/ehrService';
+import { birthdayFromFhir, genderFromFhir } from '../services/patientProfile';
 
 // Empty initial state - will be populated from storage or user input
 const EMPTY_USER_DATA: UserHealthData = {
@@ -38,6 +40,25 @@ const EMPTY_USER_DATA: UserHealthData = {
   hospitalizations: [],
 };
 
+// Copies of the profile kept before each save, so a bad save can be undone
+export interface ProfileBackup {
+  savedAt: string;
+  profile: UserHealthData;
+}
+const BACKUPS_KEY = 'profile_backups';
+const MAX_BACKUPS = 20;
+
+const rememberBeforeSave = async (previous: UserHealthData) => {
+  try {
+    const raw = await AsyncStorage.getItem(BACKUPS_KEY);
+    const list: ProfileBackup[] = raw ? JSON.parse(raw) : [];
+    list.unshift({ savedAt: new Date().toISOString(), profile: previous });
+    await AsyncStorage.setItem(BACKUPS_KEY, JSON.stringify(list.slice(0, MAX_BACKUPS)));
+  } catch (error) {
+    console.error('Could not back up the profile before saving:', error);
+  }
+};
+
 interface RecordsContextType {
   records: MedicalRecord[];
   userData: UserHealthData;
@@ -46,6 +67,9 @@ interface RecordsContextType {
   updateRecord: (record: MedicalRecord) => Promise<void>;
   deleteRecord: (recordId: string) => Promise<void>;
   updateUserData: (data: UserHealthData) => Promise<void>;
+  profileBackups: () => Promise<ProfileBackup[]>;
+  restoreProfileBackup: (savedAt: string) => Promise<void>;
+  patchUserData: (patch: Partial<UserHealthData>) => Promise<void>;
   refreshRecords: () => Promise<void>;
   clearAllData: () => Promise<void>;
   syncWithEHR: () => Promise<{ added: number; duplicates: number }>;
@@ -69,6 +93,8 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [userData, setUserData] = useState<UserHealthData>(EMPTY_USER_DATA);
   const [loading, setLoading] = useState(true);
+  // Always the latest saved profile. Saves build on this, so a stale copy can never overwrite newer data.
+  const latestUserData = useRef<UserHealthData>(EMPTY_USER_DATA);
 
   useEffect(() => {
     loadRecords();
@@ -80,6 +106,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
       setRecords(hub.records);
       if (hub.userData) {
         setUserData(hub.userData);
+        latestUserData.current = hub.userData;
       }
     } catch (error) {
       console.error('Error loading records:', error);
@@ -120,12 +147,35 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
 
   const updateUserData = async (data: UserHealthData) => {
     try {
+      await rememberBeforeSave(latestUserData.current);
+      latestUserData.current = data;
       await storageService.saveUserData(data);
       setUserData(data);
     } catch (error) {
       console.error('Error updating user data:', error);
       throw error;
     }
+  };
+
+  // Saves only the fields given, on top of the latest saved profile
+  const patchUserData = async (patch: Partial<UserHealthData>) => {
+    await rememberBeforeSave(latestUserData.current);
+    const next = { ...latestUserData.current, ...patch };
+    latestUserData.current = next;
+    setUserData(next);
+    await storageService.saveUserData(next);
+  };
+
+  const profileBackups = async (): Promise<ProfileBackup[]> => {
+    const raw = await AsyncStorage.getItem(BACKUPS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  };
+
+  // Restoring is itself a save, so the profile as it was just before the restore is backed up too
+  const restoreProfileBackup = async (savedAt: string) => {
+    const backup = (await profileBackups()).find((b) => b.savedAt === savedAt);
+    if (!backup) throw new Error('That backup could not be found.');
+    await updateUserData(backup.profile);
   };
 
   const refreshRecords = async () => {
@@ -296,9 +346,6 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
 
       let added = 0;
       let duplicates = 0;
-      const medNames: string[] = [];
-      const allergyNames: string[] = [];
-      const conditionNames: string[] = [];
 
       for (const source of sources) {
         const ehrRecords = await ehrService.convertToMedicalRecords(source.data, source.label, source.systemId);
@@ -324,23 +371,63 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
         }
 
         const data = source.data;
-        (data.medications || []).forEach((m: any) =>
-          medNames.push(m.name || m.medicationCodeableConcept?.coding?.[0]?.display || 'Unknown'));
-        (data.allergies || []).forEach((a: any) =>
-          allergyNames.push(a.allergen || a.code?.coding?.[0]?.display || 'Unknown'));
-        (data.conditions || []).forEach((c: any) =>
-          conditionNames.push(c.name || c.code?.coding?.[0]?.display || 'Unknown'));
       }
 
-      // Merge medications, allergies and conditions from all systems into userData in one save
-      if (medNames.length || allergyNames.length || conditionNames.length) {
-        await updateUserData({
-          ...userData,
-          medications: Array.from(new Set([...userData.medications, ...medNames])),
-          prescriptionMedications: Array.from(new Set([...userData.prescriptionMedications, ...medNames])),
-          allergies: Array.from(new Set([...userData.allergies, ...allergyNames])),
-          conditions: Array.from(new Set([...userData.conditions, ...conditionNames])),
+      // Demographics from Epic fill in only blank fields. Anything already entered stays as it is.
+      // "Other" is the default gender for a new profile, so Epic's value replaces it.
+      const epicPatient = sources.map((s) => s.data?.patient).find(Boolean);
+      const demographics: { birthday?: string; gender?: string } = {};
+      if (epicPatient) {
+        if (!userData.birthday) {
+          const birthday = birthdayFromFhir(epicPatient.birthDate);
+          if (birthday) demographics.birthday = birthday;
+        }
+        if (!userData.gender || userData.gender === 'Other') {
+          const gender = genderFromFhir(epicPatient.gender);
+          if (gender) demographics.gender = gender;
+        }
+      }
+      const demographicsChanged = Object.keys(demographics).length > 0;
+
+      // Weight and blood pressure from Epic join the same history the Home screen charts. Each reading is added once.
+      const epicWeights: { date: string; value: number }[] = [];
+      const epicBloodPressures: { date: string; systolic: number; diastolic: number }[] = [];
+      for (const source of sources) {
+        for (const o of source.data.observations || []) {
+          if (o.systolic != null && o.diastolic != null) {
+            epicBloodPressures.push({ date: o.date, systolic: o.systolic, diastolic: o.diastolic });
+          } else if (isWeightObservation(o)) {
+            const raw = Number(o.value);
+            if (!isNaN(raw)) {
+              const inPounds = /kg/i.test(o.unit || '') ? Math.round(raw * 2.20462 * 10) / 10 : raw;
+              epicWeights.push({ date: o.date, value: inPounds });
+            }
+          }
+        }
+      }
+      const addMissing = <T,>(existing: T[] = [], incoming: T[], same: (a: T, b: T) => boolean): T[] => {
+        const merged = [...existing];
+        incoming.forEach((item) => {
+          if (!merged.some((m) => same(m, item))) merged.push(item);
         });
+        return merged;
+      };
+      const weightHistory = addMissing(latestUserData.current.weightHistory, epicWeights,
+        (a, b) => a.date === b.date && a.value === b.value);
+      const bloodPressureHistory = addMissing(latestUserData.current.bloodPressureHistory, epicBloodPressures,
+        (a, b) => a.date === b.date && a.systolic === b.systolic && a.diastolic === b.diastolic);
+      const vitalsChanged =
+        weightHistory.length !== (userData.weightHistory || []).length ||
+        bloodPressureHistory.length !== (userData.bloodPressureHistory || []).length;
+
+      // Merge demographics, medications, allergies and conditions from all systems into userData in one save
+      if (demographicsChanged || vitalsChanged) {
+        await patchUserData({
+          ...demographics,
+          weightHistory,
+          bloodPressureHistory,
+        });
+        if (demographicsChanged) console.log('✅ Filled profile from Epic:', demographics);
       }
 
       console.log(`✅ EHR sync complete: ${added} added, ${duplicates} duplicates skipped`);
@@ -359,6 +446,9 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     updateRecord,
     deleteRecord,
     updateUserData,
+    patchUserData,
+    profileBackups,
+    restoreProfileBackup,
     refreshRecords,
     clearAllData,
     syncWithEHR,
