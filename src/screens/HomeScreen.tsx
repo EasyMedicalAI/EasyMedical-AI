@@ -21,6 +21,7 @@ import { claudeService, convertHeicToJpeg } from '@/services/claudeService';
 import { ehrService, Medication, Appointment, Observation, Allergy, Condition, EpicOverride } from '@/services/ehrService';
 import LabTrendChart from '@/components/LabTrendChart';
 import QuickLogBox from '@/components/QuickLogBox';
+import { Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { rowIconSize } from '@/components/rowIcons';
 import { applyLogEntries, LogEntry } from '@/services/quickLog';
@@ -190,12 +191,13 @@ export default function HomeScreen() {
   const [historyDateYear, setHistoryDateYear] = useState(new Date().getFullYear());
   const [addingPrescriptionMed, setAddingPrescriptionMed] = useState(false);
   const [newPrescriptionMed, setNewPrescriptionMed] = useState('');
-  const [editingPrescriptionMedIdx, setEditingPrescriptionMedIdx] = useState<number | null>(null);
-  const [editingPrescriptionMedValue, setEditingPrescriptionMedValue] = useState('');
+  const [editingMed, setEditingMed] = useState<{ kind: 'prescription' | 'otc'; index: number } | null>(null);
+  const [pendingMedEdit, setPendingMedEdit] = useState<{ kind: 'prescription' | 'otc'; index: number } | null>(null);
+  const [medEditName, setMedEditName] = useState('');
+  const [medEditDose, setMedEditDose] = useState('');
+  const [medEditFrequency, setMedEditFrequency] = useState('');
   const [addingOtcMed, setAddingOtcMed] = useState(false);
   const [newOtcMed, setNewOtcMed] = useState('');
-  const [editingOtcMedIdx, setEditingOtcMedIdx] = useState<number | null>(null);
-  const [editingOtcMedValue, setEditingOtcMedValue] = useState('');
   const [addingCondition, setAddingCondition] = useState(false);
   const [newCondition, setNewCondition] = useState('');
   const [editingConditionIdx, setEditingConditionIdx] = useState<number | null>(null);
@@ -1086,10 +1088,89 @@ export default function HomeScreen() {
 
   // Values shown on the Health, Care, and Profile rows
   const closeDetail = () => setOpenPage(null);
+  // Dose and how often, from the active entry for a medication
+  const medicationDetail = (name: string) => {
+    const active = (userData.medicationHistory || []).find((m) => m.name === name && !m.endDate);
+    return active ? [active.dose, active.frequency].filter(Boolean).join(' · ') : '';
+  };
+  const medListKey = (kind: 'prescription' | 'otc') => (kind === 'prescription' ? 'prescriptionMedications' : 'otcMedications');
+  const openMedEdit = (kind: 'prescription' | 'otc', index: number) => {
+    const name = ((userData as any)[medListKey(kind)] || [])[index] ?? '';
+    const active = (userData.medicationHistory || []).find((m) => m.name === name && !m.endDate);
+    setMedEditName(name);
+    setMedEditDose(active?.dose || '');
+    setMedEditFrequency(active?.frequency || '');
+    setEditingMed({ kind, index });
+  };
+  const saveMedEdit = async () => {
+    if (!editingMed) return;
+    const newName = medEditName.trim();
+    if (!newName) {
+      Alert.alert('Add a name', 'Enter the medication name.');
+      return;
+    }
+    const key = medListKey(editingMed.kind);
+    const list = [...((userData as any)[key] || [])];
+    const oldName = list[editingMed.index];
+    list[editingMed.index] = newName;
+    const history = [...(userData.medicationHistory || [])];
+    const details = {
+      dose: medEditDose.trim() || undefined,
+      frequency: medEditFrequency.trim() || undefined,
+    };
+    const activeIdx = history.findIndex((m) => m.name === oldName && !m.endDate);
+    if (activeIdx >= 0) history[activeIdx] = { ...history[activeIdx], name: newName, ...details };
+    else if (details.dose || details.frequency) history.push({ name: newName, ...details });
+    const patch: any = { medicationHistory: history };
+    patch[key] = list;
+    await patchUserData(patch);
+    setEditingMed(null);
+  };
+  const markMedStopped = async () => {
+    if (!editingMed) return;
+    const key = medListKey(editingMed.kind);
+    const list = [...((userData as any)[key] || [])];
+    const name = list[editingMed.index];
+    list.splice(editingMed.index, 1);
+    const history = [...(userData.medicationHistory || [])];
+    const endDate = new Date().toISOString();
+    const activeIdx = history.findIndex((m) => m.name === name && !m.endDate);
+    if (activeIdx >= 0) history[activeIdx] = { ...history[activeIdx], endDate };
+    else history.push({ name, endDate });
+    const patch: any = { medicationHistory: history };
+    patch[key] = list;
+    await patchUserData(patch);
+    setEditingMed(null);
+  };
+  const deleteMed = () => {
+    if (!editingMed) return;
+    const key = medListKey(editingMed.kind);
+    Alert.alert('Delete medication', 'Remove this medication and its details from your list?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const list = [...((userData as any)[key] || [])];
+          const name = list[editingMed.index];
+          list.splice(editingMed.index, 1);
+          const history = (userData.medicationHistory || []).filter((m) => !(m.name === name && !m.endDate));
+          const patch: any = { medicationHistory: history };
+          patch[key] = list;
+          await patchUserData(patch);
+          setEditingMed(null);
+        },
+      },
+    ]);
+  };
   // These pages have no Edit toggle, so their edit and remove controls are always shown
   const showHealthControls = true;
   // The medications page has no Edit toggle, so its edit and remove controls are always shown
   const showMedicationControls = true;
+  const pastMedications = (userData.medicationHistory || [])
+    .filter((m) => !!m.endDate || m.source === 'epic')
+    .sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
+  const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const medicationCount =
     new Set([...(userData.prescriptionMedications || []), ...epicMedications.map((m) => m.name)]).size +
     (userData.otcMedications || []).length;
@@ -1324,66 +1405,37 @@ export default function HomeScreen() {
         title="Medications"
         onClose={closeDetail}
         onDismiss={() => {
-          if (!pendingMedicationAdd) return;
-          setMedicationType(pendingMedicationAdd);
-          setMedicationInputMode('method');
-          setPendingMedicationAdd(null);
+          if (pendingMedicationAdd) {
+            setMedicationType(pendingMedicationAdd);
+            setMedicationInputMode('method');
+            setPendingMedicationAdd(null);
+          }
+          if (pendingMedEdit) {
+            openMedEdit(pendingMedEdit.kind, pendingMedEdit.index);
+            setPendingMedEdit(null);
+          }
         }}
       >
         <View style={styles.section}>
           <View style={styles.card}>
             {/* Prescription Medications */}
-            <View style={styles.healthSection}>
+            <View style={[styles.healthSection, styles.lastHealthSection]}>
               <View style={styles.healthSectionHeader}>
-                <Text style={styles.healthSectionTitle}>Prescription Medications</Text>
+                <Text style={styles.healthSectionTitle}>Current prescription medications</Text>
               </View>
               {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) || epicMedications.length > 0 ? (
                 <>
                   {/* Manual medications */}
                   {userData.prescriptionMedications && userData.prescriptionMedications.map((med, idx) => new Set(epicMedications.map((m) => m.name.trim().toLowerCase())).has(med.trim().toLowerCase()) ? null : (
                     <View key={`manual-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
-                      {editingPrescriptionMedIdx === idx ? (
-                        <TextInput
-                          style={[styles.input, { flex: 1, height: 36 }]}
-                          value={editingPrescriptionMedValue}
-                          onChangeText={setEditingPrescriptionMedValue}
-                        />
-                      ) : (
-                        <Text style={[styles.healthItem, { flex: 1 }]}>• {med}</Text>
-                      )}
-                      {editingPrescriptionMedIdx === idx ? (
-                        <>
-                          <TouchableOpacity
-                            onPress={async () => {
-                              const updated = [...(userData.prescriptionMedications || [])];
-                              updated[idx] = editingPrescriptionMedValue;
-                              const updatedData = { ...editData, prescriptionMedications: updated };
-                              setEditData(updatedData);
-                              await patchUserData({ prescriptionMedications: updatedData.prescriptionMedications });
-                              setEditingPrescriptionMedIdx(null);
-                            }}
-                          >
-                            <Text style={styles.editLink}>✓</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => setEditingPrescriptionMedIdx(null)}>
-                            <Text style={styles.editLink}>✕</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={async () => {
-                              const updated = (userData.prescriptionMedications || []).filter((_, i) => i !== idx);
-                              const updatedData = { ...editData, prescriptionMedications: updated };
-                              setEditData(updatedData);
-                              await patchUserData({ prescriptionMedications: updatedData.prescriptionMedications });
-                              setEditingPrescriptionMedIdx(null);
-                            }}
-                          >
-                            <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : showMedicationControls ? (
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.medRowName}>{med}</Text>
+                        {medicationDetail(med) ? <Text style={styles.medRowDetail}>{medicationDetail(med)}</Text> : null}
+                      </View>
+                      {showMedicationControls ? (
                         <TouchableOpacity onPress={() => {
-                          setEditingPrescriptionMedIdx(idx);
-                          setEditingPrescriptionMedValue(med);
+                          setPendingMedEdit({ kind: 'prescription', index: idx });
+                          setOpenPage(null);
                         }}>
                           <Text style={styles.editLink}>Edit</Text>
                         </TouchableOpacity>
@@ -1396,15 +1448,15 @@ export default function HomeScreen() {
                     const name = epicText(key, String(med.name ?? ''), 'primary');
                     const dosage = epicText(key, String(med.dosage ?? ''), 'secondary');
                     return (
-                      <View key={`epic-med-${index}`} style={{ marginVertical: 4 }}>
-                        <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{name}</Text></Text>
-                        <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
-                          {dosage}
-                        </Text>
+                      <View key={`epic-med-${index}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.medRowName}>{name}</Text>
+                          {dosage ? <Text style={styles.medRowDetail}>{dosage}</Text> : null}
+                        </View>
                         {showMedicationControls && (
-                        <TouchableOpacity onPress={() => openEpicEdit(key, 'medication', name, dosage)}>
-                          <Text style={styles.epicEditLink}>Edit</Text>
-                        </TouchableOpacity>
+                          <TouchableOpacity onPress={() => openEpicEdit(key, 'medication', name, dosage)}>
+                            <Text style={styles.editLink}>Edit</Text>
+                          </TouchableOpacity>
                         )}
                       </View>
                     );
@@ -1422,60 +1474,30 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
+          </View>
+        </View>
+        <View style={styles.section}>
+          <View style={styles.card}>
             {/* OTC Medications and Supplements */}
-            <View style={styles.healthSection}>
+            <View style={[styles.healthSection, styles.lastHealthSection]}>
               <View style={styles.healthSectionHeader}>
-                <Text style={styles.healthSectionTitle}>OTC Medications & Supplements</Text>
+                <Text style={styles.healthSectionTitle}>Current OTC medications & supplements</Text>
               </View>
               {(userData.otcMedications && userData.otcMedications.length > 0) ? (
                 userData.otcMedications.map((med, idx) => (
                   <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
-                    {editingOtcMedIdx === idx ? (
-                      <TextInput
-                        style={[styles.input, { flex: 1, height: 36 }]}
-                        value={editingOtcMedValue}
-                        onChangeText={setEditingOtcMedValue}
-                      />
-                    ) : (
-                      <Text style={[styles.healthItem, { flex: 1 }]}>• {med}</Text>
-                    )}
-                    {editingOtcMedIdx === idx ? (
-                      <>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            const updated = [...(userData.otcMedications || [])];
-                            updated[idx] = editingOtcMedValue;
-                            const updatedData = { ...editData, otcMedications: updated };
-                            setEditData(updatedData);
-                            await patchUserData({ otcMedications: updatedData.otcMedications });
-                            setEditingOtcMedIdx(null);
-                          }}
-                        >
-                          <Text style={styles.editLink}>✓</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.medRowName}>{med}</Text>
+                        {medicationDetail(med) ? <Text style={styles.medRowDetail}>{medicationDetail(med)}</Text> : null}
+                      </View>
+                      {showMedicationControls ? (
+                        <TouchableOpacity onPress={() => {
+                          setPendingMedEdit({ kind: 'otc', index: idx });
+                          setOpenPage(null);
+                        }}>
+                          <Text style={styles.editLink}>Edit</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity onPress={() => setEditingOtcMedIdx(null)}>
-                          <Text style={styles.editLink}>✕</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            const updated = (userData.otcMedications || []).filter((_, i) => i !== idx);
-                            const updatedData = { ...editData, otcMedications: updated };
-                            setEditData(updatedData);
-                            await patchUserData({ otcMedications: updatedData.otcMedications });
-                            setEditingOtcMedIdx(null);
-                          }}
-                        >
-                          <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : showMedicationControls ? (
-                      <TouchableOpacity onPress={() => {
-                        setEditingOtcMedIdx(idx);
-                        setEditingOtcMedValue(med);
-                      }}>
-                        <Text style={styles.editLink}>Edit</Text>
-                      </TouchableOpacity>
-                    ) : null}
+                      ) : null}
                   </View>
                 ))
               ) : (
@@ -1491,6 +1513,28 @@ export default function HomeScreen() {
             </View>
 
 
+          </View>
+        </View>
+        <View style={styles.section}>
+          <View style={styles.card}>
+            {/* Past medications */}
+            <View style={[styles.healthSection, styles.lastHealthSection]}>
+              <View style={styles.healthSectionHeader}>
+                <Text style={styles.healthSectionTitle}>Past medications</Text>
+              </View>
+              {pastMedications.length > 0 ? (
+                pastMedications.map((med, idx) => (
+                  <View key={`past-${idx}`} style={{ marginVertical: 4 }}>
+                    <Text style={styles.healthItem}>{[med.name, med.dose].filter(Boolean).join(' · ')}</Text>
+                    <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                      {[med.startDate && `Started ${shortDate(med.startDate)}`, med.endDate && `Stopped ${shortDate(med.endDate)}`, !med.endDate && med.source === 'epic' && 'From Epic'].filter(Boolean).join(' · ')}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No past medications</Text>
+              )}
+            </View>
           </View>
         </View>
       </DetailModal>
@@ -2399,6 +2443,42 @@ export default function HomeScreen() {
           </View>
         </View>
       </DetailModal>
+
+      {/* Edit one medication */}
+      <DetailPage visible={editingMed !== null} title="Edit medication" onClose={() => setEditingMed(null)}>
+        <Section title="Details">
+          <ListCard>
+            <View style={styles.medField}>
+              <Text style={styles.medFieldLabel}>Name</Text>
+              <TextInput style={styles.medFieldInput} value={medEditName} onChangeText={setMedEditName} placeholder="Medication name" placeholderTextColor="#999" />
+            </View>
+            <Divider />
+            <View style={styles.medField}>
+              <Text style={styles.medFieldLabel}>Dose</Text>
+              <TextInput style={styles.medFieldInput} value={medEditDose} onChangeText={setMedEditDose} placeholder="e.g. 50 mg" placeholderTextColor="#999" />
+            </View>
+            <Divider />
+            <View style={styles.medField}>
+              <Text style={styles.medFieldLabel}>How often</Text>
+              <TextInput style={styles.medFieldInput} value={medEditFrequency} onChangeText={setMedEditFrequency} placeholder="e.g. twice a day" placeholderTextColor="#999" />
+            </View>
+          </ListCard>
+        </Section>
+
+        <View style={styles.medSaveWrap}>
+          <TouchableOpacity style={styles.medSaveButton} onPress={saveMedEdit}>
+            <Text style={styles.medSaveText}>Save changes</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Section title="Other actions">
+          <ListCard>
+            <ListRow icon="pause-circle-outline" label="Stopped taking" hint="Moves it to past medications" onPress={markMedStopped} />
+            <Divider />
+            <ListRow icon="trash-can-outline" label="Delete medication" danger onPress={deleteMed} />
+          </ListCard>
+        </Section>
+      </DetailPage>
 
       {/* EDIT MODALS */}
       {/* Blood Type Modal */}
@@ -4522,6 +4602,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFF',
+  },
+  medRowName: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#333',
+  },
+  medRowDetail: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  medField: {
+    paddingVertical: 12,
+  },
+  medFieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 4,
+  },
+  medFieldInput: {
+    fontSize: 16,
+    color: '#000',
+    paddingVertical: 4,
+  },
+  medSaveWrap: {
+    paddingHorizontal: 20,
+    marginBottom: 32,
+  },
+  medSaveButton: {
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  medSaveText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  lastHealthSection: {
+    borderBottomWidth: 0,
+    paddingBottom: 0,
   },
   healthSection: {
     paddingBottom: 16,

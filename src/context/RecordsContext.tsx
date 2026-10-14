@@ -4,6 +4,7 @@ import { storageService } from '../services/storageService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ehrService, isWeightObservation } from '../services/ehrService';
 import { birthdayFromFhir, genderFromFhir } from '../services/patientProfile';
+import { medicationNameFrom } from '../services/medicationName';
 
 // Empty initial state - will be populated from storage or user input
 const EMPTY_USER_DATA: UserHealthData = {
@@ -295,7 +296,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     try {
       await storageService.clearAll();
       setRecords([]);
-      setUserData({
+      const cleared: UserHealthData = {
         bloodType: '',
         height: '',
         weight: '',
@@ -331,7 +332,10 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
         familyHistory: [],
         pastConditions: [],
         hospitalizations: [],
-      });
+      };
+      // Saves are built on latestUserData, so it has to be cleared too
+      latestUserData.current = cleared;
+      setUserData(cleared);
     } catch (error) {
       console.error('Error clearing all data:', error);
       throw error;
@@ -389,6 +393,55 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
       }
       const demographicsChanged = Object.keys(demographics).length > 0;
 
+      // Stopped and completed medications from Epic go into past medications. Active ones are shown as current, so they're skipped here.
+      const knownNames = new Set(
+        [...(latestUserData.current.prescriptionMedications || []), ...(latestUserData.current.otcMedications || []), ...(latestUserData.current.medicationHistory || []).map((m) => m.name)]
+          .map((name) => String(name).trim().toLowerCase())
+      );
+      // Vaccines from Epic go to Vaccines, not medications. Immunization records are read directly, and any vaccine listed as a medication is moved too.
+      const VACCINE_PATTERN = /vaccin|immuniz|influenza|\bflu\b|tdap|dtap|pneumo|hepatitis|covid|\bmmr\b|measles|mumps|rubella|varicella|shingrix|zoster|\bhpv\b|polio|tetanus|rabies|meningo/i;
+      const vaccineDate = (iso?: string) => {
+        const d = iso ? new Date(iso) : null;
+        return d && !isNaN(d.getTime()) ? d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
+      };
+      const knownVaccines = new Set((latestUserData.current.vaccines || []).map((v) => v.name.trim().toLowerCase()));
+      const newVaccines: { name: string; date: string }[] = [];
+      const addVaccine = (name: string, date: string) => {
+        if (!name || knownVaccines.has(name.toLowerCase())) return;
+        knownVaccines.add(name.toLowerCase());
+        newVaccines.push({ name, date });
+      };
+      const misfiled = (latestUserData.current.medicationHistory || []).filter((m) => VACCINE_PATTERN.test(m.name));
+      misfiled.forEach((m) => addVaccine(m.name, vaccineDate(m.startDate || m.endDate)));
+      for (const source of sources) {
+        for (const im of source.data.immunizations || []) {
+          const name = (im.vaccineCode?.text || im.vaccineCode?.coding?.[0]?.display || '').trim();
+          addVaccine(name, vaccineDate(im.occurrenceDateTime || im.recorded));
+        }
+      }
+
+      const newPastMedications: NonNullable<UserHealthData['medicationHistory']> = [];
+      for (const source of sources) {
+        const resources = [...(source.data.medications || []), ...(source.data.medicationStatements || [])];
+        for (const r of resources) {
+          if (!r || r.status === 'active') continue;
+          const name = medicationNameFrom(r).trim();
+          if (!name || knownNames.has(name.toLowerCase())) continue;
+          knownNames.add(name.toLowerCase());
+          if (VACCINE_PATTERN.test(name)) {
+            addVaccine(name, vaccineDate(r.occurrenceDateTime || r.authoredOn || r.effectivePeriod?.start));
+            continue;
+          }
+          newPastMedications.push({
+            name,
+            dose: r.dosageInstruction?.[0]?.text || r.dosage?.[0]?.text || undefined,
+            startDate: r.authoredOn || r.effectivePeriod?.start || undefined,
+            endDate: r.dispenseRequest?.validityPeriod?.end || r.effectivePeriod?.end || undefined,
+            source: 'epic',
+          });
+        }
+      }
+
       // Weight and blood pressure from Epic join the same history the Home screen charts. Each reading is added once.
       const epicWeights: { date: string; value: number }[] = [];
       const epicBloodPressures: { date: string; systolic: number; diastolic: number }[] = [];
@@ -421,11 +474,16 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
         bloodPressureHistory.length !== (userData.bloodPressureHistory || []).length;
 
       // Merge demographics, medications, allergies and conditions from all systems into userData in one save
-      if (demographicsChanged || vitalsChanged) {
+      if (demographicsChanged || vitalsChanged || newPastMedications.length > 0 || newVaccines.length > 0 || misfiled.length > 0) {
         await patchUserData({
           ...demographics,
           weightHistory,
           bloodPressureHistory,
+          medicationHistory: [
+            ...(latestUserData.current.medicationHistory || []).filter((m) => !misfiled.includes(m)),
+            ...newPastMedications,
+          ],
+          vaccines: [...(latestUserData.current.vaccines || []), ...newVaccines],
         });
         if (demographicsChanged) console.log('✅ Filled profile from Epic:', demographics);
       }

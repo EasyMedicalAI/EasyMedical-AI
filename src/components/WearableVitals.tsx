@@ -14,7 +14,7 @@ export default function WearableVitals() {
         <MaterialCommunityIcons name="watch-variant" size={rowIconSize("watch-variant")} color="#666" style={styles.icon} />
         <View style={{ flex: 1 }}>
           <Text style={styles.label}>Connect wearable device</Text>
-          <Text style={styles.sub}>Apple Health · tap to see your metrics</Text>
+          <Text style={styles.sub}>Tap to see your metrics</Text>
         </View>
         <MaterialCommunityIcons name="chevron-right" size={20} color="#C7C7CC" style={styles.chevron} />
       </TouchableOpacity>
@@ -41,9 +41,8 @@ const styles = StyleSheet.create({
   },
   sub: {
     fontSize: 12,
-    color: '#007AFF',
+    color: '#666',
     marginTop: 2,
-    marginLeft: 34,
   },
   chevron: {
     marginLeft: 8,

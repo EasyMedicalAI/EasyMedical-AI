@@ -86,7 +86,7 @@ export default function QuickLogBox({
 
   return (
     <View style={styles.box}>
-      <Text style={styles.title}>Log something</Text>
+      <Text style={styles.title}>Quick Log</Text>
       <Text style={styles.hint}>
         Try "my weight is 182", "I just started Losartan 50 mg", or "I slept 7 hours".
       </Text>

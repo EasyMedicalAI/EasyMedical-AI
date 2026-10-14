@@ -66,7 +66,7 @@ export interface UserHealthData {
   mealHistory?: { date: string; description: string; mealType?: string; tags?: string[] }[];
   drinkHistory?: { date: string; kind: 'water' | 'coffee' | 'alcohol' | 'sugary' }[];
   dietProfile?: string[];
-  medicationHistory?: { name: string; dose?: string; instructions?: string; startDate?: string; endDate?: string }[];
+  medicationHistory?: { name: string; dose?: string; frequency?: string; instructions?: string; startDate?: string; endDate?: string; source?: 'epic' }[];
   conditions?: string[];
   allergies?: string[];
   medications?: string[];
