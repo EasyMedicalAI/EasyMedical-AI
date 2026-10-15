@@ -31,6 +31,7 @@ import LabAskBox from '@/components/LabAskBox';
 import { ScreenHeader, Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { applyLogEntries, currentMedicationNames, LogEntry } from '@/services/quickLog';
+import EntryReview from '@/components/EntryReview';
 
 let DocumentPicker: any = null;
 try {
@@ -105,7 +106,8 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
   const [recordText, setRecordText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadMode, setUploadMode] = useState<'method' | 'text' | 'photo' | 'photo-review' | 'add-photo-method'>('method');
+  const [summaryReview, setSummaryReview] = useState<{ record: MedicalRecord; entries: LogEntry[] } | null>(null);
+  const [uploadMode, setUploadMode] = useState<'method' | 'text' | 'photo' | 'photo-review' | 'add-photo-method' | 'pdf-review'>('method');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoMediaType, setPhotoMediaType] = useState<string>('image/jpeg');
   const [selectedPhotos, setSelectedPhotos] = useState<Array<{ uri: string; mediaType: string }>>([]);
@@ -666,56 +668,74 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
           `You already have a record from ${record.provider} on this date. Add this PDF too?`,
           'Add anyway'
         );
-        if (!addAnyway) {
-          setIsUploading(false);
-          return;
-        }
+        if (!addAnyway) return;
       }
 
-      await addRecord(record);
-
-      // Medications on the visit that aren't on the profile yet
-      const known = currentMedicationNames(userData).map((name) => name.trim().toLowerCase());
-      const newMeds = (extracted.medications || []).filter(
-        (med) => med?.name && !known.includes(med.name.trim().toLowerCase())
-      );
-      if (newMeds.length > 0) {
-        const visitDate = /^\d{4}-\d{2}-\d{2}$/.test(extracted.date || '')
-          ? extracted.date
-          : new Date().toISOString().slice(0, 10);
-        const names = newMeds.map((med) => med.name).join(', ');
-        const addMeds = await askYesNo(
-          'Add these medications?',
-          `This visit lists: ${names}. Add them to your medication list?`,
-          'Add them'
+      // Medications and diagnoses from the visit that aren't on the profile yet, for review
+      const visitDate = /^\d{4}-\d{2}-\d{2}$/.test(extracted.date || '')
+        ? extracted.date
+        : new Date().toISOString().slice(0, 10);
+      const knownMeds = currentMedicationNames(userData).map((name) => name.trim().toLowerCase());
+      const medEntries: LogEntry[] = (extracted.medications || [])
+        .filter((med) => med?.name && !knownMeds.includes(med.name.trim().toLowerCase()))
+        .map(
+          (med) =>
+            ({
+              type: 'start_medication',
+              date: visitDate,
+              medication_name: med.name,
+              dose: med.dose || undefined,
+              instructions: med.instructions || undefined,
+              medication_kind: 'prescription',
+            }) as LogEntry
         );
-        if (addMeds) {
-          const entries: LogEntry[] = newMeds.map(
-            (med) =>
-              ({
-                type: 'start_medication',
-                date: visitDate,
-                medication_name: med.name,
-                dose: med.dose || undefined,
-                instructions: med.instructions || undefined,
-                medication_kind: 'prescription',
-              }) as LogEntry
-          );
-          const next = applyLogEntries(userData, entries);
-          const changed = Object.fromEntries(
-            Object.entries(next).filter(([key, value]) => (userData as any)[key] !== value)
-          );
-          await patchUserData(changed);
-        }
-      }
+      const knownConditions = (userData.conditions || []).map((name) => name.trim().toLowerCase());
+      const conditionEntries: LogEntry[] = (extracted.diagnoses || [])
+        .filter((name) => name && !knownConditions.includes(name.trim().toLowerCase()))
+        .map((name) => ({ type: 'add_condition', condition_name: name }) as LogEntry);
+      const entries = [...medEntries, ...conditionEntries];
 
-      setUploadingSpecialty(null);
-      setPhotoUri(null);
-      setSelectedPhotos([]);
-      setUploadMode('method');
-      Alert.alert('Success', 'PDF added to your records.');
+      // Nothing to check: save the visit now. Otherwise show the review first, and nothing is saved until Save.
+      if (entries.length === 0) {
+        await addRecord(record);
+        resetUpload();
+        Alert.alert('Success', 'PDF added to your records.');
+        return;
+      }
+      setSummaryReview({ record, entries });
+      setUploadMode('pdf-review');
     } catch (error) {
       Alert.alert('Could not read that PDF', error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const resetUpload = () => {
+    setSummaryReview(null);
+    setUploadingSpecialty(null);
+    setPhotoUri(null);
+    setSelectedPhotos([]);
+    setUploadMode('method');
+  };
+
+  // Saves the visit and the entries the person kept in the review
+  const saveSummaryReview = async (toSave: LogEntry[]) => {
+    if (!summaryReview) return;
+    setIsUploading(true);
+    try {
+      await addRecord(summaryReview.record);
+      if (toSave.length > 0) {
+        const next = applyLogEntries(userData, toSave);
+        const changed = Object.fromEntries(
+          Object.entries(next).filter(([key, value]) => (userData as any)[key] !== value)
+        );
+        await patchUserData(changed);
+      }
+      resetUpload();
+      Alert.alert('Saved', 'The visit was added to your records.');
+    } catch (error) {
+      Alert.alert('Could not save', error instanceof Error ? error.message : String(error));
     } finally {
       setIsUploading(false);
     }
@@ -1088,6 +1108,22 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
             scrollEnabled={true}
             showsVerticalScrollIndicator={true}
           >
+            {uploadMode === 'pdf-review' && summaryReview && (
+              <>
+                <Text style={styles.label}>Check this visit</Text>
+                <Text style={styles.sublabel}>
+                  {summaryReview.record.provider || 'Visit'} · Tap an entry to change it. Nothing is saved until you tap Save.
+                </Text>
+                <EntryReview
+                  entries={summaryReview.entries}
+                  active={currentMedicationNames(userData)}
+                  saving={isUploading}
+                  saveLabel="Save visit"
+                  onSave={saveSummaryReview}
+                  onCancel={resetUpload}
+                />
+              </>
+            )}
             {uploadMode === 'method' && (
               <>
                 <Text style={styles.label}>How would you like to upload?</Text>
