@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { ehrService } from '@/services/ehrService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const ACKNOWLEDGED_KEY = 'expired_connections_acknowledged';
 import HomeScreen from '@/screens/HomeScreen';
 import RecordsScreen from '@/screens/RecordsScreen';
 import SettingsScreen from '@/screens/SettingsScreen';
@@ -11,6 +15,29 @@ export default function TabLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const [activeTab, setActiveTab] = useState('home');
+  const [expiredCount, setExpiredCount] = useState(0);
+
+  // Opening Settings counts as seeing that a connection has expired, so the badge clears.
+  // It comes back only for a connection that expires again after being reconnected.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const expired = await ehrService.getExpiredSystemIds();
+        const stored: string[] = JSON.parse((await AsyncStorage.getItem(ACKNOWLEDGED_KEY)) || '[]');
+        // Keep only acknowledgments for connections that are still expired
+        let acknowledged = stored.filter((id) => expired.includes(id));
+        if (activeTab === 'settings') acknowledged = expired;
+        await AsyncStorage.setItem(ACKNOWLEDGED_KEY, JSON.stringify(acknowledged));
+        if (!cancelled) setExpiredCount(expired.filter((id) => !acknowledged.includes(id)).length);
+      } catch {
+        if (!cancelled) setExpiredCount(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
 
   const renderScreen = () => {
     switch (activeTab) {
@@ -54,6 +81,7 @@ export default function TabLayout() {
         <TabButton
           icon="cog-outline"
           label="Settings"
+          badge={expiredCount}
           active={activeTab === 'settings'}
           onPress={() => setActiveTab('settings')}
         />
@@ -67,18 +95,27 @@ function TabButton({
   label,
   active,
   onPress,
+  badge = 0,
 }: {
   icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
   label: string;
   active: boolean;
   onPress: () => void;
+  badge?: number;
 }) {
   return (
     <TouchableOpacity
       style={[styles.tabButton, active && styles.activeTabButton]}
       onPress={onPress}
     >
-      <MaterialCommunityIcons name={icon} size={24} color={active ? '#007AFF' : '#999'} style={styles.tabIcon} />
+      <View>
+        <MaterialCommunityIcons name={icon} size={24} color={active ? '#007AFF' : '#999'} style={styles.tabIcon} />
+        {badge > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{badge}</Text>
+          </View>
+        )}
+      </View>
       <Text style={[styles.tabLabel, active && styles.activeTabLabel]}>
         {label}
       </Text>
@@ -110,6 +147,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   activeTabButton: {},
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
   tabIcon: {
     marginBottom: 2,
   },

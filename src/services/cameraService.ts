@@ -154,6 +154,27 @@ export const cameraService = {
     }
   },
 
+  // Reads one or more PDF files (for example, an after-visit summary) through the same extraction as photos
+  async analyzePdfs(pdfUris: string[]): Promise<AnalysisResult> {
+    try {
+      const documents = await Promise.all(
+        pdfUris.map((uri) => FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }))
+      );
+      const response = await fetch(`${BACKEND_URL}/api/vision/extract-record`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documents }),
+      });
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        return { success: false, error: `Backend error ${response.status}: ${errorText || 'No response body'}` };
+      }
+      return { success: true, data: await response.json() };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
   async analyzeHealthRecord(imageUris: string | string[], recordType: 'lab' | 'other' = 'other'): Promise<AnalysisResult> {
     try {
       // Convert single URI to array for consistent processing

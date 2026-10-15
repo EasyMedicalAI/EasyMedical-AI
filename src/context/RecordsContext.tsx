@@ -60,6 +60,17 @@ const rememberBeforeSave = async (previous: UserHealthData) => {
   }
 };
 
+// What a sync changed, so the alert can say exactly what happened
+export interface SyncResult {
+  added: number;
+  duplicates: number;
+  filled: string[];
+  vaccines: number;
+  pastMedications: number;
+  weights: number;
+  bloodPressures: number;
+}
+
 interface RecordsContextType {
   records: MedicalRecord[];
   userData: UserHealthData;
@@ -73,7 +84,7 @@ interface RecordsContextType {
   patchUserData: (patch: Partial<UserHealthData>) => Promise<void>;
   refreshRecords: () => Promise<void>;
   clearAllData: () => Promise<void>;
-  syncWithEHR: () => Promise<{ added: number; duplicates: number }>;
+  syncWithEHR: () => Promise<SyncResult>;
   getRecordsBySpecialty: (specialty: string) => MedicalRecord[];
   getUniqueSpecialties: () => string[];
   getAllMedications: () => string[];
@@ -343,7 +354,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Syncs every connected EHR system (Epic, Oracle Health, ...) into records. Dedupes against existing records.
-  const syncWithEHR = async (): Promise<{ added: number; duplicates: number }> => {
+  const syncWithEHR = async (): Promise<SyncResult> => {
     try {
       console.log('🔄 Syncing with connected EHR systems...');
       const sources = await ehrService.fetchAllPatientData();
@@ -469,6 +480,8 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
         (a, b) => a.date === b.date && a.value === b.value);
       const bloodPressureHistory = addMissing(latestUserData.current.bloodPressureHistory, epicBloodPressures,
         (a, b) => a.date === b.date && a.systolic === b.systolic && a.diastolic === b.diastolic);
+      const weightsAdded = weightHistory.length - (latestUserData.current.weightHistory || []).length;
+      const bloodPressuresAdded = bloodPressureHistory.length - (latestUserData.current.bloodPressureHistory || []).length;
       const vitalsChanged =
         weightHistory.length !== (userData.weightHistory || []).length ||
         bloodPressureHistory.length !== (userData.bloodPressureHistory || []).length;
@@ -489,7 +502,15 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
       }
 
       console.log(`✅ EHR sync complete: ${added} added, ${duplicates} duplicates skipped`);
-      return { added, duplicates };
+      return {
+        added,
+        duplicates,
+        filled: Object.keys(demographics).map((key) => (key === 'birthday' ? 'birthday' : 'gender')),
+        vaccines: newVaccines.length,
+        pastMedications: newPastMedications.length,
+        weights: weightsAdded,
+        bloodPressures: bloodPressuresAdded,
+      };
     } catch (error) {
       console.error('❌ Error syncing with EHR:', error);
       throw error;

@@ -90,11 +90,14 @@ export default function SettingsScreen() {
     try {
       setSyncing(true);
       const result = await syncWithEHR();
-      Alert.alert(
-        'Sync Complete',
-        `✅ Added ${result.added} records\n⏭️ Skipped ${result.duplicates} duplicates\n\nYour local records are preserved.`,
-        [{ text: 'OK' }]
-      );
+      const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+      const lines = [`Records added: ${result.added}`, `Duplicates skipped: ${result.duplicates}`];
+      if (result.filled.length > 0) lines.push(`Filled in blank ${result.filled.join(' and ')}`);
+      if (result.vaccines > 0) lines.push(`Vaccines added: ${result.vaccines}`);
+      if (result.pastMedications > 0) lines.push(`Past medications added: ${result.pastMedications}`);
+      if (result.weights > 0) lines.push(`${plural(result.weights, 'weight reading')} added`);
+      if (result.bloodPressures > 0) lines.push(`${plural(result.bloodPressures, 'blood pressure reading')} added`);
+      Alert.alert('Sync Complete', lines.join('\n') + '\n\nYour existing entries are kept.', [{ text: 'OK' }]);
     } catch (error) {
       Alert.alert('Sync Failed', 'Error syncing records: ' + String(error));
     } finally {

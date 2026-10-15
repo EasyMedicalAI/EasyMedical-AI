@@ -30,6 +30,14 @@ import { explanationFor } from '@/services/labExplanations';
 import LabAskBox from '@/components/LabAskBox';
 import { ScreenHeader, Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { applyLogEntries, currentMedicationNames, LogEntry } from '@/services/quickLog';
+
+let DocumentPicker: any = null;
+try {
+  DocumentPicker = require('expo-document-picker');
+} catch {
+  DocumentPicker = null;
+}
 
 // Simple UUID generator that works in React Native (no crypto dependency)
 const generateUUID = (): string => {
@@ -91,6 +99,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     getLatestMetrics,
     calculateTrend,
     getMetricHistory,
+    patchUserData,
   } = useRecords();
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
@@ -602,6 +611,116 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     }
   };
 
+  // Asks a yes/no question and resolves with the answer
+  const askYesNo = (title: string, message: string, yesText: string) =>
+    new Promise<boolean>((resolve) => {
+      Alert.alert(title, message, [
+        { text: 'Not now', style: 'cancel', onPress: () => resolve(false) },
+        { text: yesText, onPress: () => resolve(true) },
+      ], { cancelable: true, onDismiss: () => resolve(false) });
+    });
+
+  // A record from the same day with the same provider
+  const findSimilarRecord = (candidate: MedicalRecord) => {
+    const dayOf = (r: MedicalRecord) => new Date(r.appointmentDate || r.uploadDate).toDateString();
+    const provider = (candidate.provider || '').trim().toLowerCase();
+    if (!provider) return undefined;
+    return records.find(
+      (r) => dayOf(r) === dayOf(candidate) && (r.provider || '').trim().toLowerCase() === provider
+    );
+  };
+
+  const handlePickPdf = async () => {
+    if (!DocumentPicker) {
+      Alert.alert('Choosing PDFs needs an app update', 'This version of the app cannot open PDF files yet. Photos still work.');
+      return;
+    }
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: 'application/pdf', copyToCacheDirectory: true });
+      if (result.canceled || !result.assets?.[0]) return;
+      await handleUploadPdf(result.assets[0].uri);
+    } catch (error) {
+      Alert.alert('Could not open that file', String(error));
+    }
+  };
+
+  const handleUploadPdf = async (uri: string) => {
+    if (!uploadingSpecialty) return;
+    setIsUploading(true);
+    try {
+      const analysis = await cameraService.analyzePdfs([uri]);
+      if (!analysis.success) throw new Error(analysis.error || 'Failed to read the PDF');
+      const extracted = analysis.data as ExtractedRecord;
+
+      const record = toMedicalRecord(extracted, {
+        id: generateUUID(),
+        uploadDate: new Date().toISOString(),
+        imageUris: [],
+        chosenSpecialty: uploadingSpecialty,
+      });
+
+      const similar = findSimilarRecord(record);
+      if (similar) {
+        const addAnyway = await askYesNo(
+          'Already have this visit?',
+          `You already have a record from ${record.provider} on this date. Add this PDF too?`,
+          'Add anyway'
+        );
+        if (!addAnyway) {
+          setIsUploading(false);
+          return;
+        }
+      }
+
+      await addRecord(record);
+
+      // Medications on the visit that aren't on the profile yet
+      const known = currentMedicationNames(userData).map((name) => name.trim().toLowerCase());
+      const newMeds = (extracted.medications || []).filter(
+        (med) => med?.name && !known.includes(med.name.trim().toLowerCase())
+      );
+      if (newMeds.length > 0) {
+        const visitDate = /^\d{4}-\d{2}-\d{2}$/.test(extracted.date || '')
+          ? extracted.date
+          : new Date().toISOString().slice(0, 10);
+        const names = newMeds.map((med) => med.name).join(', ');
+        const addMeds = await askYesNo(
+          'Add these medications?',
+          `This visit lists: ${names}. Add them to your medication list?`,
+          'Add them'
+        );
+        if (addMeds) {
+          const entries: LogEntry[] = newMeds.map(
+            (med) =>
+              ({
+                type: 'start_medication',
+                date: visitDate,
+                medication_name: med.name,
+                dose: med.dose || undefined,
+                instructions: med.instructions || undefined,
+                medication_kind: 'prescription',
+              }) as LogEntry
+          );
+          const next = applyLogEntries(userData, entries);
+          const changed = Object.fromEntries(
+            Object.entries(next).filter(([key, value]) => (userData as any)[key] !== value)
+          );
+          await patchUserData(changed);
+        }
+      }
+
+      setUploadingSpecialty(null);
+      setPhotoUri(null);
+      setSelectedPhotos([]);
+      setUploadMode('method');
+      Alert.alert('Success', 'PDF added to your records.');
+    } catch (error) {
+      Alert.alert('Could not read that PDF', error instanceof Error ? error.message : String(error));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handlePickPhoto = async () => {
     if (!ImagePicker) {
       Alert.alert('Error', 'Photo library not available');
@@ -973,6 +1092,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               <>
                 <Text style={styles.label}>How would you like to upload?</Text>
                 <Text style={styles.sublabel}>Choose a method to add your medical record</Text>
+                <Text style={styles.consentText}>Documents are read by an AI service to fill in your record. They are sent to our server and to Anthropic to be read, and stored on this phone. Nothing is saved until you confirm.</Text>
 
                 <TouchableOpacity style={styles.methodButton} onPress={handleTakePhoto}>
                   <Text style={styles.methodButtonIcon}>📷</Text>
@@ -987,6 +1107,13 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                   <View style={styles.methodButtonContent}>
                     <Text style={styles.methodButtonText}>Choose Photo</Text>
                     <Text style={styles.methodButtonDesc}>Select from photo library</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.methodButton} onPress={handlePickPdf}>
+                  <MaterialCommunityIcons name="file-pdf-box" size={24} color="#333" style={styles.methodButtonIcon} />
+                  <View style={styles.methodButtonContent}>
+                    <Text style={styles.methodButtonText}>Choose PDF</Text>
+                    <Text style={styles.methodButtonDesc}>An after-visit summary or other PDF</Text>
                   </View>
                 </TouchableOpacity>
 
@@ -2429,6 +2556,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#000',
     marginBottom: 8,
+  },
+  consentText: {
+    fontSize: 12,
+    color: '#666',
+    lineHeight: 17,
+    marginBottom: 12,
   },
   sublabel: {
     fontSize: 12,

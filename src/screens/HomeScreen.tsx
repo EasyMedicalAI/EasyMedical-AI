@@ -243,7 +243,6 @@ export default function HomeScreen() {
   const [newDiastolic, setNewDiastolic] = useState('');
   const [vitalDetail, setVitalDetail] = useState<'weight' | 'bp' | null>(null);
   const [newReadingDate, setNewReadingDate] = useState('');
-  const [epicExpired, setEpicExpired] = useState(false);
   // Each time the add form opens, start from today
   useEffect(() => {
     if (addingReading) setNewReadingDate(todayInput());
@@ -283,7 +282,6 @@ export default function HomeScreen() {
       setEpicAllergies(allergies);
       setEpicConditions(conditions);
       setEpicOverrides(await ehrService.getOverrides());
-      setEpicExpired((await ehrService.getExpiredSystemIds()).length > 0);
     } catch (error) {
       console.error('Failed to load Epic data:', error);
     } finally {
@@ -381,6 +379,22 @@ export default function HomeScreen() {
 
   const weightSorted = sortedByDate(userData.weightHistory);
   const bpSorted = sortedByDate(userData.bloodPressureHistory);
+  // The reading whose date is closest to today, so the row always shows the measurement nearest the present
+  const closestToToday = <T extends { date: string }>(items: T[]): T | undefined => {
+    const now = Date.now();
+    let best: T | undefined;
+    let bestGap = Infinity;
+    for (const item of items) {
+      const gap = Math.abs(new Date(item.date).getTime() - now);
+      if (!isNaN(gap) && gap < bestGap) {
+        best = item;
+        bestGap = gap;
+      }
+    }
+    return best;
+  };
+  const weightNow = closestToToday(weightSorted);
+  const bloodPressureNow = closestToToday(bpSorted);
   const weightHint = trendHint(weightSorted.map((r) => r.value), 'lbs');
   const bpHint = trendHint(bpSorted.map((r) => r.systolic), 'mmHg (top number)');
 
@@ -1171,6 +1185,13 @@ export default function HomeScreen() {
     .filter((m) => !!m.endDate || m.source === 'epic')
     .sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
   const shortDate = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const isPastCondition = (c: { status?: string }) => !!c.status && !/^active$/i.test(c.status.trim());
+  const currentEpicConditions = epicConditions.filter((c) => !isPastCondition(c));
+  const pastEpicConditions = epicConditions.filter((c) => isPastCondition(c));
+  const onsetText = (value: string) => {
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? value : shortDate(value);
+  };
   const medicationCount =
     new Set([...(userData.prescriptionMedications || []), ...epicMedications.map((m) => m.name)]).size +
     (userData.otcMedications || []).length;
@@ -1247,14 +1268,6 @@ export default function HomeScreen() {
           <Text style={styles.snapshotTitle}>Home</Text>
         </View>
 
-        {epicExpired && (
-          <View style={styles.expiredBanner}>
-            <Text style={styles.expiredText}>
-              Your Epic sign-in has expired, so Epic data isn't updating. Go to Settings to reconnect Epic.
-            </Text>
-          </View>
-        )}
-
         {/* Quick log: type or dictate a reading or medication change, then confirm */}
         <QuickLogBox
           userData={userData}
@@ -1310,7 +1323,7 @@ export default function HomeScreen() {
             <VitalRow
               icon="scale-bathroom"
               label="Weight"
-              value={userData.weight?.includes('lbs') ? userData.weight : `${userData.weight} lbs`}
+              value={weightNow ? `${weightNow.value} lbs` : userData.weight?.includes('lbs') ? userData.weight : `${userData.weight} lbs`}
               hint={weightHint || undefined}
               onPress={() => setVitalDetail('weight')}
             />
@@ -1321,7 +1334,7 @@ export default function HomeScreen() {
             <VitalRow
               icon="heart-pulse"
               label="Blood pressure"
-              value={userData.vitals?.bloodPressure || '—'}
+              value={bloodPressureNow ? `${bloodPressureNow.systolic}/${bloodPressureNow.diastolic} mmHg` : userData.vitals?.bloodPressure || '—'}
               hint={bpHint || undefined}
               onPress={() => setVitalDetail('bp')}
             />
@@ -1599,7 +1612,7 @@ export default function HomeScreen() {
                     ) : null}
                   </View>
                 ))}
-                {epicConditions.map((cond, index) => {
+                {currentEpicConditions.map((cond, index) => {
                   const key = `condition:${cond.id}`;
                   const name = epicText(key, cond.name, 'primary');
                   const detail = epicText(key, cond.status ? `Status: ${cond.status}` : '', 'secondary');
@@ -1654,6 +1667,27 @@ export default function HomeScreen() {
               )}
             </View>
 
+          </View>
+        </View>
+        <View style={styles.section}>
+          <View style={styles.card}>
+            <View style={[styles.healthSection, styles.lastHealthSection]}>
+              <View style={styles.healthSectionHeader}>
+                <Text style={styles.healthSectionTitle}>Past conditions</Text>
+              </View>
+              {pastEpicConditions.length > 0 ? (
+                pastEpicConditions.map((cond) => (
+                  <View key={`past-condition-${cond.id}`} style={{ marginVertical: 4 }}>
+                    <Text style={styles.medRowName}>{cond.name}</Text>
+                    <Text style={styles.medRowDetail}>
+                      {[cond.status && `Status: ${cond.status}`, cond.onsetDate && `Started ${onsetText(cond.onsetDate)}`].filter(Boolean).join(' · ')}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No past conditions</Text>
+              )}
+            </View>
           </View>
         </View>
       </DetailModal>
@@ -4074,20 +4108,6 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  expiredBanner: {
-    backgroundColor: '#FFF3CD',
-    borderRadius: 10,
-    padding: 12,
-    marginHorizontal: 20,
-    marginBottom: 14,
-    borderLeftWidth: 3,
-    borderLeftColor: '#F59E0B',
-  },
-  expiredText: {
-    fontSize: 13,
-    color: '#7C4A03',
-    lineHeight: 19,
-  },
   tapForHistory: {
     fontSize: 13,
     fontWeight: '600',
