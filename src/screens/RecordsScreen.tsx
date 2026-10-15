@@ -125,6 +125,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [showRecordDetail, setShowRecordDetail] = useState(false);
   const [isEditingRecord, setIsEditingRecord] = useState(false);
   const [editedProvider, setEditedProvider] = useState('');
+  const [editedSpecialty, setEditedSpecialty] = useState('');
   const [editedDate, setEditedDate] = useState('');
   const [editedReason, setEditedReason] = useState('');
   const [editedSummary, setEditedSummary] = useState('');
@@ -1693,6 +1694,21 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 </View>
 
                 <View style={{ marginBottom: 20 }}>
+                  <Text style={styles.label}>Specialty</Text>
+                  {isEditingRecord ? (
+                    <TextInput
+                      style={styles.input}
+                      value={editedSpecialty || selectedRecord.specialty || ''}
+                      onChangeText={setEditedSpecialty}
+                      placeholder="e.g., Cardiology"
+                      placeholderTextColor="#999"
+                    />
+                  ) : (
+                    <Text style={[styles.infoValue, { fontWeight: '600' }]}>{selectedRecord.specialty}</Text>
+                  )}
+                </View>
+
+                <View style={{ marginBottom: 20 }}>
                   <Text style={styles.label}>Doctor / Provider</Text>
                   {isEditingRecord ? (
                     <TextInput
@@ -1826,6 +1842,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 onPress={() => {
                   setIsEditingRecord(false);
                   setEditedProvider('');
+                  setEditedSpecialty('');
                   setEditedDate('');
                   setEditedReason('');
                   setEditedSummary('');
@@ -1845,6 +1862,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                   const updatedRecord = {
                     ...selectedRecord,
                     provider: editedProvider || selectedRecord.provider,
+                    specialty: editedSpecialty.trim() || selectedRecord.specialty,
                     appointmentDate: formattedDate,
                     reasonForVisit: editedReason || selectedRecord.reasonForVisit,
                     summary: editedSummary || selectedRecord.summary,
@@ -1857,6 +1875,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                     setSelectedRecord(updatedRecord);
                     setIsEditingRecord(false);
                     setEditedProvider('');
+                    setEditedSpecialty('');
                     setEditedDate('');
                     setEditedReason('');
                     setEditedSummary('');
