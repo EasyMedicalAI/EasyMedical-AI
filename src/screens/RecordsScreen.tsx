@@ -1360,7 +1360,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                     {isUploading ? (
                       <ActivityIndicator color="#FFF" />
                     ) : (
-                      <Text style={styles.addButtonText}>Add to My Team</Text>
+                      <Text style={styles.addButtonText}>Analyze and save</Text>
                     )}
                   </TouchableOpacity>
                 </View>
