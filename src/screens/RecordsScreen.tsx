@@ -104,6 +104,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   } = useRecords();
   const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [uploadingSpecialty, setUploadingSpecialty] = useState<string | null>(null);
+  const [specialtyText, setSpecialtyText] = useState('');
   const [recordText, setRecordText] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [summaryReview, setSummaryReview] = useState<{ record: MedicalRecord; entries: LogEntry[] } | null>(null);
@@ -647,7 +648,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   };
 
   const handleUploadPdf = async (uri: string) => {
-    if (!uploadingSpecialty) return;
+    if (uploadingSpecialty === null) return;
     setIsUploading(true);
     try {
       const analysis = await cameraService.analyzePdfs([uri]);
@@ -658,7 +659,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         id: generateUUID(),
         uploadDate: new Date().toISOString(),
         imageUris: [],
-        chosenSpecialty: uploadingSpecialty,
+        chosenSpecialty: undefined,
       });
 
       const similar = findSimilarRecord(record);
@@ -774,7 +775,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   };
 
   const handleUploadPhoto = async () => {
-    if (!uploadingSpecialty || selectedPhotos.length === 0) {
+    if (uploadingSpecialty === null || selectedPhotos.length === 0) {
       Alert.alert('Error', 'Please select a photo');
       return;
     }
@@ -810,10 +811,8 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       });
       console.log(`✓ Base64 read successful. Length: ${base64.length} characters`);
 
-      // Determine record type (lab vs other based on specialty)
-      const isLab = uploadingSpecialty?.toLowerCase().includes('lab') ||
-                   uploadingSpecialty?.toLowerCase().includes('pathology');
-      const recordType = isLab ? 'lab' : 'other';
+      // The AI works out the type of document from its contents, so every upload is sent the same way
+      const recordType = 'other';
 
       // Every document (all pages together) goes through the same structured extraction
       console.log(`🤖 Sending ${processedUris.length} page(s) for extraction (recordType: ${recordType})...`);
@@ -828,7 +827,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
           id: recordId,
           uploadDate: new Date().toISOString(),
           imageUris: processedUris,
-          chosenSpecialty: uploadingSpecialty,
+          chosenSpecialty: undefined,
         })
       );
 
@@ -863,7 +862,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   };
 
   const handleUploadRecord = async () => {
-    if (!uploadingSpecialty || !doctorName.trim() || !appointmentDate.trim() || !appointmentSummary.trim()) {
+    if (uploadingSpecialty === null || !doctorName.trim() || !appointmentDate.trim() || !appointmentSummary.trim()) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
@@ -893,7 +892,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         uploadDate: new Date().toISOString(),
         appointmentDate: dateISO,
         originalText: appointmentSummary,
-        specialty: uploadingSpecialty,
+        specialty: specialtyText.trim() || 'Other',
         provider: doctorName,
         summary: appointmentSummary,
         reasonForVisit: appointmentSummary,
@@ -1063,15 +1062,15 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         </View>
       )}
 
-      {/* Upload Records Section, with all specialties */}
-      <Section title="Upload records">
+      {/* One upload button: the app works out the type of visit or lab from the document */}
+      <Section title="Upload">
         <ListCard>
-          {[...defaultSpecialties].sort().map((specialty, index) => (
-            <React.Fragment key={`upload-${specialty}`}>
-              {index > 0 && <Divider />}
-              <ListRow icon={getSpecialtyIcon(specialty)} label={specialty} onPress={() => setUploadingSpecialty(specialty)} />
-            </React.Fragment>
-          ))}
+          <ListRow
+            icon="upload-outline"
+            label="Upload a record"
+            hint="A photo, a PDF, or typed details. The type of visit or lab is worked out for you."
+            onPress={() => setUploadingSpecialty('')}
+          />
         </ListCard>
       </Section>
 
@@ -1091,7 +1090,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
           style={styles.modalContainer}
         >
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Upload {uploadingSpecialty} Record</Text>
+            <Text style={styles.modalTitle}>Upload a record</Text>
             <TouchableOpacity onPress={() => {
               setUploadingSpecialty(null);
               setRecordText('');
@@ -1177,6 +1176,15 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 <Text style={styles.label}>Appointment Details</Text>
                 <Text style={styles.sublabel}>Enter information about your visit</Text>
 
+                <Text style={styles.fieldLabel}>Specialty (optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Cardiology"
+                  placeholderTextColor="#999"
+                  value={specialtyText}
+                  onChangeText={setSpecialtyText}
+                  editable={!isUploading}
+                />
                 <Text style={styles.fieldLabel}>Doctor's Name</Text>
                 <TextInput
                   style={styles.input}
