@@ -32,6 +32,7 @@ import { ScreenHeader, Section, ListCard, ListRow, Divider, DetailPage } from '@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { applyLogEntries, currentMedicationNames, LogEntry } from '@/services/quickLog';
 import EntryReview from '@/components/EntryReview';
+import LabRangeList from '@/components/LabRangeList';
 
 let DocumentPicker: any = null;
 try {
@@ -1034,22 +1035,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
         <View style={styles.myLabsSection}>
           <Text style={styles.sectionTitle}>My labs</Text>
           {labValues.length > 0 ? (
-          <View style={styles.labsGrid}>
-            {labValues.sort((a, b) => a.name.localeCompare(b.name)).map(lab => (
-              <TouchableOpacity
-                key={lab.name}
-                style={styles.labCard}
-                onPress={() => setSelectedLabName(lab.name)}
-              >
-                <Text style={styles.labName}>{lab.name}</Text>
-                <Text style={styles.labValue}>{lab.value}</Text>
-                {lab.range && <Text style={styles.labRange}>Normal: {lab.range}</Text>}
-                <Text style={styles.labDate}>
-                  {new Date(lab.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          <LabRangeList labs={labValues} onSelect={(name) => setSelectedLabName(name)} />
           ) : (
             <View style={{ padding: 16, backgroundColor: '#FFF8DC', borderRadius: 8, marginTop: 8 }}>
               <Text style={{ fontSize: 12, color: '#666', fontStyle: 'italic' }}>
