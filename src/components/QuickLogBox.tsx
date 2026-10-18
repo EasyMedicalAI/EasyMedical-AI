@@ -94,7 +94,7 @@ export default function QuickLogBox({
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
-          placeholder={listening ? 'Listening...' : 'Type, or tap the microphone to speak'}
+          placeholder={listening ? 'Listening...' : 'Type or tap the microphone to speak'}
           placeholderTextColor="#999"
           value={text}
           onChangeText={setText}

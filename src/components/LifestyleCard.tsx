@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, TextInput, Modal, ScrollView, StyleSheet,
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { rowIconSize } from '@/components/rowIcons';
 import { useRecords } from '@/context/RecordsContext';
+import { SpeechModule, speechAvailable, useSpeechEvent } from '@/services/speech';
 
 type Kind = 'sleep' | 'exercise' | 'meal';
 type DrinkKind = 'water' | 'coffee' | 'alcohol' | 'sugary';
@@ -44,7 +45,6 @@ const DRINK_KINDS: { key: DrinkKind; label: string }[] = [
   { key: 'alcohol', label: 'Alcoholic drinks' },
   { key: 'sugary', label: 'Sugary drinks' },
 ];
-const DIET_OPTIONS = ['Low sodium', 'Diabetic diet', 'Gluten-free', 'Vegetarian', 'Dairy-free'];
 
 type Bar = { date: string; value: number };
 
@@ -86,6 +86,37 @@ export default function LifestyleCard() {
   const [typingActivity, setTypingActivity] = useState(false);
   const [mealType, setMealType] = useState('');
   const [mealTags, setMealTags] = useState<string[]>([]);
+  const [listening, setListening] = useState(false);
+  const [foodDetailsOpen, setFoodDetailsOpen] = useState(false);
+
+  // Speaking fills in the meal note. The person still checks it and taps Save.
+  useSpeechEvent('start', () => setListening(true));
+  useSpeechEvent('end', () => setListening(false));
+  useSpeechEvent('result', (event) => {
+    const transcript = event.results[0]?.transcript;
+    if (transcript) setValue(transcript);
+  });
+  useSpeechEvent('error', (event) => {
+    setListening(false);
+    if (event.error !== 'aborted') Alert.alert('Could not hear that', event.message || 'Please try again, or type it instead.');
+  });
+
+  const toggleListening = async () => {
+    if (!speechAvailable || !SpeechModule) {
+      Alert.alert('Speaking needs an app update', 'This version of the app cannot listen yet. You can still type your note.');
+      return;
+    }
+    if (listening) {
+      SpeechModule.stop();
+      return;
+    }
+    const permission = await SpeechModule.requestPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Microphone off', 'Turn on Microphone and Speech Recognition for EasyMedical in Settings to speak your note.');
+      return;
+    }
+    SpeechModule.start({ lang: 'en-US', interimResults: true, continuous: false });
+  };
 
   const sleep = [...(userData.sleepHistory || [])].sort((a, b) => b.date.localeCompare(a.date));
   const exercise = [...(userData.exerciseHistory || [])].sort((a, b) => b.date.localeCompare(a.date));
@@ -166,11 +197,6 @@ export default function LifestyleCard() {
     await patchUserData({ drinkHistory: all.filter((_, i) => i !== index) });
   };
 
-  const toggleDiet = (name: string) => {
-    const current = userData.dietProfile || [];
-    patchUserData({ dietProfile: current.includes(name) ? current.filter((n) => n !== name) : [...current, name] });
-  };
-
   const toggleMealTag = (tag: string) =>
     setMealTags((current) => (current.includes(tag) ? current.filter((t) => t !== tag) : [...current, tag]));
 
@@ -238,6 +264,27 @@ export default function LifestyleCard() {
   const list = open === 'sleep' ? sleep : open === 'exercise' ? exercise : meals;
   const mealDetail = (item: { mealType?: string; tags?: string[] }) => [item.mealType, ...(item.tags || [])].filter(Boolean).join(' · ');
 
+  const earlierMeals = meals.filter((m) => !isToday(m.date));
+  // One row per entry, with Delete
+  const renderHistory = (items: any[]) =>
+    items.map((item: any, index: number) => {
+                    const original = (open === 'sleep' ? userData.sleepHistory : open === 'exercise' ? userData.exerciseHistory : userData.mealHistory) || [];
+                    const originalIndex = original.indexOf(item);
+                    const main = open === 'sleep' ? `${item.hours} hours` : open === 'exercise' ? `${item.minutes} minutes${item.activity ? ` · ${item.activity}` : ''}` : item.description;
+                    const detail = open === 'meal' ? mealDetail(item) : '';
+                    return (
+                      <View key={`${item.date}-${index}`} style={styles.historyRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.historyValue}>{main}</Text>
+                          <Text style={styles.historyDate}>{detail ? `${formatDay(item.date)} · ${detail}` : formatDay(item.date)}</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => remove(open as Kind, originalIndex)}>
+                          <Text style={styles.delete}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+    });
+
   const rows: { kind: Kind; label: string; icon: React.ComponentProps<typeof MaterialCommunityIcons>['name'] }[] = [
     { kind: 'sleep', label: 'Sleep', icon: 'moon-waning-crescent' },
     { kind: 'exercise', label: 'Exercise', icon: 'run' },
@@ -278,77 +325,76 @@ export default function LifestyleCard() {
               {open && (
                 <>
                   <Text style={styles.title}>{titles[open]}</Text>
+                  {open === 'meal' && (
+                    <Text style={styles.summary}>
+                      Today: {mealsToday.length} meal{mealsToday.length === 1 ? '' : 's'}, {drinksToday.length} drink{drinksToday.length === 1 ? '' : 's'}
+                    </Text>
+                  )}
 
                   {open === 'meal' && (
-                    <>
-                      <Text style={styles.sectionLabel}>Drinks today</Text>
-                      {DRINK_KINDS.map((d) => (
-                        <View key={d.key} style={styles.counterRow}>
-                          <Text style={styles.counterLabel}>{d.label}</Text>
-                          <View style={styles.stepper}>
-                            <TouchableOpacity style={styles.stepButton} onPress={() => adjustDrink(d.key, -1)} accessibilityLabel={`Remove a ${d.label.toLowerCase()}`}>
-                              <Text style={styles.stepText}>−</Text>
-                            </TouchableOpacity>
-                            <Text style={styles.stepCount}>{drinkCount(d.key)}</Text>
-                            <TouchableOpacity style={styles.stepButton} onPress={() => adjustDrink(d.key, 1)} accessibilityLabel={`Add a ${d.label.toLowerCase()}`}>
-                              <Text style={styles.stepText}>+</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      ))}
-                    </>
-                  )}
-
-                  {open === 'sleep' && sleepBars.length > 0 && (
-                    <>
-                      <Text style={styles.sectionLabel}>Last {sleepBars.length} nights</Text>
-                      <BarChart bars={sleepBars} floor={10} />
-                      {sleepAverage !== null && (
-                        <Text style={styles.summaryText}>
-                          7-day average: {sleepAverage.toFixed(1)} hours ({recentSleep.length} night{recentSleep.length === 1 ? '' : 's'})
-                        </Text>
-                      )}
-                    </>
-                  )}
-
-                  {open === 'exercise' && exercise.length > 0 && (
-                    <>
-                      <Text style={styles.sectionLabel}>Last 14 days (minutes)</Text>
-                      <BarChart bars={exerciseBars} floor={30} />
-                      <Text style={styles.summaryText}>
-                        7-day total: {weekMinutes} min ({recentExercise.length} session{recentExercise.length === 1 ? '' : 's'})
-                      </Text>
-                      {weekByActivity.map(([name, total]) => (
-                        <Text key={name} style={styles.summaryDetail}>{`${name}: ${total} min`}</Text>
-                      ))}
-                    </>
+                    <View style={styles.hero}>
+                      <TouchableOpacity
+                        style={[styles.heroMic, listening && styles.micActive]}
+                        onPress={toggleListening}
+                        accessibilityLabel={listening ? 'Stop listening' : 'Speak your meal'}
+                      >
+                        <MaterialCommunityIcons name={listening ? 'stop' : 'microphone'} size={30} color="#FFF" />
+                      </TouchableOpacity>
+                      <Text style={styles.heroCaption}>{listening ? 'Listening...' : 'Tap and say what you ate or drank'}</Text>
+                      <Text style={styles.orType}>or type what you ate or drank</Text>
+                    </View>
                   )}
 
                   <Text style={styles.fieldLabel}>{prompts[open]}</Text>
-                  <TextInput
-                    style={styles.input}
-                    keyboardType={open === 'meal' ? 'default' : 'decimal-pad'}
-                    placeholder={open === 'sleep' ? 'e.g. 7.5' : open === 'exercise' ? 'e.g. 30' : 'e.g. chicken salad for lunch'}
-                    placeholderTextColor="#999"
-                    value={value}
-                    onChangeText={setValue}
-                    multiline={open === 'meal'}
-                  />
+                  <View style={styles.inputRow}>
+                    <TextInput
+                      style={[styles.input, { flex: 1 }]}
+                      keyboardType={open === 'meal' ? 'default' : 'decimal-pad'}
+                      placeholder={open === 'sleep' ? 'e.g. 7.5' : open === 'exercise' ? 'e.g. 30' : listening ? 'Listening...' : 'e.g. chicken salad for lunch'}
+                      placeholderTextColor="#999"
+                      value={value}
+                      onChangeText={setValue}
+                      multiline={open === 'meal'}
+                    />
+                  </View>
 
                   {open === 'meal' && (
                     <>
-                      <Text style={styles.fieldLabel}>Meal (optional)</Text>
-                      <View style={styles.chipRow}>
-                        {MEAL_TYPES.map((name) => (
-                          <Chip key={name} label={name} selected={mealType === name} onPress={() => setMealType(mealType === name ? '' : name)} />
-                        ))}
-                      </View>
-                      <Text style={styles.fieldLabel}>Tags (optional)</Text>
-                      <View style={styles.chipRow}>
-                        {MEAL_TAGS.map((tag) => (
-                          <Chip key={tag} label={tag} selected={mealTags.includes(tag)} onPress={() => toggleMealTag(tag)} />
-                        ))}
-                      </View>
+                      <TouchableOpacity style={styles.disclosure} onPress={() => setFoodDetailsOpen(!foodDetailsOpen)}>
+                        <Text style={styles.disclosureText}>Meal type, tags, and drinks</Text>
+                        <MaterialCommunityIcons name={foodDetailsOpen ? 'chevron-up' : 'chevron-down'} size={20} color="#666" />
+                      </TouchableOpacity>
+                      {foodDetailsOpen && (
+                        <View style={styles.disclosureBody}>
+                          <Text style={styles.fieldLabel}>Meal (optional)</Text>
+                          <View style={styles.chipRow}>
+                            {MEAL_TYPES.map((name) => (
+                              <Chip key={name} label={name} selected={mealType === name} onPress={() => setMealType(mealType === name ? '' : name)} />
+                            ))}
+                          </View>
+                          <Text style={styles.fieldLabel}>Tags (optional)</Text>
+                          <View style={styles.chipRow}>
+                            {MEAL_TAGS.map((tag) => (
+                              <Chip key={tag} label={tag} selected={mealTags.includes(tag)} onPress={() => toggleMealTag(tag)} />
+                            ))}
+                          </View>
+                          <Text style={styles.fieldLabel}>Drinks today</Text>
+                          {DRINK_KINDS.map((d) => (
+                            <View key={d.key} style={styles.counterRow}>
+                              <Text style={styles.counterLabel}>{d.label}</Text>
+                              <View style={styles.stepper}>
+                                <TouchableOpacity style={styles.stepButton} onPress={() => adjustDrink(d.key, -1)} accessibilityLabel={`Remove a ${d.label.toLowerCase()}`}>
+                                  <Text style={styles.stepText}>−</Text>
+                                </TouchableOpacity>
+                                <Text style={styles.stepCount}>{drinkCount(d.key)}</Text>
+                                <TouchableOpacity style={styles.stepButton} onPress={() => adjustDrink(d.key, 1)} accessibilityLabel={`Add a ${d.label.toLowerCase()}`}>
+                                  <Text style={styles.stepText}>+</Text>
+                                </TouchableOpacity>
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      )}
                     </>
                   )}
 
@@ -402,37 +448,20 @@ export default function LifestyleCard() {
                     <Text style={styles.buttonText}>Save</Text>
                   </TouchableOpacity>
 
-                  <Text style={styles.sectionLabel}>History</Text>
-                  {list.length === 0 && <Text style={styles.empty}>Nothing logged yet.</Text>}
-                  {list.map((item: any, index: number) => {
-                    const original = (open === 'sleep' ? userData.sleepHistory : open === 'exercise' ? userData.exerciseHistory : userData.mealHistory) || [];
-                    const originalIndex = original.indexOf(item);
-                    const main = open === 'sleep' ? `${item.hours} hours` : open === 'exercise' ? `${item.minutes} minutes${item.activity ? ` · ${item.activity}` : ''}` : item.description;
-                    const detail = open === 'meal' ? mealDetail(item) : '';
-                    return (
-                      <View key={`${item.date}-${index}`} style={styles.historyRow}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.historyValue}>{main}</Text>
-                          <Text style={styles.historyDate}>{detail ? `${formatDay(item.date)} · ${detail}` : formatDay(item.date)}</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => remove(open, originalIndex)}>
-                          <Text style={styles.delete}>Delete</Text>
-                        </TouchableOpacity>
-                      </View>
-                    );
-                  })}
+                  <Text style={styles.sectionLabel}>{open === 'meal' ? 'Today' : 'History'}</Text>
+                  {(open === 'meal' ? mealsToday : list).length === 0 && (
+                    <Text style={styles.empty}>{open === 'meal' ? 'Nothing logged today.' : 'Nothing logged yet.'}</Text>
+                  )}
+                  {renderHistory(open === 'meal' ? mealsToday : list)}
 
-                  {open === 'meal' && (
+                  {open === 'meal' && earlierMeals.length > 0 && (
                     <>
-                      <Text style={styles.sectionLabel}>Diet profile</Text>
-                      <Text style={styles.helper}>Set once. Shown to your doctor.</Text>
-                      <View style={styles.chipRow}>
-                        {DIET_OPTIONS.map((name) => (
-                          <Chip key={name} label={name} selected={(userData.dietProfile || []).includes(name)} onPress={() => toggleDiet(name)} />
-                        ))}
-                      </View>
+                      <Text style={styles.sectionLabel}>Earlier</Text>
+                      {renderHistory(earlierMeals)}
                     </>
                   )}
+
+
                 </>
               )}
             </ScrollView>
@@ -444,6 +473,42 @@ export default function LifestyleCard() {
 }
 
 const styles = StyleSheet.create({
+  summary: { fontSize: 14, color: '#666', marginTop: 4, marginBottom: 8 },
+  hero: { alignItems: 'center', paddingVertical: 18 },
+  heroMic: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCaption: { fontSize: 15, color: '#333', marginTop: 10 },
+  orType: { fontSize: 13, color: '#999', marginTop: 6 },
+  disclosure: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 14,
+    borderRadius: 12,
+    backgroundColor: '#F2F2F7',
+  },
+  disclosureText: { fontSize: 15, color: '#333', fontWeight: '500' },
+  disclosureBody: { paddingTop: 4 },
+  inputRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  micButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#D0D0D5',
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micActive: { backgroundColor: '#FF3B30', borderColor: '#FF3B30' },
   section: {
     paddingHorizontal: 20,
     marginBottom: 32,

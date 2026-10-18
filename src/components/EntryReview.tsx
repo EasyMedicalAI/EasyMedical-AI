@@ -96,6 +96,7 @@ const FIELDS: Partial<Record<EntryType, Field[]>> = {
     { key: 'date', label: 'Date', kind: 'date', required: true },
     { key: 'time', label: 'Time', kind: 'text' },
     { key: 'doctor_name', label: 'Doctor', kind: 'text' },
+    { key: 'specialty', label: 'Specialty', kind: 'text' },
   ],
   add_vaccine: [
     { key: 'vaccine_name', label: 'Vaccine', kind: 'text', required: true },

@@ -73,6 +73,8 @@ export interface UserHealthData {
   conditions?: string[];
   allergies?: string[];
   medications?: string[];
+  // How often to remind about upcoming appointments. Missing means standard.
+  appointmentReminders?: 'off' | 'day' | 'standard' | 'frequent';
   appointments?: Array<{
     id: string;
     dateTime: string;
@@ -100,6 +102,7 @@ export interface UserHealthData {
   prescriptionMedications?: string[];
   otcMedications?: string[];
   pastConditions?: string[];
+  pregnancies?: { year: string; outcome: string; complications: string[] }[];
   surgicalHistory?: { surgeryName: string; date: string }[];
   familyHistory?: { familyMember: string; condition: string }[];
   hospitalizations?: { reason: string; date: string }[];

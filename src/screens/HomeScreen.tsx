@@ -26,6 +26,14 @@ import MedicationCalendar from '@/components/MedicationCalendar';
 import { nextDoseLabel, defaultTimes } from '@/services/doseSchedule';
 import MedicationLabelReview, { MedicationDraft } from '@/components/MedicationLabelReview';
 import MedicationForm, { MedicationFormValues, blankMedicationForm, formFromMedication, medicationFieldsFromForm } from '@/components/MedicationForm';
+import AppointmentQuickAdd from '@/components/AppointmentQuickAdd';
+import AppointmentEditor, { formatAppointmentDateTime, appointmentPartsFrom, defaultAppointmentTime } from '@/components/AppointmentEditor';
+import AppointmentReminderOptions from '@/components/AppointmentReminderOptions';
+import { appointmentMoment } from '@/services/reminders';
+import HealthHistoryEditor, { HistoryType, FAMILY_MEMBERS, formatHistoryDate, historyDateFrom } from '@/components/HealthHistoryEditor';
+import PregnancyEditor, { PregnancyFormValues, blankPregnancyForm, isBirthOutcome, isLossOutcome } from '@/components/PregnancyEditor';
+import InsuranceEditor from '@/components/InsuranceEditor';
+import FieldFormEditor from '@/components/FieldFormEditor';
 import { Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { rowIconSize } from '@/components/rowIcons';
@@ -133,7 +141,7 @@ function VitalRow({
 }
 
 export default function HomeScreen() {
-  const { records, userData, loading, getAbnormalResults, patchUserData } = useRecords();
+  const { records, userData, loading, getAbnormalResults, patchUserData, setEpicAppointmentsForReminders } = useRecords();
   const router = useRouter();
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editData, setEditData] = useState(userData);
@@ -143,15 +151,8 @@ export default function HomeScreen() {
   }, [userData]);
   const [medicationPhoto, setMedicationPhoto] = useState<string | null>(null);
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
-  const [appointmentDateTime, setAppointmentDateTime] = useState('');
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  // Initialize with today's date
-  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth()); // Today's month (0-indexed)
-  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate()); // Today's day
-  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear()); // Today's year
-  const [selectedHour, setSelectedHour] = useState(2);
-  const [selectedMinute, setSelectedMinute] = useState(0);
-  const [selectedPeriod, setSelectedPeriod] = useState('PM');
+  const [appointmentDate, setAppointmentDate] = useState<Date>(() => new Date());
+  const [appointmentTime, setAppointmentTime] = useState<Date>(defaultAppointmentTime);
   const [selectedFeet, setSelectedFeet] = useState(5);
   const [selectedInches, setSelectedInches] = useState(10);
   const [selectedWeight, setSelectedWeight] = useState(180);
@@ -181,19 +182,15 @@ export default function HomeScreen() {
   const [selectedGender, setSelectedGender] = useState('Other');
   const [customGender, setCustomGender] = useState('');
   const [editingHistoryType, setEditingHistoryType] = useState<'surgical' | 'family' | 'conditions' | 'hospitalization' | null>(null);
-  const [surgeryDate, setSurgeryDate] = useState('');
   const [surgeryName, setSurgeryName] = useState('');
   const [familyMember, setFamilyMember] = useState('');
   const [familyMemberCustomMode, setFamilyMemberCustomMode] = useState(false);
   const [familyCondition, setFamilyCondition] = useState('');
-  const [conditionName, setConditionName] = useState('');
-  const [hospitalizationDate, setHospitalizationDate] = useState('');
   const [hospitalizationReason, setHospitalizationReason] = useState('');
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [showHistoryDatePicker, setShowHistoryDatePicker] = useState(false);
-  const [historyDateMonth, setHistoryDateMonth] = useState(0);
-  const [historyDateDay, setHistoryDateDay] = useState(1);
-  const [historyDateYear, setHistoryDateYear] = useState(new Date().getFullYear());
+  const [historyDate, setHistoryDate] = useState<Date>(() => new Date());
+  const [editingPregnancy, setEditingPregnancy] = useState<{ index: number | null } | null>(null);
+  const [pregnancyForm, setPregnancyForm] = useState<PregnancyFormValues>(blankPregnancyForm());
   const [addingPrescriptionMed, setAddingPrescriptionMed] = useState(false);
   const [newPrescriptionMed, setNewPrescriptionMed] = useState('');
   const [editingMed, setEditingMed] = useState<{ kind: 'prescription' | 'otc'; index: number } | null>(null);
@@ -202,14 +199,6 @@ export default function HomeScreen() {
   const [medsTab, setMedsTab] = useState<'list' | 'calendar'>('list');
   const [addingOtcMed, setAddingOtcMed] = useState(false);
   const [newOtcMed, setNewOtcMed] = useState('');
-  const [addingCondition, setAddingCondition] = useState(false);
-  const [newCondition, setNewCondition] = useState('');
-  const [editingConditionIdx, setEditingConditionIdx] = useState<number | null>(null);
-  const [editingConditionValue, setEditingConditionValue] = useState('');
-  const [addingAllergy, setAddingAllergy] = useState(false);
-  const [newAllergy, setNewAllergy] = useState('');
-  const [editingAllergyIdx, setEditingAllergyIdx] = useState<number | null>(null);
-  const [editingAllergyValue, setEditingAllergyValue] = useState('');
   const [addingVaccine, setAddingVaccine] = useState(false);
   const [newVaccine, setNewVaccine] = useState('');
   const [editingVaccineIdx, setEditingVaccineIdx] = useState<number | null>(null);
@@ -240,6 +229,211 @@ export default function HomeScreen() {
   const [epicConditions, setEpicConditions] = useState<Condition[]>([]);
   const [openPage, setOpenPage] = useState<string | null>(null);
   const [pendingMedicationAdd, setPendingMedicationAdd] = useState<'prescription' | 'otc' | null>(null);
+  // iOS can't show a modal from inside another, so an editor opened from a page waits until that page has closed
+  const [pendingEditor, setPendingEditor] = useState<(() => void) | null>(null);
+  const openEditorFromPage = (open: () => void) => {
+    setPendingEditor(() => open);
+    setOpenPage(null);
+  };
+  const runPendingEditor = () => {
+    if (!pendingEditor) return;
+    setPendingEditor(null);
+    pendingEditor();
+  };
+  // Allergies: your own can be added, renamed, or deleted. Epic allergies are edited through their Epic edit screen.
+  const epicAllergyNames = new Set(epicAllergies.map((a) => a.allergen.trim().toLowerCase()));
+  const manualAllergyRows = (userData.allergies || [])
+    .map((allergy, index) => ({ allergy, index }))
+    .filter(({ allergy }) => !epicAllergyNames.has(allergy.trim().toLowerCase()));
+  const addAllergy = () => {
+    Alert.prompt('New allergy', 'Enter the allergy.', async (text) => {
+      const name = text?.trim();
+      if (!name) return;
+      await patchUserData({ allergies: [...(userData.allergies || []), name] });
+    }, 'plain-text');
+  };
+  const renameAllergy = (index: number) => {
+    Alert.prompt('Edit allergy', undefined, async (text) => {
+      const name = text?.trim();
+      if (!name) return;
+      const updated = [...(userData.allergies || [])];
+      updated[index] = name;
+      await patchUserData({ allergies: updated });
+    }, 'plain-text', (userData.allergies || [])[index]);
+  };
+  const manageAllergy = (index: number) => {
+    Alert.alert((userData.allergies || [])[index], undefined, [
+      { text: 'Edit', onPress: () => renameAllergy(index) },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => patchUserData({ allergies: (userData.allergies || []).filter((_, i) => i !== index) }),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+  // Conditions: add, rename, and move between Active and Resolved
+  const epicConditionNames = new Set(epicConditions.map((c) => c.name.trim().toLowerCase()));
+  const activeConditionRows = (userData.conditions || [])
+    .map((condition, index) => ({ condition, index }))
+    .filter(({ condition }) => !epicConditionNames.has(condition.trim().toLowerCase()));
+  const addCondition = () => {
+    Alert.prompt('New condition', undefined, async (text) => {
+      const name = text?.trim();
+      if (!name) return;
+      await patchUserData({ conditions: [...(userData.conditions || []), name] });
+    }, 'plain-text');
+  };
+  const renameCondition = (list: 'active' | 'resolved', index: number) => {
+    const current = list === 'active' ? (userData.conditions || [])[index] : (userData.pastConditions || [])[index];
+    Alert.prompt('Edit condition', undefined, async (text) => {
+      const name = text?.trim();
+      if (!name) return;
+      if (list === 'active') {
+        const updated = [...(userData.conditions || [])];
+        updated[index] = name;
+        await patchUserData({ conditions: updated });
+      } else {
+        const updated = [...(userData.pastConditions || [])];
+        updated[index] = name;
+        await patchUserData({ pastConditions: updated });
+      }
+    }, 'plain-text', current);
+  };
+  // Moves a condition to the other list, or removes it
+  const moveCondition = async (from: 'active' | 'resolved', index: number, to: 'active' | 'resolved' | 'delete') => {
+    const active = [...(userData.conditions || [])];
+    const resolved = [...(userData.pastConditions || [])];
+    const [item] = (from === 'active' ? active : resolved).splice(index, 1);
+    if (to === 'active') active.push(item);
+    if (to === 'resolved') resolved.push(item);
+    await patchUserData({ conditions: active, pastConditions: resolved });
+  };
+  const manageCondition = (list: 'active' | 'resolved', index: number) => {
+    const name = list === 'active' ? (userData.conditions || [])[index] : (userData.pastConditions || [])[index];
+    Alert.alert(name, undefined, [
+      { text: 'Edit', onPress: () => renameCondition(list, index) },
+      list === 'active'
+        ? { text: 'Mark as resolved', onPress: () => moveCondition('active', index, 'resolved') }
+        : { text: 'Mark as active', onPress: () => moveCondition('resolved', index, 'active') },
+      { text: 'Delete', style: 'destructive', onPress: () => moveCondition(list, index, 'delete') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  // Opens the pharmacy editor once the Pharmacy page has closed
+  const openPharmacyEditor = () => {
+    setPharmacyName(userData.pharmacy?.name || '');
+    setPharmacyAddress(userData.pharmacy?.address || '');
+    setPharmacyPhone(userData.pharmacy?.phone || '');
+    openEditorFromPage(() => setEditingSection('pharmacy'));
+  };
+  const deletePharmacy = async () => {
+    await patchUserData({ pharmacy: undefined });
+    setEditingSection(null);
+    setPharmacyName('');
+    setPharmacyAddress('');
+    setPharmacyPhone('');
+  };
+  // Opens the emergency contact editor once the Emergency contacts page has closed
+  const openEmergencyEditor = (index: number | null) => {
+    const contact = index !== null ? (userData.emergencyContacts || [])[index] : undefined;
+    setEditData(userData);
+    setEditingEmergencyContactId(index);
+    setEmergencyContactName(contact?.name || '');
+    setEmergencyContactRelationship(contact?.relationship || '');
+    setEmergencyContactPhone(contact?.phone || '');
+    openEditorFromPage(() => setEditingSection('emergency'));
+  };
+
+  // Opens the insurance editor once the Insurance page has closed
+  const openInsuranceEditor = (index: number | null) => {
+    const item = index !== null ? (userData.insurances || [])[index] : undefined;
+    setEditData(userData);
+    setEditingInsuranceId(index);
+    setInsuranceProvider(item?.provider || '');
+    setInsuranceMemberId(item?.memberId || '');
+    setInsuranceGroupNumber(item?.groupNumber || '');
+    openEditorFromPage(() => setEditingSection('insurance'));
+  };
+
+  // Obstetric history: a summary from the pregnancy list, newest first
+  const pregnancyList = (userData.pregnancies || [])
+    .map((pregnancy, index) => ({ pregnancy, index }))
+    .sort((a, b) => Number(b.pregnancy.year) - Number(a.pregnancy.year));
+  const pregnancyCount = (userData.pregnancies || []).length;
+  const birthCount = (userData.pregnancies || []).filter((p) => isBirthOutcome(p.outcome)).length;
+  const lossCount = (userData.pregnancies || []).filter((p) => isLossOutcome(p.outcome)).length;
+  const openPregnancyEditor = (index: number | null) => {
+    const item = index !== null ? (userData.pregnancies || [])[index] : undefined;
+    setPregnancyForm(item ? { year: item.year, outcome: item.outcome, complications: [...item.complications] } : blankPregnancyForm());
+    openEditorFromPage(() => setEditingPregnancy({ index }));
+  };
+  const savePregnancy = async () => {
+    const year = pregnancyForm.year.trim();
+    const yearNumber = parseInt(year, 10);
+    if (!/^\d{4}$/.test(year) || yearNumber < 1900 || yearNumber > new Date().getFullYear()) {
+      Alert.alert('Check the year', 'Enter the four-digit year of the pregnancy.');
+      return;
+    }
+    if (!pregnancyForm.outcome) {
+      Alert.alert('Choose how it ended', 'Pick one of the options.');
+      return;
+    }
+    const entry = { year, outcome: pregnancyForm.outcome, complications: pregnancyForm.complications };
+    const list = [...(userData.pregnancies || [])];
+    if (editingPregnancy?.index != null) list[editingPregnancy.index] = entry;
+    else list.push(entry);
+    await patchUserData({ pregnancies: list });
+    setEditingPregnancy(null);
+  };
+  const deletePregnancy = async () => {
+    if (editingPregnancy?.index == null) return;
+    const list = (userData.pregnancies || []).filter((_, i) => i !== editingPregnancy.index);
+    await patchUserData({ pregnancies: list });
+    setEditingPregnancy(null);
+  };
+
+  // Opens the medical history editor once the Medical history page has closed
+  const openHistoryEditor = (kind: HistoryType, index: number | null) => {
+    setEditData(userData);
+    setEditingIndex(index);
+    setSurgeryName('');
+    setHospitalizationReason('');
+    setFamilyMember('');
+    setFamilyMemberCustomMode(false);
+    setFamilyCondition('');
+    setHistoryDate(new Date());
+    if (index !== null) {
+      if (kind === 'surgical') {
+        const item = userData.surgicalHistory?.[index];
+        setSurgeryName(item?.surgeryName || '');
+        setHistoryDate(historyDateFrom(item?.date));
+      } else if (kind === 'hospitalization') {
+        const item = userData.hospitalizations?.[index];
+        setHospitalizationReason(item?.reason || '');
+        setHistoryDate(historyDateFrom(item?.date));
+      } else {
+        const item = userData.familyHistory?.[index];
+        setFamilyMember(item?.familyMember || '');
+        setFamilyMemberCustomMode(!!item && !FAMILY_MEMBERS.includes(item.familyMember));
+        setFamilyCondition(item?.condition || '');
+      }
+    }
+    openEditorFromPage(() => setEditingHistoryType(kind));
+  };
+
+  // A blank appointment for the form editor, opened from the Appointments page
+  const openNewAppointment = () => {
+    setEditData(userData);
+    setAppointmentDate(new Date());
+    setAppointmentTime(defaultAppointmentTime());
+    setAppointmentDoctorName('');
+    setAppointmentSpecialty('');
+    setEditingAppointmentId(null);
+    openEditorFromPage(() => setEditingSection('appointments'));
+  };
+
   const [epicLoading, setEpicLoading] = useState(false);
   const [epicOverrides, setEpicOverrides] = useState<Record<string, EpicOverride>>({});
   const [addingReading, setAddingReading] = useState<'weight' | 'bp' | null>(null);
@@ -284,6 +478,7 @@ export default function HomeScreen() {
       ]);
       setEpicMedications(meds);
       setEpicAppointments(appts);
+      setEpicAppointmentsForReminders(appts);
       setEpicAllergies(allergies);
       setEpicConditions(conditions);
       setEpicOverrides(await ehrService.getOverrides());
@@ -611,14 +806,35 @@ export default function HomeScreen() {
 
   const handleSaveEdit = async () => {
     try {
-      if (editingSection === 'appointments' && appointmentDateTime && appointmentDoctorName && appointmentSpecialty) {
+      if (editingSection === 'insurance' && !insuranceProvider.trim()) {
+        Alert.alert('Add a provider', 'Enter the insurance provider.');
+        return;
+      }
+      if (editingSection === 'pharmacy' && (!pharmacyName.trim() || !pharmacyPhone.trim())) {
+        Alert.alert('Add details', 'Enter the pharmacy name and phone number.');
+        return;
+      }
+      if (editingSection === 'emergency' && (!emergencyContactName.trim() || !emergencyContactPhone.trim())) {
+        Alert.alert('Add details', 'Enter the contact name and phone number.');
+        return;
+      }
+      const historyNameMissing =
+        (editingHistoryType === 'surgical' && !surgeryName.trim()) ||
+        (editingHistoryType === 'hospitalization' && !hospitalizationReason.trim()) ||
+        (editingHistoryType === 'family' && (!familyMember.trim() || !familyCondition.trim()));
+      if (historyNameMissing) {
+        Alert.alert('Fill in the fields', 'Add a name, and for family history, who and what condition.');
+        return;
+      }
+      if (editingSection === 'appointments') {
+        const dateTime = formatAppointmentDateTime(appointmentDate, appointmentTime);
         let updatedAppointments;
 
         if (editingAppointmentId) {
           // Update existing appointment
           updatedAppointments = (editData.appointments || []).map(apt =>
             apt.id === editingAppointmentId
-              ? { ...apt, dateTime: appointmentDateTime, doctorName: appointmentDoctorName, specialty: appointmentSpecialty }
+              ? { ...apt, dateTime, doctorName: appointmentDoctorName, specialty: appointmentSpecialty }
               : apt
           );
           setEditingAppointmentId(null);
@@ -626,7 +842,7 @@ export default function HomeScreen() {
           // Add new appointment
           const newAppointment = {
             id: String(Date.now()),
-            dateTime: appointmentDateTime,
+            dateTime,
             doctorName: appointmentDoctorName,
             specialty: appointmentSpecialty,
           };
@@ -634,7 +850,6 @@ export default function HomeScreen() {
         }
 
         await patchUserData({ appointments: updatedAppointments });
-        setAppointmentDateTime('');
         setAppointmentDoctorName('');
         setAppointmentSpecialty('');
       } else if (editingSection === 'insurance' && insuranceProvider) {
@@ -662,7 +877,7 @@ export default function HomeScreen() {
         setInsuranceProvider('');
         setInsuranceMemberId('');
         setInsuranceGroupNumber('');
-      } else if (editingSection === 'emergency' && emergencyContactName && emergencyContactPhone) {
+      } else if (editingSection === 'emergency') {
         let updatedContacts;
 
         if (editingEmergencyContactId !== null) {
@@ -687,12 +902,12 @@ export default function HomeScreen() {
         setEmergencyContactName('');
         setEmergencyContactRelationship('');
         setEmergencyContactPhone('');
-      } else if (editingSection === 'pharmacy' && pharmacyName && pharmacyPhone) {
+      } else if (editingSection === 'pharmacy') {
         await patchUserData({
           pharmacy: {
-            name: pharmacyName,
-            address: pharmacyAddress,
-            phone: pharmacyPhone,
+            name: pharmacyName.trim(),
+            address: pharmacyAddress.trim(),
+            phone: pharmacyPhone.trim(),
           },
         });
         setPharmacyName('');
@@ -721,49 +936,24 @@ export default function HomeScreen() {
         setScreeningType('');
         setScreeningDate('');
         setScreeningNotes('');
-      } else if (editingHistoryType === 'surgical' && surgeryName) {
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const formattedDate = `${months[historyDateMonth]} ${historyDateYear}`;
-        let surgicalHistory = editData.surgicalHistory || [];
-        if (editingIndex !== null) {
-          surgicalHistory[editingIndex] = { surgeryName, date: formattedDate };
-        } else {
-          surgicalHistory.push({ surgeryName, date: formattedDate });
-        }
-        await patchUserData({ surgicalHistory });
-        setSurgeryName('');
-        setSurgeryDate('');
-      } else if (editingHistoryType === 'family' && familyMember && familyCondition) {
-        let familyHistory = editData.familyHistory || [];
-        if (editingIndex !== null) {
-          familyHistory[editingIndex] = { familyMember, condition: familyCondition };
-        } else {
-          familyHistory.push({ familyMember, condition: familyCondition });
-        }
-        await patchUserData({ familyHistory });
-        setFamilyMember('');
-        setFamilyCondition('');
-      } else if (editingHistoryType === 'conditions' && conditionName) {
-        let pastConditions = editData.pastConditions || [];
-        if (editingIndex !== null) {
-          pastConditions[editingIndex] = conditionName;
-        } else {
-          pastConditions.push(conditionName);
-        }
-        await patchUserData({ pastConditions });
-        setConditionName('');
-      } else if (editingHistoryType === 'hospitalization' && hospitalizationReason) {
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const formattedDate = `${months[historyDateMonth]} ${historyDateYear}`;
-        let hospitalizations = editData.hospitalizations || [];
-        if (editingIndex !== null) {
-          hospitalizations[editingIndex] = { reason: hospitalizationReason, date: formattedDate };
-        } else {
-          hospitalizations.push({ reason: hospitalizationReason, date: formattedDate });
-        }
-        await patchUserData({ hospitalizations });
-        setHospitalizationReason('');
-        setHospitalizationDate('');
+      } else if (editingHistoryType === 'surgical') {
+        const entry = { surgeryName: surgeryName.trim(), date: formatHistoryDate(historyDate) };
+        const list = [...(editData.surgicalHistory || [])];
+        if (editingIndex !== null) list[editingIndex] = entry;
+        else list.push(entry);
+        await patchUserData({ surgicalHistory: list });
+      } else if (editingHistoryType === 'family') {
+        const entry = { familyMember: familyMember.trim(), condition: familyCondition.trim() };
+        const list = [...(editData.familyHistory || [])];
+        if (editingIndex !== null) list[editingIndex] = entry;
+        else list.push(entry);
+        await patchUserData({ familyHistory: list });
+      } else if (editingHistoryType === 'hospitalization') {
+        const entry = { reason: hospitalizationReason.trim(), date: formatHistoryDate(historyDate) };
+        const list = [...(editData.hospitalizations || [])];
+        if (editingIndex !== null) list[editingIndex] = entry;
+        else list.push(entry);
+        await patchUserData({ hospitalizations: list });
       } else {
         // Save only what differs from the current profile, so nothing else is written back
         const changes = Object.fromEntries(
@@ -784,11 +974,9 @@ export default function HomeScreen() {
     setEditData(userData);
     setEditingSection(null);
     setEditingHistoryType(null);
-    setShowHistoryDatePicker(false);
     setFamilyMemberCustomMode(false);
     setMedicationPhoto(null);
     setEditingAppointmentId(null);
-    setAppointmentDateTime('');
     setAppointmentDoctorName('');
     setAppointmentSpecialty('');
     setInsuranceProvider('');
@@ -971,9 +1159,6 @@ export default function HomeScreen() {
         } else if (editingHistoryType === 'family') {
           const updated = (editData.familyHistory || []).filter((_, i) => i !== editingIndex);
           await patchUserData({ familyHistory: updated });
-        } else if (editingHistoryType === 'conditions') {
-          const updated = (editData.pastConditions || []).filter((_, i) => i !== editingIndex);
-          await patchUserData({ pastConditions: updated });
         } else if (editingHistoryType === 'hospitalization') {
           const updated = (editData.hospitalizations || []).filter((_, i) => i !== editingIndex);
           await patchUserData({ hospitalizations: updated });
@@ -985,19 +1170,6 @@ export default function HomeScreen() {
     } catch (error) {
       Alert.alert('Error', 'Failed to delete');
     }
-  };
-
-  const handleDateTimePickerDone = () => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const formattedDateTime = `${months[selectedMonth]} ${selectedDay}, ${selectedYear} • ${selectedHour}:${String(selectedMinute).padStart(2, '0')} ${selectedPeriod}`;
-    setAppointmentDateTime(formattedDateTime);
-    setShowDatePicker(false);
-    setEditingSection('appointments');
-  };
-
-  const handleOpenDatePicker = () => {
-    setEditingSection(null);
-    setShowDatePicker(true);
   };
 
   const handleCaptureMedicationPhoto = async () => {
@@ -1156,24 +1328,24 @@ export default function HomeScreen() {
     (userData.otcMedications || []).length;
   const allergyNames = [...new Set([...(userData.allergies || []), ...epicAllergies.map((a) => a.allergen)])];
   const allergyValue = allergyNames.length === 1 ? allergyNames[0] : String(allergyNames.length);
-  const conditionCount = new Set([...(userData.conditions || []), ...epicConditions.map((c) => c.name)]).size;
+  const conditionCount = new Set([...(userData.conditions || []), ...currentEpicConditions.map((c) => c.name)]).size;
   const historyCount =
     (userData.surgicalHistory || []).length +
     (userData.familyHistory || []).length +
-    (userData.pastConditions || []).length +
+    (userData.pregnancies || []).length +
     (userData.hospitalizations || []).length;
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
+  // Read the saved text with the same parser as reminders, which handles the date formats the app saves
   const upcoming = [
-    ...(userData.appointments || []).map((a) => (a.dateTime || '').split('•')[0].trim()),
-    ...epicAppointments.map((a) => a.date),
+    ...(userData.appointments || []).map((a) => appointmentMoment(a.dateTime)?.at),
+    ...epicAppointments.map((a) => (a.start ? new Date(a.start) : undefined)),
   ]
-    .map((text) => new Date(text))
-    .filter((d) => !isNaN(d.getTime()) && d.getTime() >= todayStart.getTime())
+    .filter((d): d is Date => !!d && !isNaN(d.getTime()) && d.getTime() >= todayStart.getTime())
     .sort((a, b) => a.getTime() - b.getTime());
   const appointmentValue = upcoming.length
-    ? upcoming[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : 'None scheduled';
+    ? `Next ${upcoming[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+    : 'Next: none';
   const vaccinesValue = String(getRecommendedVaccines().length) + ' recommended';
   const screeningsValue = String(getRecommendedScreenings().length) + ' recommended';
   const insuranceValue = (userData.insurances || []).length ? String((userData.insurances || []).length) + ' plans' : 'None';
@@ -1283,7 +1455,6 @@ export default function HomeScreen() {
               icon="scale-bathroom"
               label="Weight"
               value={weightNow ? `${weightNow.value} lbs` : userData.weight?.includes('lbs') ? userData.weight : `${userData.weight} lbs`}
-              hint={weightHint || undefined}
               onPress={() => setVitalDetail('weight')}
             />
 
@@ -1294,7 +1465,6 @@ export default function HomeScreen() {
               icon="heart-pulse"
               label="Blood pressure"
               value={bloodPressureNow ? `${bloodPressureNow.systolic}/${bloodPressureNow.diastolic} mmHg` : userData.vitals?.bloodPressure || '—'}
-              hint={bpHint || undefined}
               onPress={() => setVitalDetail('bp')}
             />
 
@@ -1530,452 +1700,168 @@ export default function HomeScreen() {
         )}
       </DetailModal>
 
-      <DetailModal visible={openPage === 'conditions'} title="Conditions" onClose={closeDetail}>
-        <View style={styles.section}>
-          <View style={styles.card}>
-            {/* Conditions */}
-            <View style={styles.healthSection}>
-              <View style={styles.healthSectionHeader}>
-                <Text style={styles.healthSectionTitle}>Conditions</Text>
-              </View>
-              {(userData.conditions && userData.conditions.length > 0) || epicConditions.length > 0 ? (
-                <>
-                {userData.conditions.map((condition, idx) => new Set(epicConditions.map((c) => c.name.trim().toLowerCase())).has(condition.trim().toLowerCase()) ? null : (
-                  <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
-                    {editingConditionIdx === idx ? (
-                      <TextInput
-                        style={[styles.input, { flex: 1, height: 36 }]}
-                        value={editingConditionValue}
-                        onChangeText={setEditingConditionValue}
-                      />
-                    ) : (
-                      <Text style={[styles.healthItem, { flex: 1 }]}>• {condition}</Text>
-                    )}
-                    {editingConditionIdx === idx ? (
-                      <>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            const updated = [...(userData.conditions || [])];
-                            updated[idx] = editingConditionValue;
-                            const updatedData = { ...editData, conditions: updated };
-                            setEditData(updatedData);
-                            await patchUserData({ conditions: updatedData.conditions });
-                            setEditingConditionIdx(null);
-                          }}
-                        >
-                          <Text style={styles.editLink}>✓</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => setEditingConditionIdx(null)}>
-                          <Text style={styles.editLink}>✕</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            const updated = (userData.conditions || []).filter((_, i) => i !== idx);
-                            const updatedData = { ...editData, conditions: updated };
-                            setEditData(updatedData);
-                            await patchUserData({ conditions: updatedData.conditions });
-                            setEditingConditionIdx(null);
-                          }}
-                        >
-                          <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
-                        </TouchableOpacity>
-                      </>
-                    ) : showHealthControls ? (
-                      <TouchableOpacity onPress={() => {
-                        setEditingConditionIdx(idx);
-                        setEditingConditionValue(condition);
-                      }}>
-                        <Text style={styles.editLink}>Edit</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                ))}
-                {currentEpicConditions.map((cond, index) => {
-                  const key = `condition:${cond.id}`;
-                  const name = epicText(key, cond.name, 'primary');
-                  const detail = epicText(key, cond.status ? `Status: ${cond.status}` : '', 'secondary');
-                  return (
-                    <View key={`epic-cond-${index}`} style={{ marginVertical: 4 }}>
-                      <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{name}</Text></Text>
-                      {detail ? (
-                        <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>{detail}</Text>
-                      ) : null}
-{showHealthControls && (
-                      <TouchableOpacity onPress={() => openEpicEdit(key, 'condition', name, detail)}>
-                        <Text style={styles.epicEditLink}>Edit</Text>
-                      </TouchableOpacity>
-                        )}
-                    </View>
-                  );
-                })}
-                </>
-              ) : (
-                <Text style={styles.emptyText}>No conditions added</Text>
-              )}
-              <TouchableOpacity style={styles.addButton} onPress={() => setAddingCondition(!addingCondition)}>
-                <Text style={styles.addButtonText}>+ Add condition</Text>
-              </TouchableOpacity>
-              {addingCondition && (
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
-                  <TextInput
-                    style={[styles.input, { flex: 1, height: 40 }]}
-                    placeholder="Enter condition"
-                    placeholderTextColor="#999"
-                    value={newCondition}
-                    onChangeText={setNewCondition}
+      <DetailModal visible={openPage === 'conditions'} title="Conditions" onClose={closeDetail} onDismiss={runPendingEditor}>
+        <Section title="Active">
+          <ListCard>
+            {[
+              ...activeConditionRows.map(({ condition, index }) => (
+                <ListRow key={'active-' + index} icon="stethoscope" label={condition} onPress={() => manageCondition('active', index)} />
+              )),
+              ...currentEpicConditions.map((cond) => {
+                const key = `condition:${cond.id}`;
+                const name = epicText(key, cond.name, 'primary');
+                const detail = epicText(key, cond.status ? `Status: ${cond.status}` : '', 'secondary');
+                return (
+                  <ListRow
+                    key={'epic-' + cond.id}
+                    icon="stethoscope"
+                    label={name}
+                    hint={detail || undefined}
+                    onPress={() => openEditorFromPage(() => openEpicEdit(key, 'condition', name, detail))}
                   />
-                  <TouchableOpacity
-                    style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
-                    onPress={async () => {
-                      if (newCondition.trim()) {
-                        const updatedData = {
-                          ...editData,
-                          conditions: [...(editData.conditions || []), newCondition.trim()]
-                        };
-                        setEditData(updatedData);
-                        await patchUserData({ conditions: updatedData.conditions });
-                        setNewCondition('');
-                        setAddingCondition(false);
-                      }
-                    }}
-                  >
-                    <Text style={{ color: '#FFF', fontWeight: '600' }}>Add</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
+                );
+              }),
+            ].map((row, idx) => (
+              <React.Fragment key={idx}>
+                {idx > 0 && <Divider />}
+                {row}
+              </React.Fragment>
+            ))}
+            {activeConditionRows.length + currentEpicConditions.length === 0 && <Text style={styles.emptyText}>No active conditions</Text>}
+            {activeConditionRows.length + currentEpicConditions.length > 0 && <Divider />}
+            <ListRow icon="plus-circle-outline" label="Add condition" onPress={addCondition} />
+          </ListCard>
+        </Section>
 
-          </View>
-        </View>
-        <View style={styles.section}>
-          <View style={styles.card}>
-            <View style={[styles.healthSection, styles.lastHealthSection]}>
-              <View style={styles.healthSectionHeader}>
-                <Text style={styles.healthSectionTitle}>Past conditions</Text>
-              </View>
-              {pastEpicConditions.length > 0 ? (
-                pastEpicConditions.map((cond) => (
-                  <View key={`past-condition-${cond.id}`} style={{ marginVertical: 4 }}>
-                    <Text style={styles.medRowName}>{cond.name}</Text>
-                    <Text style={styles.medRowDetail}>
-                      {[cond.status && `Status: ${cond.status}`, cond.onsetDate && `Started ${onsetText(cond.onsetDate)}`].filter(Boolean).join(' · ')}
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>No past conditions</Text>
-              )}
-            </View>
-          </View>
-        </View>
+        <Section title="Resolved">
+          <ListCard>
+            {[
+              ...(userData.pastConditions || []).map((condition, index) => (
+                <ListRow key={'resolved-' + index} icon="check-circle-outline" label={condition} onPress={() => manageCondition('resolved', index)} />
+              )),
+              ...pastEpicConditions.map((cond) => (
+                <ListRow
+                  key={'past-epic-' + cond.id}
+                  icon="check-circle-outline"
+                  label={cond.name}
+                  hint={[cond.status && `Status: ${cond.status}`, cond.onsetDate && `Started ${onsetText(cond.onsetDate)}`].filter(Boolean).join(' · ') || undefined}
+                />
+              )),
+            ].map((row, idx) => (
+              <React.Fragment key={idx}>
+                {idx > 0 && <Divider />}
+                {row}
+              </React.Fragment>
+            ))}
+            {(userData.pastConditions || []).length + pastEpicConditions.length === 0 && <Text style={styles.emptyText}>No resolved conditions</Text>}
+          </ListCard>
+        </Section>
       </DetailModal>
 
-      <DetailModal visible={openPage === 'allergies'} title="Allergies" onClose={closeDetail}>
-        <View style={styles.section}>
-          <View style={styles.card}>
-            {/* Allergies */}
-            <View style={styles.healthSection}>
-              <View style={styles.healthSectionHeader}>
-                <Text style={styles.healthSectionTitle}>Allergies</Text>
-              </View>
-              {(userData.allergies && userData.allergies.length > 0) || epicAllergies.length > 0 ? (
-                <>
-                  {/* Manual allergies */}
-                  {userData.allergies && userData.allergies.map((allergy, idx) => new Set(epicAllergies.map((a) => a.allergen.trim().toLowerCase())).has(allergy.trim().toLowerCase()) ? null : (
-                    <View key={`manual-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
-                      {editingAllergyIdx === idx ? (
-                        <TextInput
-                          style={[styles.input, { flex: 1, height: 36 }]}
-                          value={editingAllergyValue}
-                          onChangeText={setEditingAllergyValue}
-                        />
-                      ) : (
-                        <Text style={[styles.healthItem, { flex: 1 }]}>• {allergy}</Text>
-                      )}
-                      {editingAllergyIdx === idx ? (
-                        <>
-                          <TouchableOpacity
-                            onPress={async () => {
-                              const updated = [...(userData.allergies || [])];
-                              updated[idx] = editingAllergyValue;
-                              const updatedData = { ...editData, allergies: updated };
-                              setEditData(updatedData);
-                              await patchUserData({ allergies: updatedData.allergies });
-                              setEditingAllergyIdx(null);
-                            }}
-                          >
-                            <Text style={styles.editLink}>✓</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => setEditingAllergyIdx(null)}>
-                            <Text style={styles.editLink}>✕</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={async () => {
-                              const updated = (userData.allergies || []).filter((_, i) => i !== idx);
-                              const updatedData = { ...editData, allergies: updated };
-                              setEditData(updatedData);
-                              await patchUserData({ allergies: updatedData.allergies });
-                              setEditingAllergyIdx(null);
-                            }}
-                          >
-                            <Text style={[styles.editLink, { color: '#FF3B30' }]}>🗑️</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : showHealthControls ? (
-                        <TouchableOpacity onPress={() => {
-                          setEditingAllergyIdx(idx);
-                          setEditingAllergyValue(allergy);
-                        }}>
-                          <Text style={styles.editLink}>Edit</Text>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  ))}
-                  {/* Epic allergies */}
-                  {epicAllergies.map((allergy) => {
-                    const key = `allergy:${allergy.id}`;
-                    const allergen = epicText(key, allergy.allergen, 'primary');
-                    const reaction = epicText(key, allergy.reaction, 'secondary');
-                    return (
-                      <View key={allergy.id} style={{ marginVertical: 4 }}>
-                        <Text style={styles.healthItem}>• <Text style={{ fontWeight: '600' }}>{allergen}</Text></Text>
-                        <Text style={[styles.healthItem, { fontSize: 12, marginLeft: 12, opacity: 0.7 }]}>
-                          Reaction: {reaction}
-                        </Text>
-{showHealthControls && (
-                        <TouchableOpacity onPress={() => openEpicEdit(key, 'allergy', allergen, reaction)}>
-                          <Text style={styles.epicEditLink}>Edit</Text>
-                        </TouchableOpacity>
-                        )}
-                      </View>
-                    );
-                  })}
-                </>
-              ) : (
-                <Text style={styles.emptyText}>No allergies added</Text>
-              )}
-              <TouchableOpacity style={styles.addButton} onPress={() => setAddingAllergy(!addingAllergy)}>
-                <Text style={styles.addButtonText}>+ Add allergy</Text>
-              </TouchableOpacity>
-              {addingAllergy && (
-                <View style={{ flexDirection: 'row', gap: 8, marginTop: 12, alignItems: 'center' }}>
-                  <TextInput
-                    style={[styles.input, { flex: 1, height: 40 }]}
-                    placeholder="Enter allergy"
-                    placeholderTextColor="#999"
-                    value={newAllergy}
-                    onChangeText={setNewAllergy}
+      <DetailModal visible={openPage === 'allergies'} title="Allergies" onClose={closeDetail} onDismiss={runPendingEditor}>
+        <Section title="Allergies">
+          <ListCard>
+            {[
+              ...manualAllergyRows.map(({ allergy, index }) => (
+                <ListRow key={'manual-' + index} icon="alert-outline" label={allergy} onPress={() => manageAllergy(index)} />
+              )),
+              ...epicAllergies.map((allergy) => {
+                const key = `allergy:${allergy.id}`;
+                const allergen = epicText(key, allergy.allergen, 'primary');
+                const reaction = epicText(key, allergy.reaction, 'secondary');
+                return (
+                  <ListRow
+                    key={'epic-' + allergy.id}
+                    icon="alert-outline"
+                    label={allergen}
+                    hint={reaction ? `Reaction: ${reaction}` : undefined}
+                    onPress={() => openEditorFromPage(() => openEpicEdit(key, 'allergy', allergen, reaction))}
                   />
-                  <TouchableOpacity
-                    style={{ paddingHorizontal: 12, paddingVertical: 10, backgroundColor: '#007AFF', borderRadius: 6 }}
-                    onPress={async () => {
-                      if (newAllergy.trim()) {
-                        const updatedData = {
-                          ...editData,
-                          allergies: [...(editData.allergies || []), newAllergy.trim()]
-                        };
-                        setEditData(updatedData);
-                        await patchUserData({ allergies: updatedData.allergies });
-                        setNewAllergy('');
-                        setAddingAllergy(false);
-                      }
-                    }}
-                  >
-                    <Text style={{ color: '#FFF', fontWeight: '600' }}>Add</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-
-          </View>
-        </View>
+                );
+              }),
+            ].map((row, idx) => (
+              <React.Fragment key={idx}>
+                {idx > 0 && <Divider />}
+                {row}
+              </React.Fragment>
+            ))}
+            {manualAllergyRows.length + epicAllergies.length === 0 && <Text style={styles.emptyText}>No allergies added</Text>}
+            {manualAllergyRows.length + epicAllergies.length > 0 && <Divider />}
+            <ListRow icon="plus-circle-outline" label="Add allergy" onPress={addAllergy} />
+          </ListCard>
+        </Section>
       </DetailModal>
 
-      <DetailModal visible={openPage === 'history'} onClose={closeDetail}>
-        {/* HEALTH HISTORY Section */}
-        <View style={styles.section}>
-          <View style={styles.cardTitleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>Health History</Text>
-            </View>
-          </View>
+      <DetailModal visible={openPage === 'history'} onClose={closeDetail} title="Medical history" onDismiss={runPendingEditor}>
+        <Section title="Surgeries">
+          <ListCard>
+            {(userData.surgicalHistory || []).map((surgery, idx) => (
+              <React.Fragment key={'surgery-' + idx}>
+                {idx > 0 && <Divider />}
+                <ListRow icon="content-cut" label={surgery.surgeryName} value={surgery.date} onPress={() => openHistoryEditor('surgical', idx)} />
+              </React.Fragment>
+            ))}
+            {(userData.surgicalHistory || []).length > 0 && <Divider />}
+            <ListRow icon="plus-circle-outline" label="Add surgery" onPress={() => openHistoryEditor('surgical', null)} />
+          </ListCard>
+        </Section>
 
-          <View style={styles.card}>
-            {/* Surgical History */}
-            <View style={styles.historyCategory}>
-              <View style={styles.historyCategoryHeader}>
-                <Text style={styles.historyCategoryTitle}>Surgical History</Text>
-              </View>
-              {userData.surgicalHistory && userData.surgicalHistory.length > 0 ? (
-                userData.surgicalHistory.map((surgery, idx) => (
-                  <View key={idx} style={styles.historyEntry}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.entryTitle}>{surgery.surgeryName}</Text>
-                      <Text style={styles.entryMeta}>{surgery.date}</Text>
-                    </View>
-                    {showHealthControls && (
-                      <TouchableOpacity onPress={() => {
-                        setEditData(userData);
-                        setEditingHistoryType('surgical');
-                        setEditingIndex(idx);
-                        setSurgeryDate(surgery.date);
-                        setSurgeryName(surgery.surgeryName);
-                      }}>
-                        <Text style={styles.editLink}>Edit</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>No surgical history added</Text>
-              )}
-              <TouchableOpacity style={styles.addButton} onPress={() => {
-                setEditData(userData);
-                setEditingHistoryType('surgical');
-                setEditingIndex(null);
-                setSurgeryDate('');
-                setSurgeryName('');
-              }}>
-                <Text style={styles.addButtonText}>+ Add surgery</Text>
-              </TouchableOpacity>
-            </View>
+        <Section title="Family history">
+          <ListCard>
+            {(userData.familyHistory || []).map((item, idx) => (
+              <React.Fragment key={'family-' + idx}>
+                {idx > 0 && <Divider />}
+                <ListRow icon="account-group-outline" label={item.familyMember} hint={item.condition} onPress={() => openHistoryEditor('family', idx)} />
+              </React.Fragment>
+            ))}
+            {(userData.familyHistory || []).length > 0 && <Divider />}
+            <ListRow icon="plus-circle-outline" label="Add family history" onPress={() => openHistoryEditor('family', null)} />
+          </ListCard>
+        </Section>
 
-            <View style={styles.divider} />
-
-            {/* Family History */}
-            <View style={styles.historyCategory}>
-              <View style={styles.historyCategoryHeader}>
-                <Text style={styles.historyCategoryTitle}>Family History</Text>
-              </View>
-              {userData.familyHistory && userData.familyHistory.length > 0 ? (
-                Object.entries(
-                  userData.familyHistory.reduce((acc, family, idx) => {
-                    if (!acc[family.familyMember]) {
-                      acc[family.familyMember] = [];
-                    }
-                    acc[family.familyMember].push({ ...family, idx });
-                    return acc;
-                  }, {})
-                ).map(([member, conditions]) => (
-                  <View key={member} style={styles.historyEntry}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.entryTitle}>{member}</Text>
-                      {conditions.map((item, condIdx) => (
-                        <View key={item.idx} style={{ marginTop: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Text style={styles.entryMeta}>{condIdx + 1}. {item.condition}</Text>
-                          {showHealthControls && (
-                            <TouchableOpacity onPress={() => {
-                              setEditData(userData);
-                              setEditingHistoryType('family');
-                              setEditingIndex(item.idx);
-                              setFamilyMember(item.familyMember);
-                              setFamilyCondition(item.condition);
-                            }}>
-                              <Text style={styles.editLink}>Edit</Text>
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>No family history added</Text>
-              )}
-              <TouchableOpacity style={styles.addButton} onPress={() => {
-                setEditData(userData);
-                setEditingHistoryType('family');
-                setEditingIndex(null);
-                setFamilyMember('');
-                setFamilyCondition('');
-              }}>
-                <Text style={styles.addButtonText}>+ Add family history</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.divider} />
-
-            {/* Past Conditions */}
-            <View style={styles.historyCategory}>
-              <View style={styles.historyCategoryHeader}>
-                <Text style={styles.historyCategoryTitle}>Past Conditions</Text>
-              </View>
-              {userData.pastConditions && userData.pastConditions.length > 0 ? (
-                userData.pastConditions.map((condition, idx) => (
-                  <View key={idx} style={styles.historyEntry}>
-                    <Text style={styles.entryTitle}>{condition}</Text>
-                    {showHealthControls && (
-                      <TouchableOpacity onPress={() => {
-                        setEditData(userData);
-                        setEditingHistoryType('conditions');
-                        setEditingIndex(idx);
-                        setConditionName(condition);
-                      }}>
-                        <Text style={styles.editLink}>Edit</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>No past conditions added</Text>
-              )}
-              <TouchableOpacity style={styles.addButton} onPress={() => {
-                setEditData(userData);
-                setEditingHistoryType('conditions');
-                setEditingIndex(null);
-                setConditionName('');
-              }}>
-                <Text style={styles.addButtonText}>+ Add past condition</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.divider} />
-
-            {/* Hospitalizations */}
-            <View style={styles.historyCategory}>
-              <View style={styles.historyCategoryHeader}>
-                <Text style={styles.historyCategoryTitle}>Hospitalizations</Text>
-              </View>
-              {userData.hospitalizations && userData.hospitalizations.length > 0 ? (
-                userData.hospitalizations.map((hospitalization, idx) => (
-                  <View key={idx} style={styles.historyEntry}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.entryTitle}>{hospitalization.reason}</Text>
-                      <Text style={styles.entryMeta}>{hospitalization.date}</Text>
-                    </View>
-                    {showHealthControls && (
-                      <TouchableOpacity onPress={() => {
-                        setEditData(userData);
-                        setEditingHistoryType('hospitalization');
-                        setEditingIndex(idx);
-                        setHospitalizationDate(hospitalization.date);
-                        setHospitalizationReason(hospitalization.reason);
-                      }}>
-                        <Text style={styles.editLink}>Edit</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>No hospitalizations added</Text>
-              )}
-              <TouchableOpacity style={styles.addButton} onPress={() => {
-                setEditData(userData);
-                setEditingHistoryType('hospitalization');
-                setEditingIndex(null);
-                setHospitalizationDate('');
-                setHospitalizationReason('');
-              }}>
-                <Text style={styles.addButtonText}>+ Add hospitalization</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+        <Section title="Hospitalizations">
+          <ListCard>
+            {(userData.hospitalizations || []).map((stay, idx) => (
+              <React.Fragment key={'hospital-' + idx}>
+                {idx > 0 && <Divider />}
+                <ListRow icon="hospital-box-outline" label={stay.reason} value={stay.date} onPress={() => openHistoryEditor('hospitalization', idx)} />
+              </React.Fragment>
+            ))}
+            {(userData.hospitalizations || []).length > 0 && <Divider />}
+            <ListRow icon="plus-circle-outline" label="Add hospitalization" onPress={() => openHistoryEditor('hospitalization', null)} />
+          </ListCard>
+        </Section>
+        <Section title="Obstetric history (if applicable)">
+          <ListCard>
+            <ListRow icon="human-pregnant" label="Pregnancies" value={String(pregnancyCount)} />
+            <Divider />
+            <ListRow icon="baby-face-outline" label="Births" value={String(birthCount)} />
+            <Divider />
+            <ListRow icon="heart-outline" label="Losses" value={String(lossCount)} />
+            {pregnancyList.map(({ pregnancy, index }) => (
+              <React.Fragment key={'pregnancy-' + index}>
+                <Divider />
+                <ListRow
+                  icon="baby-carriage"
+                  label={pregnancy.outcome}
+                  hint={pregnancy.complications.join(', ') || undefined}
+                  value={pregnancy.year}
+                  onPress={() => openPregnancyEditor(index)}
+                />
+              </React.Fragment>
+            ))}
+            <Divider />
+            <ListRow icon="plus-circle-outline" label="Add pregnancy" onPress={() => openPregnancyEditor(null)} />
+          </ListCard>
+        </Section>
 
       </DetailModal>
 
-      <DetailModal visible={openPage === 'appointments'} onClose={closeDetail}>
+      <DetailModal
+        visible={openPage === 'appointments'}
+        onClose={closeDetail}
+        onDismiss={runPendingEditor}
+      >
         <View style={styles.section}>
           {/* Appointments */}
           <View style={styles.cardWrapper}>
@@ -2006,11 +1892,13 @@ export default function HomeScreen() {
                           </View>
                           <TouchableOpacity onPress={() => {
                             setEditData(userData);
-                            setEditingSection('appointments');
                             setEditingAppointmentId(apt.id);
-                            setAppointmentDateTime(apt.dateTime);
+                            const parts = appointmentPartsFrom(apt.dateTime);
+                            setAppointmentDate(parts.date);
+                            setAppointmentTime(parts.time);
                             setAppointmentDoctorName(apt.doctorName);
                             setAppointmentSpecialty(apt.specialty);
+                            openEditorFromPage(() => setEditingSection('appointments'));
                           }}>
                             <Text style={styles.editLink}>Edit</Text>
                           </TouchableOpacity>
@@ -2043,33 +1931,26 @@ export default function HomeScreen() {
               ) : (
                 <Text style={styles.emptyText}>No upcoming appointments</Text>
               )}
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => {
-                  setEditData(userData);
-                  setAppointmentDateTime('');
-                  setAppointmentDoctorName('');
-                  setAppointmentSpecialty('');
-                  setEditingAppointmentId(null);
-                  setSelectedMonth(7);
-                  setSelectedDay(15);
-                  setSelectedYear(new Date().getFullYear());
-                  setSelectedHour(2);
-                  setSelectedMinute(0);
-                  setSelectedPeriod('PM');
-                  setEditingSection('appointments');
-                }}
-              >
-                <Text style={styles.addButtonText}>+ Add Appointment</Text>
-              </TouchableOpacity>
             </View>
           </View>
 
 
         </View>
+        <AppointmentQuickAdd
+          userData={userData}
+          onSave={async (entries: LogEntry[]) => {
+            const updated = applyLogEntries(userData, entries);
+            await patchUserData({ appointments: updated.appointments });
+          }}
+          onEnterDetails={openNewAppointment}
+        />
+        <AppointmentReminderOptions
+          value={userData.appointmentReminders ?? 'standard'}
+          onChange={(level) => patchUserData({ appointmentReminders: level })}
+        />
       </DetailModal>
 
-      <DetailModal visible={openPage === 'screenings'} onClose={closeDetail}>
+      <DetailModal visible={openPage === 'screenings'} onClose={closeDetail} onDismiss={runPendingEditor}>
         {/* SCREENINGS Card */}
         <View style={styles.section}>
           <View style={styles.cardWrapper}>
@@ -2085,7 +1966,7 @@ export default function HomeScreen() {
                 <Text style={styles.screeningSectionTitle}>Screening Completed</Text>
                 <TouchableOpacity onPress={() => {
                   setEditData(userData);
-                  setEditingSection('screenings');
+                  openEditorFromPage(() => setEditingSection('screenings'));
                   setEditingScreeningId(null);
                   setScreeningType('');
                   setScreeningDate('');
@@ -2103,7 +1984,7 @@ export default function HomeScreen() {
                         style={styles.completedScreeningItem}
                         onPress={() => {
                           setEditData(userData);
-                          setEditingSection('screenings');
+                          openEditorFromPage(() => setEditingSection('screenings'));
                           setEditingScreeningId(idx);
                           setScreeningType(screening.type);
                           setScreeningDate(screening.date);
@@ -2144,7 +2025,7 @@ export default function HomeScreen() {
                       onPress={() => {
                         if (!isCompleted) {
                           setEditData(userData);
-                          setEditingSection('screenings');
+                          openEditorFromPage(() => setEditingSection('screenings'));
                           setEditingScreeningId(null);
                           setScreeningType(screening);
                           setScreeningDate('');
@@ -2167,7 +2048,7 @@ export default function HomeScreen() {
 
       </DetailModal>
 
-      <DetailModal visible={openPage === 'vaccines'} onClose={closeDetail}>
+      <DetailModal visible={openPage === 'vaccines'} onClose={closeDetail} onDismiss={runPendingEditor}>
         {/* VACCINES Card */}
         <View style={styles.section}>
           <View style={styles.cardWrapper}>
@@ -2183,7 +2064,7 @@ export default function HomeScreen() {
                 <Text style={styles.screeningSectionTitle}>Vaccines Completed</Text>
                 <TouchableOpacity onPress={() => {
                   setEditData(userData);
-                  setEditingSection('vaccines');
+                  openEditorFromPage(() => setEditingSection('vaccines'));
                   setEditingScreeningId(null);
                   setScreeningType('');
                   setScreeningDate('');
@@ -2253,207 +2134,61 @@ export default function HomeScreen() {
 
       </DetailModal>
 
-      <DetailModal visible={openPage === 'insurance'} onClose={closeDetail}>
-        <View style={styles.section}>
-          {/* Insurance */}
-          <View style={styles.cardWrapper}>
-            <View style={styles.cardTitleRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Insurance</Text>
-                <Text style={styles.cardMeta}>{userData.insurances?.length || 0} plans</Text>
-              </View>
-            </View>
-            <View style={styles.card}>
-              {userData.insurances && userData.insurances.length > 0 ? (
-                userData.insurances.map((insurance, idx) => (
-                  <View key={idx}>
-                    <View style={styles.infoRowWithEdit}>
-                      <View style={styles.infoColumn}>
-                        <Text style={styles.infoLabel}>Provider</Text>
-                        <Text style={styles.infoValue}>{insurance.provider}</Text>
-                      </View>
-                      <TouchableOpacity onPress={() => {
-                        setEditData(userData);
-                        setEditingSection('insurance');
-                        setEditingInsuranceId(idx);
-                        setInsuranceProvider(insurance.provider);
-                        setInsuranceMemberId(insurance.memberId || '');
-                        setInsuranceGroupNumber(insurance.groupNumber || '');
-                      }}>
-                        <Text style={styles.editLink}>Edit</Text>
-                      </TouchableOpacity>
-                    </View>
-                    <View style={styles.infoRow}>
-                      <Text style={styles.infoLabel}>Member ID</Text>
-                      <Text style={styles.infoValueMono}>{insurance.memberId || '—'}</Text>
-                    </View>
-                    {insurance.groupNumber && (
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Group Number</Text>
-                        <Text style={styles.infoValueMono}>{insurance.groupNumber}</Text>
-                      </View>
-                    )}
-                    {idx < userData.insurances.length - 1 && <View style={styles.divider} />}
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>No insurance information added</Text>
-              )}
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('insurance');
-                  setEditingInsuranceId(null);
-                  setInsuranceProvider('');
-                  setInsuranceMemberId('');
-                  setInsuranceGroupNumber('');
-                }}
-              >
-                <Text style={styles.addButtonText}>+ Add Insurance</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-        </View>
+      <DetailModal visible={openPage === 'insurance'} title="Insurance" onClose={closeDetail} onDismiss={runPendingEditor}>
+        <Section title="Plans">
+          <ListCard>
+            {(userData.insurances || []).map((insurance, idx) => (
+              <React.Fragment key={'plan-' + idx}>
+                {idx > 0 && <Divider />}
+                <ListRow
+                  icon="card-account-details-outline"
+                  label={insurance.provider}
+                  hint={[insurance.memberId && `Member ID ${insurance.memberId}`, insurance.groupNumber && `Group ${insurance.groupNumber}`].filter(Boolean).join(' · ') || undefined}
+                  onPress={() => openInsuranceEditor(idx)}
+                />
+              </React.Fragment>
+            ))}
+            {(userData.insurances || []).length === 0 && <Text style={styles.emptyText}>No insurance added</Text>}
+            {(userData.insurances || []).length > 0 && <Divider />}
+            <ListRow icon="plus-circle-outline" label="Add insurance" onPress={() => openInsuranceEditor(null)} />
+          </ListCard>
+        </Section>
       </DetailModal>
-
-      <DetailModal visible={openPage === 'pharmacy'} onClose={closeDetail}>
-        <View style={styles.section}>
-          {/* Pharmacy */}
-          <View style={styles.cardWrapper}>
-            <View style={styles.cardTitleRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Pharmacy</Text>
-              </View>
-            </View>
-            <View style={styles.card}>
-              {userData.pharmacy ? (
-                <>
-                  <View style={styles.infoRowWithEdit}>
-                    <View style={styles.infoColumn}>
-                      <Text style={styles.infoLabel}>Name</Text>
-                      <Text style={styles.infoValue}>{userData.pharmacy.name}</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => {
-                      setEditData(userData);
-                      setEditingSection('pharmacy');
-                      setPharmacyName(userData.pharmacy?.name || '');
-                      setPharmacyAddress(userData.pharmacy?.address || '');
-                      setPharmacyPhone(userData.pharmacy?.phone || '');
-                    }}>
-                      <Text style={styles.editLink}>Edit</Text>
-                    </TouchableOpacity>
-                  </View>
-                  {userData.pharmacy.address && (
-                    <>
-                      <View style={styles.divider} />
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Address</Text>
-                        <Text style={styles.infoValue}>{userData.pharmacy.address}</Text>
-                      </View>
-                    </>
-                  )}
-                  {userData.pharmacy.phone && (
-                    <>
-                      <View style={styles.divider} />
-                      <View style={styles.infoRow}>
-                        <Text style={styles.infoLabel}>Phone</Text>
-                        <Text style={styles.infoValueMono}>{userData.pharmacy.phone}</Text>
-                      </View>
-                    </>
-                  )}
-                </>
-              ) : (
-                <>
-                  <View style={styles.infoRowWithEdit}>
-                    <View style={styles.infoColumn}>
-                      <Text style={styles.infoLabel}>Name</Text>
-                      <Text style={styles.infoValue}>—</Text>
-                    </View>
-                    <TouchableOpacity onPress={() => {
-                      setEditData(userData);
-                      setEditingSection('pharmacy');
-                      setPharmacyName('');
-                      setPharmacyAddress('');
-                      setPharmacyPhone('');
-                    }}>
-                      <Text style={styles.editLink}>Edit</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('pharmacy');
-                  setPharmacyName(userData.pharmacy?.name || '');
-                  setPharmacyAddress(userData.pharmacy?.address || '');
-                  setPharmacyPhone(userData.pharmacy?.phone || '');
-                }}
-              >
-                <Text style={styles.addButtonText}>{userData.pharmacy ? '+ Edit Pharmacy' : '+ Add Pharmacy'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-        </View>
+      <DetailModal visible={openPage === 'pharmacy'} title="Pharmacy" onClose={closeDetail} onDismiss={runPendingEditor}>
+        <Section title="Preferred pharmacy">
+          <ListCard>
+            {userData.pharmacy ? (
+              <ListRow
+                icon="pill"
+                label={userData.pharmacy.name}
+                hint={[userData.pharmacy.address, userData.pharmacy.phone].filter(Boolean).join(' · ') || undefined}
+                onPress={openPharmacyEditor}
+              />
+            ) : (
+              <ListRow icon="plus-circle-outline" label="Add pharmacy" onPress={openPharmacyEditor} />
+            )}
+          </ListCard>
+        </Section>
       </DetailModal>
-
-      <DetailModal visible={openPage === 'emergency'} onClose={closeDetail}>
-        <View style={styles.section}>
-          {/* Emergency Contacts */}
-          <View style={styles.cardWrapper}>
-            <View style={styles.cardTitleRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Emergency Contacts</Text>
-                <Text style={styles.cardMeta}>{userData.emergencyContacts?.length || 0} contacts</Text>
-              </View>
-            </View>
-            <View style={styles.card}>
-              {userData.emergencyContacts && userData.emergencyContacts.length > 0 ? (
-                userData.emergencyContacts.map((contact, idx) => (
-                  <View key={idx}>
-                    <View style={styles.contactRowWithEdit}>
-                      <View>
-                        <Text style={styles.contactName}>{contact.name}</Text>
-                        <Text style={styles.contactRelationship}>{contact.relationship}</Text>
-                        <Text style={styles.contactPhoneNumber}>{contact.phone}</Text>
-                      </View>
-                      <TouchableOpacity onPress={() => {
-                        setEditData(userData);
-                        setEditingSection('emergency');
-                        setEditingEmergencyContactId(idx);
-                        setEmergencyContactName(contact.name);
-                        setEmergencyContactRelationship(contact.relationship);
-                        setEmergencyContactPhone(contact.phone);
-                      }}>
-                        <Text style={styles.editLink}>Edit</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {idx < userData.emergencyContacts.length - 1 && <View style={styles.divider} />}
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>No emergency contacts added</Text>
-              )}
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => {
-                  setEditData(userData);
-                  setEditingSection('emergency');
-                  setEditingEmergencyContactId(null);
-                  setEmergencyContactName('');
-                  setEmergencyContactRelationship('');
-                  setEmergencyContactPhone('');
-                }}
-              >
-                <Text style={styles.addButtonText}>+ Add Contact</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+      <DetailModal visible={openPage === 'emergency'} title="Emergency contacts" onClose={closeDetail} onDismiss={runPendingEditor}>
+        <Section title="Contacts">
+          <ListCard>
+            {(userData.emergencyContacts || []).map((contact, idx) => (
+              <React.Fragment key={'contact-' + idx}>
+                {idx > 0 && <Divider />}
+                <ListRow
+                  icon="phone-outline"
+                  label={contact.name}
+                  hint={[contact.relationship, contact.phone].filter(Boolean).join(' · ') || undefined}
+                  onPress={() => openEmergencyEditor(idx)}
+                />
+              </React.Fragment>
+            ))}
+            {(userData.emergencyContacts || []).length === 0 && <Text style={styles.emptyText}>No emergency contacts added</Text>}
+            {(userData.emergencyContacts || []).length > 0 && <Divider />}
+            <ListRow icon="plus-circle-outline" label="Add contact" onPress={() => openEmergencyEditor(null)} />
+          </ListCard>
+        </Section>
       </DetailModal>
 
       {/* Edit one medication */}
@@ -2772,213 +2507,40 @@ export default function HomeScreen() {
       </Modal>
 
       {/* History Modal */}
-      <Modal visible={editingHistoryType !== null} animationType="slide" onRequestClose={handleCancel}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {editingHistoryType === 'surgical' && 'Surgical History'}
-              {editingHistoryType === 'family' && 'Family History'}
-              {editingHistoryType === 'conditions' && 'Past Condition'}
-              {editingHistoryType === 'hospitalization' && 'Hospitalization'}
-            </Text>
-            <TouchableOpacity onPress={() => {
-              setEditingHistoryType(null);
-              setShowHistoryDatePicker(false);
-            }}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.modalContent}>
-            {editingHistoryType === 'surgical' && (
-              <>
-                <Text style={styles.label}>Surgery Name</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Appendectomy"
-                  placeholderTextColor="#999"
-                  value={surgeryName}
-                  onChangeText={setSurgeryName}
-                />
-                <Text style={styles.label}>Date (Month Year)</Text>
-                <View style={styles.pickerRow}>
-                  <View style={styles.pickerColumn}>
-                    <Text style={styles.pickerLabel}>Month</Text>
-                    <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          style={[styles.pickerOption, historyDateMonth === idx && styles.pickerOptionSelected]}
-                          onPress={() => setHistoryDateMonth(idx)}
-                        >
-                          <Text style={[styles.pickerOptionText, historyDateMonth === idx && styles.pickerOptionTextSelected]}>
-                            {month}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
+      <HealthHistoryEditor
+        visible={editingHistoryType !== null}
+        type={editingHistoryType}
+        isEditing={editingIndex !== null}
+        name={editingHistoryType === 'surgical' ? surgeryName : hospitalizationReason}
+        member={familyMember}
+        customMember={familyMemberCustomMode}
+        condition={familyCondition}
+        date={historyDate}
+        onChange={(patch) => {
+          if (patch.name !== undefined) {
+            if (editingHistoryType === 'surgical') setSurgeryName(patch.name);
+            else setHospitalizationReason(patch.name);
+          }
+          if (patch.member !== undefined) setFamilyMember(patch.member);
+          if (patch.customMember !== undefined) setFamilyMemberCustomMode(patch.customMember);
+          if (patch.condition !== undefined) setFamilyCondition(patch.condition);
+          if (patch.date) setHistoryDate(patch.date);
+        }}
+        onSave={handleSaveEdit}
+        onCancel={handleCancel}
+        onDelete={handleDelete}
+      />
 
-                  <View style={styles.pickerColumn}>
-                    <Text style={styles.pickerLabel}>Year</Text>
-                    <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                      {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map((year) => (
-                        <TouchableOpacity
-                          key={year}
-                          style={[styles.pickerOption, historyDateYear === year && styles.pickerOptionSelected]}
-                          onPress={() => setHistoryDateYear(year)}
-                        >
-                          <Text style={[styles.pickerOptionText, historyDateYear === year && styles.pickerOptionTextSelected]}>
-                            {year}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                </View>
-              </>
-            )}
-            {editingHistoryType === 'family' && (
-              <>
-                <Text style={styles.label}>Family Member</Text>
-                <View style={styles.familyMemberContainer}>
-                  {['Mother', 'Father', 'Sister', 'Brother', 'Grandmother', 'Grandfather', 'Aunt', 'Uncle'].map((member) => (
-                    <TouchableOpacity
-                      key={member}
-                      style={[
-                        styles.familyButton,
-                        familyMember === member && styles.familyButtonSelected,
-                      ]}
-                      onPress={() => {
-                        setFamilyMember(member);
-                        setFamilyMemberCustomMode(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.familyButtonText,
-                          familyMember === member && styles.familyButtonTextSelected,
-                        ]}
-                      >
-                        {member}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                  <TouchableOpacity
-                    style={[
-                      styles.familyButton,
-                      familyMemberCustomMode && styles.familyButtonSelected,
-                    ]}
-                    onPress={() => {
-                      setFamilyMember('');
-                      setFamilyMemberCustomMode(true);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.familyButtonText,
-                        familyMemberCustomMode && styles.familyButtonTextSelected,
-                      ]}
-                    >
-                      Other
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                {familyMemberCustomMode && (
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter family member name"
-                    placeholderTextColor="#999"
-                    value={familyMember}
-                    onChangeText={setFamilyMember}
-                  />
-                )}
-                <Text style={styles.label}>Condition</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Diabetes"
-                  placeholderTextColor="#999"
-                  value={familyCondition}
-                  onChangeText={setFamilyCondition}
-                />
-              </>
-            )}
-            {editingHistoryType === 'conditions' && (
-              <>
-                <Text style={styles.label}>Condition Name</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Asthma"
-                  placeholderTextColor="#999"
-                  value={conditionName}
-                  onChangeText={setConditionName}
-                />
-              </>
-            )}
-            {editingHistoryType === 'hospitalization' && (
-              <>
-                <Text style={styles.label}>Reason</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Pneumonia treatment"
-                  placeholderTextColor="#999"
-                  value={hospitalizationReason}
-                  onChangeText={setHospitalizationReason}
-                />
-                <Text style={styles.label}>Date (Month Year)</Text>
-                <View style={styles.pickerRow}>
-                  <View style={styles.pickerColumn}>
-                    <Text style={styles.pickerLabel}>Month</Text>
-                    <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                      {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          style={[styles.pickerOption, historyDateMonth === idx && styles.pickerOptionSelected]}
-                          onPress={() => setHistoryDateMonth(idx)}
-                        >
-                          <Text style={[styles.pickerOptionText, historyDateMonth === idx && styles.pickerOptionTextSelected]}>
-                            {month}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
 
-                  <View style={styles.pickerColumn}>
-                    <Text style={styles.pickerLabel}>Year</Text>
-                    <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                      {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map((year) => (
-                        <TouchableOpacity
-                          key={year}
-                          style={[styles.pickerOption, historyDateYear === year && styles.pickerOptionSelected]}
-                          onPress={() => setHistoryDateYear(year)}
-                        >
-                          <Text style={[styles.pickerOptionText, historyDateYear === year && styles.pickerOptionTextSelected]}>
-                            {year}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                </View>
-              </>
-            )}
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
-                <Text style={styles.buttonTextWhite}>Save</Text>
-              </TouchableOpacity>
-            </View>
-            {editingIndex !== null && (
-              <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-                <Text style={styles.deleteButtonText}>Delete</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      </Modal>
-
+      <PregnancyEditor
+        visible={editingPregnancy !== null}
+        isEditing={editingPregnancy?.index != null}
+        values={pregnancyForm}
+        onChange={(patch) => setPregnancyForm((form) => ({ ...form, ...patch }))}
+        onSave={savePregnancy}
+        onCancel={() => setEditingPregnancy(null)}
+        onDelete={deletePregnancy}
+      />
 
       {/* Gender Modal */}
       <Modal visible={editingSection === 'gender'} animationType="slide" onRequestClose={handleCancel}>
@@ -3390,37 +2952,6 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={editingSection === 'allergies'} animationType="slide" onRequestClose={handleCancel}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Allergies</Text>
-            <TouchableOpacity onPress={handleCancel}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.modalContent}>
-            <Text style={styles.label}>Allergies (one per line)</Text>
-            <TextInput
-              style={[styles.input, { minHeight: 120 }]}
-              multiline
-              value={editData.allergies?.join('\n') || ''}
-              onChangeText={(text) => setEditData({
-                ...editData,
-                allergies: text.split('\n').filter(a => a.trim())
-              })}
-              placeholder="Allergy 1&#10;Allergy 2"
-            />
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
-                <Text style={styles.buttonTextWhite}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       <Modal visible={editingSection === 'vaccines'} animationType="slide" onRequestClose={handleCancel}>
         <View style={styles.modalContainer}>
@@ -3591,94 +3122,41 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={editingSection === 'insurance'} animationType="slide" onRequestClose={handleCancel}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{editingInsuranceId !== null ? 'Edit Insurance' : 'Add Insurance'}</Text>
-            <TouchableOpacity onPress={handleCancel}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <Text style={styles.label}>Insurance Provider</Text>
-            <TextInput
-              style={styles.input}
-              value={insuranceProvider}
-              onChangeText={setInsuranceProvider}
-              placeholder="e.g., Blue Cross Blue Shield"
-            />
-            <Text style={styles.label}>Member ID</Text>
-            <TextInput
-              style={styles.input}
-              value={insuranceMemberId}
-              onChangeText={setInsuranceMemberId}
-              placeholder="e.g., BCX123456789"
-            />
-            <Text style={styles.label}>Group Number (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              value={insuranceGroupNumber}
-              onChangeText={setInsuranceGroupNumber}
-              placeholder="e.g., GRP789"
-            />
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
-                <Text style={styles.buttonTextWhite}>Save</Text>
-              </TouchableOpacity>
-            </View>
-            {editingInsuranceId !== null && (
-              <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-                <Text style={styles.deleteButtonText}>Delete Insurance</Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
+      <InsuranceEditor
+        visible={editingSection === 'insurance'}
+        isEditing={editingInsuranceId !== null}
+        provider={insuranceProvider}
+        memberId={insuranceMemberId}
+        groupNumber={insuranceGroupNumber}
+        onChange={(patch) => {
+          if (patch.provider !== undefined) setInsuranceProvider(patch.provider);
+          if (patch.memberId !== undefined) setInsuranceMemberId(patch.memberId);
+          if (patch.groupNumber !== undefined) setInsuranceGroupNumber(patch.groupNumber);
+        }}
+        onSave={handleSaveEdit}
+        onCancel={handleCancel}
+        onDelete={handleDelete}
+      />
 
-      <Modal visible={editingSection === 'pharmacy'} animationType="slide" onRequestClose={handleCancel}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add Pharmacy</Text>
-            <TouchableOpacity onPress={handleCancel}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <Text style={styles.label}>Pharmacy Name</Text>
-            <TextInput
-              style={styles.input}
-              value={pharmacyName}
-              onChangeText={setPharmacyName}
-              placeholder="e.g., CVS Pharmacy"
-            />
-            <Text style={styles.label}>Address</Text>
-            <TextInput
-              style={styles.input}
-              value={pharmacyAddress}
-              onChangeText={setPharmacyAddress}
-              placeholder="e.g., 123 Main St, Springfield, IL 62701"
-            />
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              style={styles.input}
-              value={pharmacyPhone}
-              onChangeText={setPharmacyPhone}
-              placeholder="e.g., (555) 123-4567"
-            />
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
-                <Text style={styles.buttonTextWhite}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
+      <FieldFormEditor
+        visible={editingSection === 'pharmacy'}
+        title="pharmacy"
+        isEditing={!!userData.pharmacy}
+        fields={[
+          { key: 'name', label: 'Pharmacy name', placeholder: 'e.g. CVS on Main Street' },
+          { key: 'address', label: 'Address', placeholder: 'e.g. 12 Main Street', optional: true },
+          { key: 'phone', label: 'Phone', placeholder: 'e.g. (555) 123-4567', keyboardType: 'phone-pad' },
+        ]}
+        values={{ name: pharmacyName, address: pharmacyAddress, phone: pharmacyPhone }}
+        onChange={(key, value) => {
+          if (key === 'name') setPharmacyName(value);
+          else if (key === 'address') setPharmacyAddress(value);
+          else setPharmacyPhone(value);
+        }}
+        onSave={handleSaveEdit}
+        onCancel={handleCancel}
+        onDelete={deletePharmacy}
+      />
 
       <Modal visible={editingSection === 'screenings'} animationType="slide" onRequestClose={handleCancel}>
         <View style={styles.modalContainer}>
@@ -3728,236 +3206,44 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={editingSection === 'appointments'} animationType="slide" onRequestClose={handleCancel}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{editingAppointmentId ? 'Edit Appointment' : 'Add Appointment'}</Text>
-            <TouchableOpacity onPress={handleCancel}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <Text style={styles.label}>Date & Time</Text>
-            <TouchableOpacity
-              style={styles.dateTimeButton}
-              onPress={handleOpenDatePicker}
-            >
-              <Text style={styles.dateTimeButtonText}>
-                {appointmentDateTime || 'Select date & time...'}
-              </Text>
-            </TouchableOpacity>
-            <Text style={styles.label}>Doctor Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Dr. Sarah Johnson"
-              value={appointmentDoctorName}
-              onChangeText={setAppointmentDoctorName}
-            />
-            <Text style={styles.label}>Specialty</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Cardiology"
-              value={appointmentSpecialty}
-              onChangeText={setAppointmentSpecialty}
-            />
+      <AppointmentEditor
+        visible={editingSection === 'appointments'}
+        isEditing={editingAppointmentId !== null}
+        doctorName={appointmentDoctorName}
+        specialty={appointmentSpecialty}
+        date={appointmentDate}
+        time={appointmentTime}
+        onChange={(patch) => {
+          if (patch.doctorName !== undefined) setAppointmentDoctorName(patch.doctorName);
+          if (patch.specialty !== undefined) setAppointmentSpecialty(patch.specialty);
+          if (patch.date) setAppointmentDate(patch.date);
+          if (patch.time) setAppointmentTime(patch.time);
+        }}
+        onSave={handleSaveEdit}
+        onCancel={handleCancel}
+        onDelete={handleDelete}
+      />
 
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
-                <Text style={styles.buttonTextWhite}>Save</Text>
-              </TouchableOpacity>
-            </View>
-            {editingAppointmentId && (
-              <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-                <Text style={styles.deleteButtonText}>Delete Appointment</Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
+      <FieldFormEditor
+        visible={editingSection === 'emergency'}
+        title="emergency contact"
+        isEditing={editingEmergencyContactId !== null}
+        fields={[
+          { key: 'name', label: 'Name', placeholder: 'e.g. Jane Doe' },
+          { key: 'relationship', label: 'Relationship', placeholder: 'e.g. Spouse', optional: true },
+          { key: 'phone', label: 'Phone', placeholder: 'e.g. (555) 123-4567', keyboardType: 'phone-pad' },
+        ]}
+        values={{ name: emergencyContactName, relationship: emergencyContactRelationship, phone: emergencyContactPhone }}
+        onChange={(key, value) => {
+          if (key === 'name') setEmergencyContactName(value);
+          else if (key === 'relationship') setEmergencyContactRelationship(value);
+          else setEmergencyContactPhone(value);
+        }}
+        onSave={handleSaveEdit}
+        onCancel={handleCancel}
+        onDelete={handleDelete}
+      />
 
-      {/* Date & Time Picker Modal */}
-      <Modal visible={showDatePicker} animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Date & Time</Text>
-            <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.datePickerContent}>
-            <View style={styles.pickerRow}>
-              {/* Month Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Month</Text>
-                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={[styles.pickerOption, selectedMonth === idx && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedMonth(idx)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedMonth === idx && styles.pickerOptionTextSelected]}>
-                        {month}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Day Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Day</Text>
-                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                    <TouchableOpacity
-                      key={day}
-                      style={[styles.pickerOption, selectedDay === day && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedDay(day)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedDay === day && styles.pickerOptionTextSelected]}>
-                        {day}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Year Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Year</Text>
-                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                  {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map((year) => (
-                    <TouchableOpacity
-                      key={year}
-                      style={[styles.pickerOption, selectedYear === year && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedYear(year)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedYear === year && styles.pickerOptionTextSelected]}>
-                        {year}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            </View>
-
-            <View style={styles.pickerRow}>
-              {/* Hour Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Hour</Text>
-                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                  {Array.from({ length: 12 }, (_, i) => i + 1).map((hour) => (
-                    <TouchableOpacity
-                      key={hour}
-                      style={[styles.pickerOption, selectedHour === hour && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedHour(hour)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedHour === hour && styles.pickerOptionTextSelected]}>
-                        {hour}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Minute Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Minute</Text>
-                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                  {Array.from({ length: 60 }, (_, i) => i).map((minute) => (
-                    <TouchableOpacity
-                      key={minute}
-                      style={[styles.pickerOption, selectedMinute === minute && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedMinute(minute)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedMinute === minute && styles.pickerOptionTextSelected]}>
-                        {String(minute).padStart(2, '0')}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Period Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Period</Text>
-                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                  {['AM', 'PM'].map((period) => (
-                    <TouchableOpacity
-                      key={period}
-                      style={[styles.pickerOption, selectedPeriod === period && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedPeriod(period)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedPeriod === period && styles.pickerOptionTextSelected]}>
-                        {period}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.datePickerDoneButton}
-              onPress={handleDateTimePickerDone}
-            >
-              <Text style={styles.datePickerDoneButtonText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      <Modal visible={editingSection === 'emergency'} animationType="slide" onRequestClose={handleCancel}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{editingEmergencyContactId !== null ? 'Edit Emergency Contact' : 'Add Emergency Contact'}</Text>
-            <TouchableOpacity onPress={handleCancel}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <Text style={styles.label}>Name</Text>
-            <TextInput
-              style={styles.input}
-              value={emergencyContactName}
-              onChangeText={setEmergencyContactName}
-              placeholder="Full name"
-            />
-            <Text style={styles.label}>Relationship</Text>
-            <TextInput
-              style={styles.input}
-              value={emergencyContactRelationship}
-              onChangeText={setEmergencyContactRelationship}
-              placeholder="e.g., Spouse, Parent, Sister"
-            />
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              style={styles.input}
-              value={emergencyContactPhone}
-              onChangeText={setEmergencyContactPhone}
-              placeholder="(555) 123-4567"
-            />
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
-                <Text style={styles.buttonTextWhite}>Save</Text>
-              </TouchableOpacity>
-            </View>
-            {editingEmergencyContactId !== null && (
-              <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-                <Text style={styles.deleteButtonText}>Delete Contact</Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
-
-      {/* Medication Input Modal */}
       <Modal visible={medicationInputMode !== null} animationType="slide" onRequestClose={() => {
         setMedicationInputMode(null);
         setMedicationType(null);

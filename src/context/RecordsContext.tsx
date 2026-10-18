@@ -3,6 +3,7 @@ import { MedicalRecord, MedicalHub, UserHealthData, LabMetric } from '../types/m
 import { storageService } from '../services/storageService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ehrService, isWeightObservation } from '../services/ehrService';
+import type { Appointment } from '../services/ehrService';
 import { birthdayFromFhir, genderFromFhir } from '../services/patientProfile';
 import { medicationNameFrom } from '../services/medicationName';
 import { dateKey, doseKey, remindedMedications } from '../services/doseSchedule';
@@ -84,6 +85,7 @@ interface RecordsContextType {
   profileBackups: () => Promise<ProfileBackup[]>;
   restoreProfileBackup: (savedAt: string) => Promise<void>;
   patchUserData: (patch: Partial<UserHealthData>) => Promise<void>;
+  setEpicAppointmentsForReminders: (appointments: Appointment[]) => void;
   refreshRecords: () => Promise<void>;
   clearAllData: () => Promise<void>;
   syncWithEHR: () => Promise<SyncResult>;
@@ -107,6 +109,8 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   const [records, setRecords] = useState<MedicalRecord[]>([]);
   const [userData, setUserData] = useState<UserHealthData>(EMPTY_USER_DATA);
   const [loading, setLoading] = useState(true);
+  // Epic appointments are loaded by the Home screen; they're kept here so their reminders can be scheduled too
+  const [epicAppointments, setEpicAppointments] = useState<Appointment[]>([]);
   // Always the latest saved profile. Saves build on this, so a stale copy can never overwrite newer data.
   const latestUserData = useRef<UserHealthData>(EMPTY_USER_DATA);
 
@@ -535,22 +539,24 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  // Keep the phone's reminders in step with the medication list
+  // Keep the phone's reminders in step with medications and appointments
   useEffect(() => {
     if (loading) return;
-    if (remindedMedications(userData).length > 0) {
+    const hasReminders = remindedMedications(userData).length > 0 || (userData.appointments || []).length > 0 || epicAppointments.length > 0;
+    if (hasReminders) {
       requestReminderPermission().then((granted) => {
-        if (granted) scheduleReminders(userData);
+        if (granted) scheduleReminders(userData, epicAppointments);
       });
     } else {
-      scheduleReminders(userData);
+      scheduleReminders(userData, epicAppointments);
     }
-  }, [userData, loading]);
+  }, [userData, loading, epicAppointments]);
 
   const value: RecordsContextType = {
     records,
     userData,
     loading,
+    setEpicAppointmentsForReminders: setEpicAppointments,
     addRecord,
     updateRecord,
     deleteRecord,

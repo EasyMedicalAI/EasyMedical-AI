@@ -54,6 +54,7 @@ export interface Appointment {
   provider: string;
   date: string;
   time: string;
+  start?: string; // ISO start time from Epic, used for reminders
 }
 
 export interface Observation {
@@ -331,6 +332,7 @@ class EhrService {
           provider: e.resource.participant?.[0]?.actor?.display || 'Unknown Provider',
           date: startDate.toLocaleDateString(),
           time: startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          start: e.resource.start,
         };
       });
     });
