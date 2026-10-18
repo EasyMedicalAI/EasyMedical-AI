@@ -66,7 +66,8 @@ export interface UserHealthData {
   mealHistory?: { date: string; description: string; mealType?: string; tags?: string[] }[];
   drinkHistory?: { date: string; kind: 'water' | 'coffee' | 'alcohol' | 'sugary' }[];
   dietProfile?: string[];
-  medicationHistory?: { name: string; dose?: string; frequency?: string; instructions?: string; startDate?: string; endDate?: string; source?: 'epic'; reminderTimes?: string[] }[];
+  // lastDoseDate is the planned last day ("YYYY-MM-DD"); endDate is when the medication was stopped
+  medicationHistory?: { name: string; dose?: string; frequency?: string; instructions?: string; startDate?: string; endDate?: string; lastDoseDate?: string; source?: 'epic'; reminderTimes?: string[]; skipDays?: number[] }[];
   // Taken doses: key "date|medication|HH:MM" -> when it was marked taken
   doseLog?: Record<string, string>;
   conditions?: string[];
@@ -93,6 +94,15 @@ export interface UserHealthData {
     memberId: string;
     groupNumber?: string;
   };
+  insurances?: { provider: string; memberId: string; groupNumber?: string }[];
+  birthday?: string;
+  gender?: string;
+  prescriptionMedications?: string[];
+  otcMedications?: string[];
+  pastConditions?: string[];
+  surgicalHistory?: { surgeryName: string; date: string }[];
+  familyHistory?: { familyMember: string; condition: string }[];
+  hospitalizations?: { reason: string; date: string }[];
   vitals?: VitalSigns;
   lastVisitDate?: string;
   pharmacy?: {

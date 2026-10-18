@@ -32,16 +32,51 @@ export function formatTime(time: string): string {
   return `${shown}:${pad(minute)} ${suffix}`;
 }
 
+// "2026-10-18" -> a Date at local midnight that day
+export function dateFromKey(key: string): Date {
+  const [year, month, day] = key.split('-').map((n) => parseInt(n, 10));
+  return new Date(year, month - 1, day);
+}
+
+// The day a number of days from a "2026-10-18" key, as a key
+export function shiftDate(key: string, days: number): string {
+  const day = dateFromKey(key);
+  return dateKey(new Date(day.getFullYear(), day.getMonth(), day.getDate() + days));
+}
+
+// 0 = Sunday ... 6 = Saturday
+export const weekdayOf = (key: string) => dateFromKey(key).getDay();
+
+export interface ScheduledMedication {
+  name: string;
+  times: string[];
+  startDate?: string; // "YYYY-MM-DD"; no doses before this day
+  lastDoseDate?: string; // "YYYY-MM-DD"; no doses after this day
+  skipDays: number[]; // weekdays with no doses, 0 = Sunday ... 6 = Saturday
+}
+
 // Current medications that have reminder times
-export function remindedMedications(userData: UserHealthData): { name: string; times: string[]; startDate?: string }[] {
+export function remindedMedications(userData: UserHealthData): ScheduledMedication[] {
   const names = [...(userData.prescriptionMedications || []), ...(userData.otcMedications || [])];
   return names
     .map((name) => {
       const active = (userData.medicationHistory || []).find((m) => m.name === name && !m.endDate);
-      const startDate = active?.startDate ? dateKey(new Date(active.startDate)) : undefined;
-      return { name, times: [...(active?.reminderTimes || [])].sort(), startDate };
+      return {
+        name,
+        times: [...(active?.reminderTimes || [])].sort(),
+        startDate: active?.startDate ? dateKey(new Date(active.startDate)) : undefined,
+        lastDoseDate: active?.lastDoseDate,
+        skipDays: [...(active?.skipDays || [])],
+      };
     })
     .filter((m) => m.times.length > 0);
+}
+
+// Whether a medication is due on a day, given its start, end and skip days
+export function isScheduledOn(med: Pick<ScheduledMedication, 'startDate' | 'lastDoseDate' | 'skipDays'>, date: string): boolean {
+  if (med.startDate && date < med.startDate) return false;
+  if (med.lastDoseDate && date > med.lastDoseDate) return false;
+  return !med.skipDays.includes(weekdayOf(date));
 }
 
 export const doseKey = (date: string, name: string, time: string) => `${date}|${name}|${time}`;
@@ -50,7 +85,7 @@ export const doseKey = (date: string, name: string, time: string) => `${date}|${
 export function dosesForDate(userData: UserHealthData, date: string): DoseItem[] {
   const log = userData.doseLog || {};
   return remindedMedications(userData)
-    .filter((med) => !med.startDate || date >= med.startDate)
+    .filter((med) => isScheduledOn(med, date))
     .flatMap((med) =>
       med.times.map((time) => {
         const key = doseKey(date, med.name, time);
@@ -65,17 +100,24 @@ export function dayCounts(userData: UserHealthData, date: string): { total: numb
   return { total: doses.length, taken: doses.filter((d) => d.taken).length };
 }
 
-// The next reminder for a medication: today's first time still to come, otherwise tomorrow's first time
+// The next reminder for a medication: today's first time still to come, otherwise the next day it's due
 export function nextDoseLabel(userData: UserHealthData, name: string, now = new Date()): string {
-  const active = (userData.medicationHistory || []).find((m) => m.name === name && !m.endDate);
-  const times = [...(active?.reminderTimes || [])].sort();
-  if (times.length === 0) return '';
+  const med = remindedMedications(userData).find((m) => m.name === name);
+  if (!med) return '';
   const minutesNow = now.getHours() * 60 + now.getMinutes();
-  const later = times.find((t) => {
+  const later = med.times.find((t) => {
     const [h, m] = t.split(':').map((n) => parseInt(n, 10));
     return h * 60 + m > minutesNow;
   });
-  return later ? `next ${formatTime(later)}` : `next ${formatTime(times[0])} tomorrow`;
+  const today = dateKey(now);
+  if (later && isScheduledOn(med, today)) return `next ${formatTime(later)}`;
+  for (let ahead = 1; ahead <= 7; ahead++) {
+    const day = shiftDate(today, ahead);
+    if (!isScheduledOn(med, day)) continue;
+    if (ahead === 1) return `next ${formatTime(med.times[0])} tomorrow`;
+    return `next ${formatTime(med.times[0])} ${dateFromKey(day).toLocaleDateString('en-US', { weekday: 'long' })}`;
+  }
+  return '';
 }
 
 // The new dose log after marking a dose taken or not taken

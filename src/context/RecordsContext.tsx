@@ -5,6 +5,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ehrService, isWeightObservation } from '../services/ehrService';
 import { birthdayFromFhir, genderFromFhir } from '../services/patientProfile';
 import { medicationNameFrom } from '../services/medicationName';
+import { dateKey, doseKey, remindedMedications } from '../services/doseSchedule';
+import { setupReminders, listenForReminderResponses, requestReminderPermission, scheduleReminders } from '../services/reminders';
 
 // Empty initial state - will be populated from storage or user input
 const EMPTY_USER_DATA: UserHealthData = {
@@ -516,6 +518,34 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
       throw error;
     }
   };
+
+  // A dose tapped as Taken on a reminder is recorded for today, the same as marking it in the calendar
+  const markDoseFromReminder = async (name: string, time: string) => {
+    const key = doseKey(dateKey(new Date()), name, time);
+    const current = latestUserData.current;
+    if (current.doseLog?.[key]) return;
+    await patchUserData({ doseLog: { ...(current.doseLog || {}), [key]: new Date().toISOString() } });
+  };
+
+  // Reminders: set up the buttons once, and record Taken taps
+  useEffect(() => {
+    setupReminders();
+    return listenForReminderResponses((name, time) => {
+      markDoseFromReminder(name, time);
+    });
+  }, []);
+
+  // Keep the phone's reminders in step with the medication list
+  useEffect(() => {
+    if (loading) return;
+    if (remindedMedications(userData).length > 0) {
+      requestReminderPermission().then((granted) => {
+        if (granted) scheduleReminders(userData);
+      });
+    } else {
+      scheduleReminders(userData);
+    }
+  }, [userData, loading]);
 
   const value: RecordsContextType = {
     records,

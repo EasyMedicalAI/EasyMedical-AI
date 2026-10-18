@@ -23,8 +23,9 @@ import { ehrService, Medication, Appointment, Observation, Allergy, Condition, E
 import LabTrendChart from '@/components/LabTrendChart';
 import QuickLogBox from '@/components/QuickLogBox';
 import MedicationCalendar from '@/components/MedicationCalendar';
-import { nextDoseLabel, parseTime, formatTime, defaultTimes } from '@/services/doseSchedule';
+import { nextDoseLabel, defaultTimes } from '@/services/doseSchedule';
 import MedicationLabelReview, { MedicationDraft } from '@/components/MedicationLabelReview';
+import MedicationForm, { MedicationFormValues, blankMedicationForm, formFromMedication, medicationFieldsFromForm } from '@/components/MedicationForm';
 import { Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { rowIconSize } from '@/components/rowIcons';
@@ -197,12 +198,8 @@ export default function HomeScreen() {
   const [newPrescriptionMed, setNewPrescriptionMed] = useState('');
   const [editingMed, setEditingMed] = useState<{ kind: 'prescription' | 'otc'; index: number } | null>(null);
   const [pendingMedEdit, setPendingMedEdit] = useState<{ kind: 'prescription' | 'otc'; index: number } | null>(null);
-  const [medEditName, setMedEditName] = useState('');
-  const [medEditDose, setMedEditDose] = useState('');
+  const [medForm, setMedForm] = useState<MedicationFormValues>(blankMedicationForm());
   const [medsTab, setMedsTab] = useState<'list' | 'calendar'>('list');
-  const [medEditTimes, setMedEditTimes] = useState<string[]>([]);
-  const [medEditTimeText, setMedEditTimeText] = useState('');
-  const [medEditFrequency, setMedEditFrequency] = useState('');
   const [addingOtcMed, setAddingOtcMed] = useState(false);
   const [newOtcMed, setNewOtcMed] = useState('');
   const [addingCondition, setAddingCondition] = useState(false);
@@ -917,31 +914,30 @@ export default function HomeScreen() {
   };
 
   const handleMedicationTextSubmit = async () => {
-    if (!medicationInputText.trim() || !medicationType) {
-      Alert.alert('Error', 'Please enter a medication name');
+    const name = medForm.name.trim();
+    if (!name || !medicationType) {
+      Alert.alert('Add a name', 'Enter the medication name.');
       return;
     }
 
     try {
-      if (medicationType === 'prescription') {
-        const updatedData = {
-          ...editData,
-          prescriptionMedications: [...(editData.prescriptionMedications || []), medicationInputText.trim()]
-        };
-        setEditData(updatedData);
-        await patchUserData({ prescriptionMedications: updatedData.prescriptionMedications });
-      } else {
-        const updatedData = {
-          ...editData,
-          otcMedications: [...(editData.otcMedications || []), medicationInputText.trim()]
-        };
-        setEditData(updatedData);
-        await patchUserData({ otcMedications: updatedData.otcMedications });
-      }
+      const key = medListKey(medicationType);
+      const list = [...((userData as any)[key] || [])];
+      if (!list.some((n: string) => n.trim().toLowerCase() === name.toLowerCase())) list.push(name);
+
+      const history = [...(userData.medicationHistory || [])];
+      const fields = medicationFieldsFromForm(medForm);
+      const activeIdx = history.findIndex((m) => m.name.trim().toLowerCase() === name.toLowerCase() && !m.endDate);
+      if (activeIdx >= 0) history[activeIdx] = { ...history[activeIdx], name, ...fields };
+      else history.push({ name, ...fields });
+
+      const patch: any = { medicationHistory: history };
+      patch[key] = list;
+      await patchUserData(patch);
 
       setMedicationInputMode(null);
       setMedicationType(null);
-      setMedicationInputText('');
+      setMedForm(blankMedicationForm());
       Alert.alert('Success', 'Medication added');
     } catch (error) {
       Alert.alert('Error', 'Failed to add medication');
@@ -1076,28 +1072,15 @@ export default function HomeScreen() {
     return active ? [active.dose, active.frequency, nextDoseLabel(userData, name)].filter(Boolean).join(' · ') : '';
   };
   const medListKey = (kind: 'prescription' | 'otc') => (kind === 'prescription' ? 'prescriptionMedications' : 'otcMedications');
-  const addMedEditTime = () => {
-    const time = parseTime(medEditTimeText);
-    if (!time) {
-      Alert.alert('Check the time', 'Enter a time such as 8:00 AM.');
-      return;
-    }
-    setMedEditTimes((current) => (current.includes(time) ? current : [...current, time].sort()));
-    setMedEditTimeText('');
-  };
   const openMedEdit = (kind: 'prescription' | 'otc', index: number) => {
     const name = ((userData as any)[medListKey(kind)] || [])[index] ?? '';
     const active = (userData.medicationHistory || []).find((m) => m.name === name && !m.endDate);
-    setMedEditName(name);
-    setMedEditDose(active?.dose || '');
-    setMedEditFrequency(active?.frequency || '');
-    setMedEditTimes([...(active?.reminderTimes || [])].sort());
-    setMedEditTimeText('');
+    setMedForm(formFromMedication(name, active));
     setEditingMed({ kind, index });
   };
   const saveMedEdit = async () => {
     if (!editingMed) return;
-    const newName = medEditName.trim();
+    const newName = medForm.name.trim();
     if (!newName) {
       Alert.alert('Add a name', 'Enter the medication name.');
       return;
@@ -1107,14 +1090,10 @@ export default function HomeScreen() {
     const oldName = list[editingMed.index];
     list[editingMed.index] = newName;
     const history = [...(userData.medicationHistory || [])];
-    const details = {
-      dose: medEditDose.trim() || undefined,
-      frequency: medEditFrequency.trim() || undefined,
-      reminderTimes: medEditTimes.length > 0 ? medEditTimes : undefined,
-    };
+    const details = medicationFieldsFromForm(medForm);
     const activeIdx = history.findIndex((m) => m.name === oldName && !m.endDate);
     if (activeIdx >= 0) history[activeIdx] = { ...history[activeIdx], name: newName, ...details };
-    else if (details.dose || details.frequency || details.reminderTimes) history.push({ name: newName, ...details });
+    else history.push({ name: newName, ...details });
     const patch: any = { medicationHistory: history };
     patch[key] = list;
     await patchUserData(patch);
@@ -2479,54 +2458,9 @@ export default function HomeScreen() {
 
       {/* Edit one medication */}
       <DetailPage visible={editingMed !== null} title="Edit medication" onClose={() => setEditingMed(null)}>
-        <Section title="Details">
-          <ListCard>
-            <View style={styles.medField}>
-              <Text style={styles.medFieldLabel}>Name</Text>
-              <TextInput style={styles.medFieldInput} value={medEditName} onChangeText={setMedEditName} placeholder="Medication name" placeholderTextColor="#999" />
-            </View>
-            <Divider />
-            <View style={styles.medField}>
-              <Text style={styles.medFieldLabel}>Dose</Text>
-              <TextInput style={styles.medFieldInput} value={medEditDose} onChangeText={setMedEditDose} placeholder="e.g. 50 mg" placeholderTextColor="#999" />
-            </View>
-            <Divider />
-            <View style={styles.medField}>
-              <Text style={styles.medFieldLabel}>How often</Text>
-              <TextInput style={styles.medFieldInput} value={medEditFrequency} onChangeText={setMedEditFrequency} placeholder="e.g. twice a day" placeholderTextColor="#999" />
-            </View>
-          </ListCard>
-        </Section>
-
-        <Section title="Reminder times">
-          <ListCard>
-            <View style={styles.medTimes}>
-              {medEditTimes.length === 0 && <Text style={styles.medTimesEmpty}>No reminders yet.</Text>}
-              {medEditTimes.map((time) => (
-                <TouchableOpacity
-                  key={time}
-                  style={styles.timeChip}
-                  onPress={() => setMedEditTimes((current) => current.filter((t) => t !== time))}
-                >
-                  <Text style={styles.timeChipText}>{formatTime(time)}  ×</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <Divider />
-            <View style={styles.timeAddRow}>
-              <TextInput
-                style={styles.timeInput}
-                value={medEditTimeText}
-                onChangeText={setMedEditTimeText}
-                placeholder="e.g. 8:00 AM"
-                placeholderTextColor="#999"
-              />
-              <TouchableOpacity style={styles.timeAddButton} onPress={addMedEditTime}>
-                <Text style={styles.timeAddText}>Add</Text>
-              </TouchableOpacity>
-            </View>
-          </ListCard>
-        </Section>
+        <View style={styles.medFormWrap}>
+          <MedicationForm value={medForm} onChange={(patch) => setMedForm((form) => ({ ...form, ...patch }))} />
+        </View>
 
         <View style={styles.medSaveWrap}>
           <TouchableOpacity style={styles.medSaveButton} onPress={saveMedEdit}>
@@ -4033,14 +3967,21 @@ export default function HomeScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Add {medicationType === 'prescription' ? 'Prescription' : 'OTC'} Medication</Text>
-            <TouchableOpacity onPress={() => {
-              setMedicationInputMode(null);
-              setMedicationType(null);
-              setMedicationPhotoUri(null);
-              setMedicationInputText('');
-            }}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {medicationInputMode === 'text' && (
+                <TouchableOpacity onPress={() => setMedForm(blankMedicationForm())} style={{ marginRight: 16 }}>
+                  <Text style={{ fontSize: 17, color: '#007AFF' }}>Clear</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => {
+                setMedicationInputMode(null);
+                setMedicationType(null);
+                setMedicationPhotoUri(null);
+                setMedicationInputText('');
+              }}>
+                <Text style={styles.closeButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           <ScrollView style={styles.modalContent}>
             {medicationInputMode === 'method' && (
@@ -4064,7 +4005,7 @@ export default function HomeScreen() {
                   </View>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.methodButton} onPress={() => setMedicationInputMode('text')}>
+                <TouchableOpacity style={styles.methodButton} onPress={() => { setMedForm(blankMedicationForm()); setMedicationInputMode('text'); }}>
                   <Text style={styles.methodButtonIcon}>✍️</Text>
                   <View style={styles.methodButtonContent}>
                     <Text style={styles.methodButtonText}>Type Details</Text>
@@ -4075,30 +4016,15 @@ export default function HomeScreen() {
             )}
 
             {medicationInputMode === 'text' && (
-              <>
-                <Text style={styles.label}>Medication Name</Text>
-                <Text style={styles.sublabel}>Enter the medication name and dosage</Text>
-                <TextInput
-                  style={[styles.input, { minHeight: 100 }]}
-                  placeholder="e.g., Lisinopril 10mg daily"
-                  placeholderTextColor="#999"
-                  value={medicationInputText}
-                  onChangeText={setMedicationInputText}
-                  multiline
-                />
-                <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={() => setMedicationInputMode('method')}
-                >
+              <View style={styles.medFormWrap}>
+                <MedicationForm value={medForm} onChange={(patch) => setMedForm((form) => ({ ...form, ...patch }))} />
+                <TouchableOpacity style={styles.medSaveButton} onPress={handleMedicationTextSubmit}>
+                  <Text style={styles.medSaveText}>Save medication</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.backButton} onPress={() => setMedicationInputMode('method')}>
                   <Text style={styles.backButtonText}>← Back</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={handleMedicationTextSubmit}
-                >
-                  <Text style={styles.addButtonText}>Add Medication</Text>
-                </TouchableOpacity>
-              </>
+              </View>
             )}
 
             {medicationInputMode === 'label-review' && labelDraft && (
@@ -4755,6 +4681,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
     paddingVertical: 4,
+  },
+  medFormWrap: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
   },
   medSaveWrap: {
     paddingHorizontal: 20,
