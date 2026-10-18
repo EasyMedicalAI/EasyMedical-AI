@@ -7,15 +7,21 @@ import { rowIconSize } from '@/components/rowIcons';
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 // The app name bar and large page title, as on Home
-export function ScreenHeader({ title }: { title: string }) {
+// An optional round button at the right of the title, for the screen's main action
+export function ScreenHeader({ title, action }: { title: string; action?: { label: string; onPress: () => void } }) {
   return (
     <>
       <View style={kit.topBar}>
         <View />
         <Text style={kit.appName}>EasyMedical AI</Text>
       </View>
-      <View style={kit.pageHeader}>
+      <View style={[kit.pageHeader, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
         <Text style={kit.pageTitle}>{title}</Text>
+        {action && (
+          <TouchableOpacity style={kit.headerAction} onPress={action.onPress} accessibilityLabel={action.label}>
+            <MaterialCommunityIcons name="plus" size={22} color="#FFF" />
+          </TouchableOpacity>
+        )}
       </View>
     </>
   );
@@ -112,6 +118,14 @@ export function DetailPage({
 }
 
 const kit = StyleSheet.create({
+  headerAction: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   topBar: {
     paddingHorizontal: 20,
     paddingTop: 50,

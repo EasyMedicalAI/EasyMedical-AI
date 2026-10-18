@@ -1,5 +1,6 @@
 // Lifestyle: sleep, exercise, and food, logged by hand. Tapping a row opens its chart and history, where entries can be added or removed.
 import React, { useState } from 'react';
+import DateWheel, { dateFromText, textFromDate } from '@/components/DateWheel';
 import { View, Text, TouchableOpacity, TextInput, Modal, ScrollView, StyleSheet, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { rowIconSize } from '@/components/rowIcons';
@@ -434,14 +435,11 @@ export default function LifestyleCard() {
                     </>
                   )}
 
-                  <Text style={styles.fieldLabel}>Date (MM/DD/YYYY)</Text>
-                  <TextInput
-                    style={styles.input}
-                    keyboardType="numbers-and-punctuation"
-                    placeholder="e.g. 10/14/2026"
-                    placeholderTextColor="#999"
-                    value={date}
-                    onChangeText={setDate}
+                  <DateWheel
+                    label="Date"
+                    value={dateFromText(date)}
+                    onChange={(picked) => setDate(textFromDate(picked))}
+                    maximumDate={new Date()}
                   />
 
                   <TouchableOpacity style={styles.button} onPress={save}>

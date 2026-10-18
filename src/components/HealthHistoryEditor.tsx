@@ -127,7 +127,7 @@ export default function HealthHistoryEditor({
                 <DateTimePicker
                   value={date}
                   mode="date"
-                  display="spinner"
+                  display="spinner" textColor="#000"
                   onChange={(_, picked) => picked && onChange({ date: new Date(picked.getFullYear(), picked.getMonth(), 1) })}
                 />
               )}

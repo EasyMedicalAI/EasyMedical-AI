@@ -119,7 +119,7 @@ export default function MedicationForm({
         <DateTimePicker
           value={value.startDate ?? today}
           mode="date"
-          display="spinner"
+          display="spinner" textColor="#000"
           onChange={(_, date) => date && onChange({ startDate: startOfDay(date) })}
         />
       )}
@@ -146,7 +146,7 @@ export default function MedicationForm({
         <DateTimePicker
           value={value.endDate ?? shiftDateObject(value.startDate ?? today, 30)}
           mode="date"
-          display="spinner"
+          display="spinner" textColor="#000"
           minimumDate={value.startDate ?? today}
           onChange={(_, date) => date && onChange({ endDate: startOfDay(date) })}
         />
@@ -175,7 +175,7 @@ export default function MedicationForm({
               <DateTimePicker
                 value={toDate(time)}
                 mode="time"
-                display="spinner"
+                display="spinner" textColor="#000"
                 onChange={(_, date) =>
                   date && onChange({ times: value.times.map((t, i) => (i === index ? toTime(date) : t)) })
                 }
@@ -197,7 +197,7 @@ export default function MedicationForm({
           <DateTimePicker
             value={toDate(newTime)}
             mode="time"
-            display="spinner"
+            display="spinner" textColor="#000"
             onChange={(_, date) => date && setNewTime(toTime(date))}
           />
           <TouchableOpacity

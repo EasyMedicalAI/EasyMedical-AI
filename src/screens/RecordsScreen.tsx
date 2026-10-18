@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import DateWheel from '@/components/DateWheel';
 import {
   ScrollView,
   View,
@@ -121,7 +122,6 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [showAppointmentDetail, setShowAppointmentDetail] = useState(false);
   const [selectedDoctor, setSelectedDoctor] = useState<string | null>(null);
   const [showDoctorAppointments, setShowDoctorAppointments] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [showRecordDetail, setShowRecordDetail] = useState(false);
   const [isEditingRecord, setIsEditingRecord] = useState(false);
@@ -132,23 +132,14 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   const [editedSummary, setEditedSummary] = useState('');
   const [editedFindings, setEditedFindings] = useState('');
   const [editedNextSteps, setEditedNextSteps] = useState('');
-  const [editRecordMonth, setEditRecordMonth] = useState(0);
-  const [editRecordDay, setEditRecordDay] = useState(1);
-  const [editRecordYear, setEditRecordYear] = useState(new Date().getFullYear());
+  const [editRecordDate, setEditRecordDate] = useState<Date>(() => new Date());
   const [selectedMetricName, setSelectedMetricName] = useState<string | null>(null);
-  // Initialize with today's date
-  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth());
-  const [selectedDay, setSelectedDay] = useState(() => new Date().getDate());
-  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  const [appointmentPick, setAppointmentPick] = useState<Date>(() => new Date());
   const router = useRouter();
 
   useEffect(() => {
     loadAppointments();
   }, []);
-
-  useEffect(() => {
-    console.log('📅 showDatePicker state changed to:', showDatePicker);
-  }, [showDatePicker]);
 
   const loadAppointments = async () => {
     try {
@@ -160,39 +151,19 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   };
 
   const [scrollViewKey, setScrollViewKey] = useState(0);
-  const monthScrollRef = useRef(null);
-  const dayScrollRef = useRef(null);
-  const yearScrollRef = useRef(null);
-
-  // Scroll pickers to today's date when form opens
-  useEffect(() => {
-    if (uploadMode === 'text') {
-      setTimeout(() => {
-        const itemHeight = 32; // pickerOption height with padding (8+8+16)
-        monthScrollRef.current?.scrollTo({ y: selectedMonth * itemHeight, animated: false });
-        dayScrollRef.current?.scrollTo({ y: (selectedDay - 1) * itemHeight, animated: false });
-        yearScrollRef.current?.scrollTo({ y: (selectedYear - 1900) * itemHeight, animated: false });
-      }, 0);
-    }
-  }, [uploadMode, selectedMonth, selectedDay, selectedYear]);
 
   // Initialize date picker with selected record's date when entering edit mode
   useEffect(() => {
     if (isEditingRecord && selectedRecord) {
       const recordDate = new Date(selectedRecord.appointmentDate || selectedRecord.uploadDate);
-      setEditRecordMonth(recordDate.getMonth());
-      setEditRecordDay(recordDate.getDate());
-      setEditRecordYear(recordDate.getFullYear());
+      setEditRecordDate(new Date(recordDate.getFullYear(), recordDate.getMonth(), recordDate.getDate(), 12));
     }
   }, [isEditingRecord, selectedRecord]);
 
-  const handleDatePickerDone = () => {
+  // "Oct 18, 2026", the form the appointment date is saved in
+  const appointmentDayText = (date: Date) => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const formattedDate = `${months[selectedMonth]} ${selectedDay}, ${selectedYear}`;
-    setAppointmentDate(formattedDate);
-    setShowDatePicker(false);
-    // Force re-render of the ScrollView
-    setScrollViewKey(prev => prev + 1);
+    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
   };
 
   const getOrganizedRecords = () => {
@@ -943,7 +914,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
   return (
     <>
     <ScrollView style={styles.container}>
-      <ScreenHeader title="Records" />
+      <ScreenHeader title="Records" action={{ label: 'Upload a record', onPress: () => setUploadingSpecialty('') }} />
       <Text style={styles.headerSubtitle}>{specialties.length} specialties available</Text>
 
       {/* My Records Section */}
@@ -1143,10 +1114,9 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                   style={styles.methodButton}
                   onPress={() => {
                     setUploadMode('text');
-                    // Reset date to today
-                    setSelectedMonth(new Date().getMonth());
-                    setSelectedDay(new Date().getDate());
-                    setSelectedYear(new Date().getFullYear());
+                    const today = new Date();
+                    setAppointmentPick(today);
+                    setAppointmentDate(appointmentDayText(today));
                   }}
                 >
                   <Text style={styles.methodButtonIcon}>✍️</Text>
@@ -1183,72 +1153,13 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 />
 
                 <Text style={styles.fieldLabel}>Date of Appointment</Text>
-
-                {/* Inline Date Picker */}
-                <View style={styles.inlineDatePickerContainer}>
-                  <View style={styles.pickerRow}>
-                    {/* Month Picker */}
-                    <View style={styles.pickerColumn}>
-                      <Text style={styles.pickerLabel}>Month</Text>
-                      <ScrollView ref={monthScrollRef} style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                        {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
-                          <TouchableOpacity
-                            key={idx}
-                            style={[styles.pickerOption, selectedMonth === idx && styles.pickerOptionSelected]}
-                            onPress={() => setSelectedMonth(idx)}
-                          >
-                            <Text style={[styles.pickerOptionText, selectedMonth === idx && styles.pickerOptionTextSelected]}>
-                              {month}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-
-                    {/* Day Picker */}
-                    <View style={styles.pickerColumn}>
-                      <Text style={styles.pickerLabel}>Day</Text>
-                      <ScrollView ref={dayScrollRef} style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                        {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                          <TouchableOpacity
-                            key={day}
-                            style={[styles.pickerOption, selectedDay === day && styles.pickerOptionSelected]}
-                            onPress={() => setSelectedDay(day)}
-                          >
-                            <Text style={[styles.pickerOptionText, selectedDay === day && styles.pickerOptionTextSelected]}>
-                              {day}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-
-                    {/* Year Picker */}
-                    <View style={styles.pickerColumn}>
-                      <Text style={styles.pickerLabel}>Year</Text>
-                      <ScrollView ref={yearScrollRef} style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                        {Array.from({ length: new Date().getFullYear() - 1900 + 10 }, (_, i) => 1900 + i).map((year) => (
-                          <TouchableOpacity
-                            key={year}
-                            style={[styles.pickerOption, selectedYear === year && styles.pickerOptionSelected]}
-                            onPress={() => setSelectedYear(year)}
-                          >
-                            <Text style={[styles.pickerOptionText, selectedYear === year && styles.pickerOptionTextSelected]}>
-                              {year}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  </View>
-
-                  <TouchableOpacity
-                    style={styles.datePickerDoneButton}
-                    onPress={handleDatePickerDone}
-                  >
-                    <Text style={styles.datePickerDoneButtonText}>Done</Text>
-                  </TouchableOpacity>
-                </View>
+                <DateWheel
+                  value={appointmentPick}
+                  onChange={(picked) => {
+                    setAppointmentPick(picked);
+                    setAppointmentDate(appointmentDayText(picked));
+                  }}
+                />
 
                 <Text style={styles.fieldLabel}>Summary of Visit</Text>
                 <TextInput
@@ -1507,80 +1418,6 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       </Modal>
 
       {/* Date Picker Modal */}
-      <Modal visible={showDatePicker} animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
-        <View style={styles.modalContainer}>
-          <View style={styles.dateModalHeader}>
-            <Text style={styles.dateModalTitle}>Select Date</Text>
-            <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.datePickerContent}>
-            <View style={styles.pickerRow}>
-              {/* Month Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Month</Text>
-                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={[styles.pickerOption, selectedMonth === idx && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedMonth(idx)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedMonth === idx && styles.pickerOptionTextSelected]}>
-                        {month}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Day Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Day</Text>
-                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                    <TouchableOpacity
-                      key={day}
-                      style={[styles.pickerOption, selectedDay === day && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedDay(day)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedDay === day && styles.pickerOptionTextSelected]}>
-                        {day}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Year Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Year</Text>
-                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                  {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map((year) => (
-                    <TouchableOpacity
-                      key={year}
-                      style={[styles.pickerOption, selectedYear === year && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedYear(year)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedYear === year && styles.pickerOptionTextSelected]}>
-                        {year}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.datePickerDoneButton}
-              onPress={handleDatePickerDone}
-            >
-              <Text style={styles.datePickerDoneButtonText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {/* Record Detail Modal */}
       <Modal visible={showRecordDetail && selectedRecord !== null} animationType="slide" onRequestClose={() => { setShowRecordDetail(false); setIsEditingRecord(false); }}>
@@ -1610,63 +1447,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                 <View style={{ marginBottom: 20 }}>
                   <Text style={styles.label}>Date</Text>
                   {isEditingRecord ? (
-                    <View style={styles.inlineDatePickerContainer}>
-                      <View style={styles.pickerRow}>
-                        {/* Month Picker */}
-                        <View style={styles.pickerColumn}>
-                          <Text style={styles.pickerLabel}>Month</Text>
-                          <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                            {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((month, idx) => (
-                              <TouchableOpacity
-                                key={idx}
-                                style={[styles.pickerOption, editRecordMonth === idx && styles.pickerOptionSelected]}
-                                onPress={() => setEditRecordMonth(idx)}
-                              >
-                                <Text style={[styles.pickerOptionText, editRecordMonth === idx && styles.pickerOptionTextSelected]}>
-                                  {month}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        </View>
-
-                        {/* Day Picker */}
-                        <View style={styles.pickerColumn}>
-                          <Text style={styles.pickerLabel}>Day</Text>
-                          <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                            {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                              <TouchableOpacity
-                                key={day}
-                                style={[styles.pickerOption, editRecordDay === day && styles.pickerOptionSelected]}
-                                onPress={() => setEditRecordDay(day)}
-                              >
-                                <Text style={[styles.pickerOptionText, editRecordDay === day && styles.pickerOptionTextSelected]}>
-                                  {day}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        </View>
-
-                        {/* Year Picker */}
-                        <View style={styles.pickerColumn}>
-                          <Text style={styles.pickerLabel}>Year</Text>
-                          <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                            {Array.from({ length: new Date().getFullYear() - 1900 + 10 }, (_, i) => 1900 + i).map((year) => (
-                              <TouchableOpacity
-                                key={year}
-                                style={[styles.pickerOption, editRecordYear === year && styles.pickerOptionSelected]}
-                                onPress={() => setEditRecordYear(year)}
-                              >
-                                <Text style={[styles.pickerOptionText, editRecordYear === year && styles.pickerOptionTextSelected]}>
-                                  {year}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        </View>
-                      </View>
-                    </View>
+                    <DateWheel value={editRecordDate} onChange={setEditRecordDate} />
                   ) : (
                     <Text style={styles.infoValue}>
                       {new Date(selectedRecord.appointmentDate || selectedRecord.uploadDate).toLocaleDateString('en-US', {
@@ -1834,9 +1615,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                   setEditedSummary('');
                   setEditedFindings('');
                   setEditedNextSteps('');
-                  setEditRecordMonth(0);
-                  setEditRecordDay(1);
-                  setEditRecordYear(new Date().getFullYear());
+                  setEditRecordDate(new Date());
                 }}
               >
                 <Text style={styles.buttonText}>Cancel</Text>
@@ -1844,7 +1623,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               <TouchableOpacity
                 style={[styles.saveButton, { flex: 1 }]}
                 onPress={async () => {
-                  const formattedDate = new Date(editRecordYear, editRecordMonth, editRecordDay).toISOString();
+                  const formattedDate = new Date(editRecordDate.getFullYear(), editRecordDate.getMonth(), editRecordDate.getDate()).toISOString();
                   const updatedRecord = {
                     ...selectedRecord,
                     provider: editedProvider || selectedRecord.provider,

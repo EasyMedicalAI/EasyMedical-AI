@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import DateWheel, { dateFromText, textFromDate } from '@/components/DateWheel';
 import {
   ScrollView,
   View,
@@ -153,8 +154,8 @@ export default function HomeScreen() {
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false);
   const [appointmentDate, setAppointmentDate] = useState<Date>(() => new Date());
   const [appointmentTime, setAppointmentTime] = useState<Date>(defaultAppointmentTime);
-  const [selectedFeet, setSelectedFeet] = useState(5);
-  const [selectedInches, setSelectedInches] = useState(10);
+  const [heightFeet, setHeightFeet] = useState('');
+  const [heightInches, setHeightInches] = useState('');
   const [selectedWeight, setSelectedWeight] = useState(180);
   const [selectedSystolic, setSelectedSystolic] = useState(120);
   const [selectedDiastolic, setSelectedDiastolic] = useState(80);
@@ -176,9 +177,7 @@ export default function HomeScreen() {
   const [screeningDate, setScreeningDate] = useState('');
   const [screeningNotes, setScreeningNotes] = useState('');
   const [editingScreeningId, setEditingScreeningId] = useState<number | null>(null);
-  const [selectedBirthdayMonth, setSelectedBirthdayMonth] = useState(0);
-  const [selectedBirthdayDay, setSelectedBirthdayDay] = useState(1);
-  const [selectedBirthdayYear, setSelectedBirthdayYear] = useState(1990);
+  const [birthdayPick, setBirthdayPick] = useState<Date>(() => new Date(1990, 0, 1, 12));
   const [selectedGender, setSelectedGender] = useState('Other');
   const [customGender, setCustomGender] = useState('');
   const [editingHistoryType, setEditingHistoryType] = useState<'surgical' | 'family' | 'conditions' | 'hospitalization' | null>(null);
@@ -1361,9 +1360,7 @@ export default function HomeScreen() {
       const yearStr = parseInt(parts[2]);
       const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
       const monthIdx = months.indexOf(monthStr);
-      setSelectedBirthdayMonth(monthIdx >= 0 ? monthIdx : 0);
-      setSelectedBirthdayDay(dayStr || 1);
-      setSelectedBirthdayYear(yearStr || 1990);
+      setBirthdayPick(new Date(yearStr || 1990, monthIdx >= 0 ? monthIdx : 0, dayStr || 1, 12));
     }
     setEditingSection('birthday');
   };
@@ -1379,6 +1376,24 @@ export default function HomeScreen() {
       setCustomGender(currentGender);
     }
     setEditingSection('gender');
+  };
+
+  // Height is stored as 5'10"; the form starts from the saved height
+  const openHeightEditor = () => {
+    const match = (userData.height || '').match(/(\d+)\D+(\d+)/);
+    setHeightFeet(match ? match[1] : '');
+    setHeightInches(match ? match[2] : '');
+    setEditingSection('height');
+  };
+  const saveHeight = async () => {
+    const feet = parseInt(heightFeet, 10);
+    const inches = parseInt(heightInches, 10);
+    if (!/^\d+$/.test(heightFeet.trim()) || !/^\d+$/.test(heightInches.trim()) || feet < 3 || feet > 8 || inches < 0 || inches > 11) {
+      Alert.alert('Check the height', 'Enter feet from 3 to 8, and inches from 0 to 11.');
+      return;
+    }
+    await patchUserData({ height: `${feet}'${inches}"` });
+    setEditingSection(null);
   };
 
   const openSimpleEdit = (section: string) => {
@@ -1445,7 +1460,7 @@ export default function HomeScreen() {
               icon="human-male-height"
               label="Height"
               value={userData.height?.includes("'") ? userData.height : (userData.height ? `${userData.height.replace(/\s/g, "'")}"` : '0\'0"')}
-              onPress={() => openSimpleEdit('height')}
+              onPress={openHeightEditor}
             />
 
             <View style={styles.divider} />
@@ -2333,14 +2348,11 @@ export default function HomeScreen() {
             <Text style={styles.epicEditTitle}>
               {addingReading === 'weight' ? 'Add a weight' : 'Add a blood pressure'}
             </Text>
-            <Text style={styles.epicEditLabel}>Date (MM/DD/YYYY)</Text>
-            <TextInput
-              style={styles.epicEditInput}
-              keyboardType="numbers-and-punctuation"
-              placeholder="e.g. 10/14/2026"
-              placeholderTextColor="#999"
-              value={newReadingDate}
-              onChangeText={setNewReadingDate}
+            <DateWheel
+              label="Date"
+              value={dateFromText(newReadingDate)}
+              onChange={(picked) => setNewReadingDate(textFromDate(picked))}
+              maximumDate={new Date()}
             />
 
             {addingReading === 'weight' ? (
@@ -2430,61 +2442,12 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.modalContent}>
-            <View style={styles.datePickerContainer}>
-              {/* Month Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Month</Text>
-                <ScrollView style={styles.picker} scrollEnabled>
-                  {['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'].map((month, idx) => (
-                    <TouchableOpacity
-                      key={month}
-                      style={[styles.pickerOption, selectedBirthdayMonth === idx && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedBirthdayMonth(idx)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedBirthdayMonth === idx && styles.pickerOptionTextSelected]}>
-                        {month}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Day Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Day</Text>
-                <ScrollView style={styles.picker} scrollEnabled>
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
-                    <TouchableOpacity
-                      key={day}
-                      style={[styles.pickerOption, selectedBirthdayDay === day && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedBirthdayDay(day)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedBirthdayDay === day && styles.pickerOptionTextSelected]}>
-                        {day}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Year Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Year</Text>
-                <ScrollView style={styles.picker} scrollEnabled>
-                  {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map((year) => (
-                    <TouchableOpacity
-                      key={year}
-                      style={[styles.pickerOption, selectedBirthdayYear === year && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedBirthdayYear(year)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedBirthdayYear === year && styles.pickerOptionTextSelected]}>
-                        {year}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            </View>
+            <DateWheel
+              label="Birthday"
+              value={birthdayPick}
+              onChange={setBirthdayPick}
+              maximumDate={new Date()}
+            />
 
             <View style={styles.buttonContainer}>
               <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
@@ -2494,7 +2457,7 @@ export default function HomeScreen() {
                 style={styles.saveButton}
                 onPress={() => {
                   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-                  const formattedBirthday = `${months[selectedBirthdayMonth]} ${selectedBirthdayDay}, ${selectedBirthdayYear}`;
+                  const formattedBirthday = `${months[birthdayPick.getMonth()]} ${birthdayPick.getDate()}, ${birthdayPick.getFullYear()}`;
                   patchUserData({ birthday: formattedBirthday });
                   setEditingSection(null);
                 }}
@@ -2649,67 +2612,22 @@ export default function HomeScreen() {
       </Modal>
 
       {/* Height Modal */}
-      <Modal visible={editingSection === 'height'} animationType="slide" onRequestClose={handleCancel}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select Height</Text>
-            <TouchableOpacity onPress={handleCancel}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.datePickerContent}>
-            <View style={styles.pickerRow}>
-              {/* Feet Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Feet</Text>
-                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                  {Array.from({ length: 4 }, (_, i) => i + 4).map((foot) => (
-                    <TouchableOpacity
-                      key={foot}
-                      style={[styles.pickerOption, selectedFeet === foot && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedFeet(foot)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedFeet === foot && styles.pickerOptionTextSelected]}>
-                        {foot}'
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* Inches Picker */}
-              <View style={styles.pickerColumn}>
-                <Text style={styles.pickerLabel}>Inches</Text>
-                <ScrollView style={styles.scrollPicker} showsVerticalScrollIndicator={false}>
-                  {Array.from({ length: 12 }, (_, i) => i).map((inch) => (
-                    <TouchableOpacity
-                      key={inch}
-                      style={[styles.pickerOption, selectedInches === inch && styles.pickerOptionSelected]}
-                      onPress={() => setSelectedInches(inch)}
-                    >
-                      <Text style={[styles.pickerOptionText, selectedInches === inch && styles.pickerOptionTextSelected]}>
-                        {inch}"
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.datePickerDoneButton}
-              onPress={async () => {
-                const updatedData = { ...editData, height: `${selectedFeet}'${selectedInches}"` };
-                setEditData(updatedData);
-                await patchUserData({ height: updatedData.height });
-                setEditingSection(null);
-              }}
-            >
-              <Text style={styles.datePickerDoneButtonText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      <FieldFormEditor
+        visible={editingSection === 'height'}
+        title="height"
+        isEditing
+        fields={[
+          { key: 'feet', label: 'Feet', placeholder: 'e.g. 5', keyboardType: 'number-pad' },
+          { key: 'inches', label: 'Inches', placeholder: 'e.g. 10', keyboardType: 'number-pad' },
+        ]}
+        values={{ feet: heightFeet, inches: heightInches }}
+        onChange={(key, value) => {
+          if (key === 'feet') setHeightFeet(value.replace(/\D/g, '').slice(0, 1));
+          else setHeightInches(value.replace(/\D/g, '').slice(0, 2));
+        }}
+        onSave={saveHeight}
+        onCancel={handleCancel}
+      />
 
       {/* Weight Modal */}
       <Modal visible={editingSection === 'weight'} animationType="slide" onRequestClose={handleCancel}>

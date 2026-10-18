@@ -1,6 +1,7 @@
 // Shows parsed entries as a list to check before anything is saved. Tap an entry to change its fields inline.
 // Used by Quick Log and by the review of an uploaded summary.
 import React, { useState } from 'react';
+import DateWheel, { dateFromText, textFromDate } from '@/components/DateWheel';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LogEntry, describeEntry, savableEntries } from '@/services/quickLog';
@@ -247,14 +248,20 @@ function EntryEditor({
                       })}
                     </View>
                   ) : (
-                    <TextInput
-                      style={styles.fieldInput}
-                      value={texts[key] ?? ''}
-                      onChangeText={(value) => setTexts((current) => ({ ...current, [key]: value }))}
-                      placeholder={field.kind === 'date' ? 'MM/DD/YYYY' : undefined}
-                      placeholderTextColor="#999"
-                      keyboardType={field.kind === 'number' ? 'decimal-pad' : field.kind === 'date' ? 'numbers-and-punctuation' : 'default'}
-                    />
+                    field.kind === 'date' ? (
+                      <DateWheel
+                        value={dateFromText(texts[key] ?? '')}
+                        onChange={(picked) => setTexts((current) => ({ ...current, [key]: textFromDate(picked) }))}
+                      />
+                    ) : (
+                      <TextInput
+                        style={styles.fieldInput}
+                        value={texts[key] ?? ''}
+                        onChangeText={(value) => setTexts((current) => ({ ...current, [key]: value }))}
+                        placeholderTextColor="#999"
+                        keyboardType={field.kind === 'number' ? 'decimal-pad' : 'default'}
+                      />
+                    )
                   )}
                 </View>
               </React.Fragment>

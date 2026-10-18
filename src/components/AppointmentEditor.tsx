@@ -97,7 +97,7 @@ export default function AppointmentEditor({
             <DateTimePicker
               value={date}
               mode="date"
-              display="spinner"
+              display="spinner" textColor="#000"
               onChange={(_, picked) => picked && onChange({ date: new Date(picked.getFullYear(), picked.getMonth(), picked.getDate()) })}
             />
           )}
@@ -109,7 +109,7 @@ export default function AppointmentEditor({
             </Text>
           </TouchableOpacity>
           {open === 'time' && (
-            <DateTimePicker value={time} mode="time" display="spinner" onChange={(_, picked) => picked && onChange({ time: picked })} />
+            <DateTimePicker value={time} mode="time" display="spinner" textColor="#000" onChange={(_, picked) => picked && onChange({ time: picked })} />
           )}
 
           {isEditing && onDelete && (
