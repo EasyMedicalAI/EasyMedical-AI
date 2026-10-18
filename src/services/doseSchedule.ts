@@ -94,3 +94,19 @@ export function monthCells(year: number, month: number): (string | null)[] {
   for (let day = 1; day <= days; day++) cells.push(dateKey(new Date(year, month, day)));
   return cells;
 }
+
+// Reminder times to start with when a label says how many doses a day but not the times
+export function defaultTimes(timesPerDay: number): string[] {
+  switch (timesPerDay) {
+    case 1:
+      return ['08:00'];
+    case 2:
+      return ['08:00', '18:00'];
+    case 3:
+      return ['08:00', '13:00', '18:00'];
+    case 4:
+      return ['08:00', '12:00', '16:00', '20:00'];
+    default:
+      return [];
+  }
+}

@@ -18,11 +18,13 @@ import { useRouter } from 'expo-router';
 import WearableVitals from '@/components/WearableVitals';
 import LifestyleCard from '@/components/LifestyleCard';
 import { claudeService, convertHeicToJpeg } from '@/services/claudeService';
+import { cameraService } from '@/services/cameraService';
 import { ehrService, Medication, Appointment, Observation, Allergy, Condition, EpicOverride } from '@/services/ehrService';
 import LabTrendChart from '@/components/LabTrendChart';
 import QuickLogBox from '@/components/QuickLogBox';
 import MedicationCalendar from '@/components/MedicationCalendar';
-import { nextDoseLabel, parseTime, formatTime } from '@/services/doseSchedule';
+import { nextDoseLabel, parseTime, formatTime, defaultTimes } from '@/services/doseSchedule';
+import MedicationLabelReview, { MedicationDraft } from '@/components/MedicationLabelReview';
 import { Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { rowIconSize } from '@/components/rowIcons';
@@ -221,7 +223,8 @@ export default function HomeScreen() {
   const [editingVaccineId, setEditingVaccineId] = useState<number | null>(null);
   const [showVaccineModal, setShowVaccineModal] = useState(false);
   const [selectedRecommendedVaccine, setSelectedRecommendedVaccine] = useState<string>('');
-  const [medicationInputMode, setMedicationInputMode] = useState<'method' | 'text' | 'photo' | null>(null);
+  const [medicationInputMode, setMedicationInputMode] = useState<'method' | 'text' | 'photo' | 'label-review' | null>(null);
+  const [labelDraft, setLabelDraft] = useState<MedicationDraft | null>(null);
   const [medicationType, setMedicationType] = useState<'prescription' | 'otc' | null>(null);
   const [medicationInputText, setMedicationInputText] = useState('');
   const [medicationPhotoUri, setMedicationPhotoUri] = useState<string | null>(null);
@@ -856,101 +859,61 @@ export default function HomeScreen() {
   };
 
   const handleMedicationPhotoSubmit = async () => {
-    if (!medicationPhotoUri || !medicationType) {
+    if (!medicationPhotoUri) {
       Alert.alert('Error', 'Please select a photo');
       return;
     }
 
     setAnalyzingMedication(true);
     try {
-      // Convert HEIC images to JPEG if needed
       let imageUri = medicationPhotoUri;
-      const needsConversion =
-        medicationPhotoMediaType.includes('heic') ||
-        medicationPhotoMediaType.includes('heif');
-
-      if (needsConversion) {
-        console.log(`🔄 Converting image (type: ${medicationPhotoMediaType}) from ${medicationPhotoUri} to JPEG...`);
+      if (medicationPhotoMediaType.includes('heic') || medicationPhotoMediaType.includes('heif')) {
         imageUri = await convertHeicToJpeg(medicationPhotoUri);
-        console.log(`✓ Conversion complete. New URI: ${imageUri}`);
-      } else {
-        console.log(`📷 Using image as-is (type: ${medicationPhotoMediaType})`);
       }
+      const base64 = await FileSystem.readAsStringAsync(imageUri, { encoding: FileSystem.EncodingType.Base64 });
+      const result = await cameraService.analyzeMedicationLabel([base64]);
+      if (!result.success) throw new Error(result.error || 'Could not read the label');
 
-      // Convert photo to base64 for analysis
-      console.log(`📊 Reading image as base64 from: ${imageUri}`);
-      const base64 = await FileSystem.readAsStringAsync(imageUri, {
-        encoding: FileSystem.EncodingType.Base64,
+      const label = result.data;
+      setLabelDraft({
+        name: label.name,
+        dose: label.dose,
+        howOften: label.howOften,
+        reminderTimes: label.reminderTimes.length > 0 ? label.reminderTimes : defaultTimes(label.timesPerDay),
+        isOtc: label.isOtc,
+        notes: label.notes,
+        confidence: label.confidence,
       });
-      console.log(`✓ Base64 read successful. Length: ${base64.length} characters`);
-
-      // Analyze the medication bottle using Claude vision
-      console.log(`🤖 Sending to Claude API (image/jpeg format)...`);
-      const analysis = await claudeService.parseRecordFromImage(base64, 'temp-id', 'image/jpeg');
-      console.log(`✓ Claude analysis complete`);
-
-      // Extract medication details from analysis
-      let medicationEntry = `Medication from bottle photo`;
-
-      if (analysis.medicationDetails) {
-        const { name, dosage, frequency } = analysis.medicationDetails;
-        medicationEntry = `${name} ${dosage} - ${frequency}`;
-        console.log('Medication details extracted:', { name, dosage, frequency, medicationEntry });
-      } else if (analysis.reasonForVisit) {
-        medicationEntry = analysis.reasonForVisit;
-        console.log('Using reasonForVisit:', medicationEntry);
-      }
-      console.log('Final medication entry:', medicationEntry);
-
-      // Ask for confirmation before adding
-      Alert.alert(
-        'Confirm Medication',
-        `Add this ${medicationType} medication?\n\n${medicationEntry}`,
-        [
-          {
-            text: 'Cancel',
-            onPress: () => {
-              setAnalyzingMedication(false);
-            },
-            style: 'cancel',
-          },
-          {
-            text: 'Confirm',
-            onPress: async () => {
-              try {
-                if (medicationType === 'prescription') {
-                  const updatedData = {
-                    ...editData,
-                    prescriptionMedications: [...(editData.prescriptionMedications || []), medicationEntry]
-                  };
-                  setEditData(updatedData);
-                  await patchUserData({ prescriptionMedications: updatedData.prescriptionMedications });
-                } else {
-                  const updatedData = {
-                    ...editData,
-                    otcMedications: [...(editData.otcMedications || []), medicationEntry]
-                  };
-                  setEditData(updatedData);
-                  await patchUserData({ otcMedications: updatedData.otcMedications });
-                }
-
-                setMedicationInputMode(null);
-                setMedicationType(null);
-                setMedicationPhotoUri(null);
-                Alert.alert('Success', 'Medication added successfully!');
-              } catch (error) {
-                Alert.alert('Error', 'Failed to add medication: ' + String(error));
-              } finally {
-                setAnalyzingMedication(false);
-              }
-            },
-          },
-        ]
-      );
+      setMedicationInputMode('label-review');
     } catch (error) {
-      Alert.alert('Error', 'Failed to analyze medication photo: ' + String(error));
+      Alert.alert('Could not read that label', error instanceof Error ? error.message : String(error));
+    } finally {
       setAnalyzingMedication(false);
     }
+  };
+
+  // Saves a checked label: the name joins the list, and its dose, how often, and reminder times are kept
+  const saveLabelDraft = async (draft: MedicationDraft) => {
+    const key = draft.isOtc ? 'otcMedications' : 'prescriptionMedications';
+    const list = [...((userData as any)[key] || [])];
+    if (!list.some((n: string) => n.trim().toLowerCase() === draft.name.toLowerCase())) list.push(draft.name);
+
+    const history = [...(userData.medicationHistory || [])];
+    const fields = {
+      dose: draft.dose || undefined,
+      frequency: draft.howOften || undefined,
+      reminderTimes: draft.reminderTimes.length > 0 ? draft.reminderTimes : undefined,
+    };
+    const activeIdx = history.findIndex((m) => m.name.trim().toLowerCase() === draft.name.toLowerCase() && !m.endDate);
+    if (activeIdx >= 0) history[activeIdx] = { ...history[activeIdx], name: draft.name, ...fields };
+    else history.push({ name: draft.name, ...fields, startDate: new Date().toISOString() });
+
+    const patch: any = { medicationHistory: history };
+    patch[key] = list;
+    await patchUserData(patch);
+    setLabelDraft(null);
+    setMedicationPhotoUri(null);
+    setMedicationInputMode(null);
   };
 
   const handleMedicationTextSubmit = async () => {
@@ -4138,6 +4101,16 @@ export default function HomeScreen() {
               </>
             )}
 
+            {medicationInputMode === 'label-review' && labelDraft && (
+              <MedicationLabelReview
+                draft={labelDraft}
+                onSave={saveLabelDraft}
+                onCancel={() => {
+                  setLabelDraft(null);
+                  setMedicationInputMode('method');
+                }}
+              />
+            )}
             {medicationInputMode === 'photo' && medicationPhotoUri && (
               <>
                 <Text style={styles.label}>Preview Your Bottle</Text>
