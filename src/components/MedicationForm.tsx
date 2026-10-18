@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { dateFromKey, dateKey, formatTime, shiftDate } from '@/services/doseSchedule';
 import { UserHealthData } from '@/types/medical';
 
@@ -116,12 +115,17 @@ export default function MedicationForm({
         <Text style={styles.inputText}>{value.startDate ? formatDate(value.startDate) : 'Not set'}</Text>
       </TouchableOpacity>
       {isOpen({ kind: 'start' }) && (
-        <DateTimePicker
+        <>
+                <DateTimePicker
           value={value.startDate ?? today}
           mode="date"
           display="spinner" textColor="#000"
           onChange={(_, date) => date && onChange({ startDate: startOfDay(date) })}
         />
+              <TouchableOpacity style={styles.wheelDone} onPress={() => setOpen(null)}>
+                <Text style={styles.wheelDoneText}>Done</Text>
+              </TouchableOpacity>
+                </>
       )}
 
       <Text style={styles.label}>
@@ -143,36 +147,31 @@ export default function MedicationForm({
         </TouchableOpacity>
       )}
       {isOpen({ kind: 'end' }) && (
-        <DateTimePicker
+        <>
+                <DateTimePicker
           value={value.endDate ?? shiftDateObject(value.startDate ?? today, 30)}
           mode="date"
           display="spinner" textColor="#000"
           minimumDate={value.startDate ?? today}
           onChange={(_, date) => date && onChange({ endDate: startOfDay(date) })}
         />
+              <TouchableOpacity style={styles.wheelDone} onPress={() => setOpen(null)}>
+                <Text style={styles.wheelDoneText}>Done</Text>
+              </TouchableOpacity>
+                </>
       )}
 
-      <View style={styles.headerRow}>
-        <Text style={styles.label}>REMINDER TIMES</Text>
-        <TouchableOpacity
-          onPress={() => {
-            setNewTime('08:00');
-            toggle({ kind: 'time', index: null });
-          }}
-        >
-          <Text style={styles.addLink}>+ Add</Text>
-        </TouchableOpacity>
-      </View>
       {value.times.length === 0 && <Text style={styles.hint}>No reminders yet. Add a time to be reminded.</Text>}
       {value.times.map((time, index) => (
         <View key={index}>
-          <TouchableOpacity style={styles.timeRow} onPress={() => toggle({ kind: 'time', index })}>
+          <Text style={styles.label}>REMINDER TIME</Text>
+          <TouchableOpacity style={styles.input} onPress={() => toggle({ kind: 'time', index })}>
             <Text style={styles.inputText}>{formatTime(time)}</Text>
-            <MaterialCommunityIcons name="chevron-right" size={20} color="#C7C7CC" />
           </TouchableOpacity>
           {isOpen({ kind: 'time', index }) && (
             <>
-              <DateTimePicker
+              <>
+                <DateTimePicker
                 value={toDate(time)}
                 mode="time"
                 display="spinner" textColor="#000"
@@ -180,6 +179,10 @@ export default function MedicationForm({
                   date && onChange({ times: value.times.map((t, i) => (i === index ? toTime(date) : t)) })
                 }
               />
+              <TouchableOpacity style={styles.wheelDone} onPress={() => setOpen(null)}>
+                <Text style={styles.wheelDoneText}>Done</Text>
+              </TouchableOpacity>
+                </>
               <TouchableOpacity
                 onPress={() => {
                   onChange({ times: value.times.filter((_, i) => i !== index) });
@@ -192,14 +195,27 @@ export default function MedicationForm({
           )}
         </View>
       ))}
+      <TouchableOpacity
+        onPress={() => {
+          setNewTime('08:00');
+          toggle({ kind: 'time', index: null });
+        }}
+      >
+        <Text style={styles.addLink}>+ Add reminder time</Text>
+      </TouchableOpacity>
       {isOpen({ kind: 'time', index: null }) && (
         <>
-          <DateTimePicker
+          <>
+                <DateTimePicker
             value={toDate(newTime)}
             mode="time"
             display="spinner" textColor="#000"
             onChange={(_, date) => date && setNewTime(toTime(date))}
           />
+              <TouchableOpacity style={styles.wheelDone} onPress={() => setOpen(null)}>
+                <Text style={styles.wheelDoneText}>Done</Text>
+              </TouchableOpacity>
+                </>
           <TouchableOpacity
             onPress={() => {
               if (!value.times.includes(newTime)) onChange({ times: [...value.times, newTime].sort() });
@@ -244,6 +260,8 @@ function shiftDateObject(d: Date, days: number): Date {
 }
 
 const styles = StyleSheet.create({
+  wheelDone: { alignSelf: 'flex-end', paddingVertical: 8, paddingHorizontal: 4, marginTop: 4 },
+  wheelDoneText: { fontSize: 17, color: '#007AFF', fontWeight: '600' },
   label: {
     fontSize: 12,
     fontWeight: '600',
@@ -290,13 +308,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   timeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     backgroundColor: '#F2F2F7',
     borderRadius: 12,
     paddingHorizontal: 14,
     minHeight: 50,
+    justifyContent: 'center',
     marginBottom: 8,
   },
   link: {
