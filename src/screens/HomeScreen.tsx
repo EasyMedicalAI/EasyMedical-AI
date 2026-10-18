@@ -21,6 +21,8 @@ import { claudeService, convertHeicToJpeg } from '@/services/claudeService';
 import { ehrService, Medication, Appointment, Observation, Allergy, Condition, EpicOverride } from '@/services/ehrService';
 import LabTrendChart from '@/components/LabTrendChart';
 import QuickLogBox from '@/components/QuickLogBox';
+import MedicationCalendar from '@/components/MedicationCalendar';
+import { nextDoseLabel, parseTime, formatTime } from '@/services/doseSchedule';
 import { Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { rowIconSize } from '@/components/rowIcons';
@@ -195,6 +197,9 @@ export default function HomeScreen() {
   const [pendingMedEdit, setPendingMedEdit] = useState<{ kind: 'prescription' | 'otc'; index: number } | null>(null);
   const [medEditName, setMedEditName] = useState('');
   const [medEditDose, setMedEditDose] = useState('');
+  const [medsTab, setMedsTab] = useState<'list' | 'calendar'>('list');
+  const [medEditTimes, setMedEditTimes] = useState<string[]>([]);
+  const [medEditTimeText, setMedEditTimeText] = useState('');
   const [medEditFrequency, setMedEditFrequency] = useState('');
   const [addingOtcMed, setAddingOtcMed] = useState(false);
   const [newOtcMed, setNewOtcMed] = useState('');
@@ -1105,15 +1110,26 @@ export default function HomeScreen() {
   // Dose and how often, from the active entry for a medication
   const medicationDetail = (name: string) => {
     const active = (userData.medicationHistory || []).find((m) => m.name === name && !m.endDate);
-    return active ? [active.dose, active.frequency].filter(Boolean).join(' · ') : '';
+    return active ? [active.dose, active.frequency, nextDoseLabel(userData, name)].filter(Boolean).join(' · ') : '';
   };
   const medListKey = (kind: 'prescription' | 'otc') => (kind === 'prescription' ? 'prescriptionMedications' : 'otcMedications');
+  const addMedEditTime = () => {
+    const time = parseTime(medEditTimeText);
+    if (!time) {
+      Alert.alert('Check the time', 'Enter a time such as 8:00 AM.');
+      return;
+    }
+    setMedEditTimes((current) => (current.includes(time) ? current : [...current, time].sort()));
+    setMedEditTimeText('');
+  };
   const openMedEdit = (kind: 'prescription' | 'otc', index: number) => {
     const name = ((userData as any)[medListKey(kind)] || [])[index] ?? '';
     const active = (userData.medicationHistory || []).find((m) => m.name === name && !m.endDate);
     setMedEditName(name);
     setMedEditDose(active?.dose || '');
     setMedEditFrequency(active?.frequency || '');
+    setMedEditTimes([...(active?.reminderTimes || [])].sort());
+    setMedEditTimeText('');
     setEditingMed({ kind, index });
   };
   const saveMedEdit = async () => {
@@ -1131,10 +1147,11 @@ export default function HomeScreen() {
     const details = {
       dose: medEditDose.trim() || undefined,
       frequency: medEditFrequency.trim() || undefined,
+      reminderTimes: medEditTimes.length > 0 ? medEditTimes : undefined,
     };
     const activeIdx = history.findIndex((m) => m.name === oldName && !m.endDate);
     if (activeIdx >= 0) history[activeIdx] = { ...history[activeIdx], name: newName, ...details };
-    else if (details.dose || details.frequency) history.push({ name: newName, ...details });
+    else if (details.dose || details.frequency || details.reminderTimes) history.push({ name: newName, ...details });
     const patch: any = { medicationHistory: history };
     patch[key] = list;
     await patchUserData(patch);
@@ -1429,6 +1446,16 @@ export default function HomeScreen() {
           }
         }}
       >
+        <View style={styles.medsTabs}>
+          <TouchableOpacity style={[styles.medsTab, medsTab === 'list' && styles.medsTabActive]} onPress={() => setMedsTab('list')}>
+            <Text style={[styles.medsTabText, medsTab === 'list' && styles.medsTabTextActive]}>List</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.medsTab, medsTab === 'calendar' && styles.medsTabActive]} onPress={() => setMedsTab('calendar')}>
+            <Text style={[styles.medsTabText, medsTab === 'calendar' && styles.medsTabTextActive]}>Calendar</Text>
+          </TouchableOpacity>
+        </View>
+        {medsTab === 'list' && (
+          <>
         <View style={styles.section}>
           <View style={styles.card}>
             {/* Prescription Medications */}
@@ -1550,6 +1577,15 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+          </>
+        )}
+        {medsTab === 'calendar' && (
+          <View style={styles.section}>
+            <View style={styles.card}>
+              <MedicationCalendar userData={userData} onChangeDoseLog={(log) => patchUserData({ doseLog: log })} />
+            </View>
+          </View>
+        )}
       </DetailModal>
 
       <DetailModal visible={openPage === 'conditions'} title="Conditions" onClose={closeDetail}>
@@ -2495,6 +2531,36 @@ export default function HomeScreen() {
             <View style={styles.medField}>
               <Text style={styles.medFieldLabel}>How often</Text>
               <TextInput style={styles.medFieldInput} value={medEditFrequency} onChangeText={setMedEditFrequency} placeholder="e.g. twice a day" placeholderTextColor="#999" />
+            </View>
+          </ListCard>
+        </Section>
+
+        <Section title="Reminder times">
+          <ListCard>
+            <View style={styles.medTimes}>
+              {medEditTimes.length === 0 && <Text style={styles.medTimesEmpty}>No reminders yet.</Text>}
+              {medEditTimes.map((time) => (
+                <TouchableOpacity
+                  key={time}
+                  style={styles.timeChip}
+                  onPress={() => setMedEditTimes((current) => current.filter((t) => t !== time))}
+                >
+                  <Text style={styles.timeChipText}>{formatTime(time)}  ×</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Divider />
+            <View style={styles.timeAddRow}>
+              <TextInput
+                style={styles.timeInput}
+                value={medEditTimeText}
+                onChangeText={setMedEditTimeText}
+                placeholder="e.g. 8:00 AM"
+                placeholderTextColor="#999"
+              />
+              <TouchableOpacity style={styles.timeAddButton} onPress={addMedEditTime}>
+                <Text style={styles.timeAddText}>Add</Text>
+              </TouchableOpacity>
             </View>
           </ListCard>
         </Section>
@@ -4632,6 +4698,76 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     marginTop: 2,
+  },
+  medsTabs: {
+    flexDirection: 'row',
+    backgroundColor: '#EFEFF4',
+    borderRadius: 10,
+    padding: 3,
+    marginHorizontal: 20,
+    marginBottom: 16,
+  },
+  medsTab: {
+    flex: 1,
+    paddingVertical: 7,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  medsTabActive: {
+    backgroundColor: '#FFF',
+  },
+  medsTabText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  medsTabTextActive: {
+    color: '#000',
+    fontWeight: '600',
+  },
+  medTimes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingVertical: 10,
+  },
+  medTimesEmpty: {
+    fontSize: 13,
+    color: '#666',
+  },
+  timeChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#E8F1FF',
+  },
+  timeChipText: {
+    fontSize: 13,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  timeAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+  },
+  timeInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#000',
+    paddingVertical: 6,
+  },
+  timeAddButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: '#007AFF',
+  },
+  timeAddText: {
+    color: '#FFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
   medField: {
     paddingVertical: 12,

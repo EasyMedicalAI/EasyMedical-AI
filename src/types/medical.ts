@@ -66,7 +66,9 @@ export interface UserHealthData {
   mealHistory?: { date: string; description: string; mealType?: string; tags?: string[] }[];
   drinkHistory?: { date: string; kind: 'water' | 'coffee' | 'alcohol' | 'sugary' }[];
   dietProfile?: string[];
-  medicationHistory?: { name: string; dose?: string; frequency?: string; instructions?: string; startDate?: string; endDate?: string; source?: 'epic' }[];
+  medicationHistory?: { name: string; dose?: string; frequency?: string; instructions?: string; startDate?: string; endDate?: string; source?: 'epic'; reminderTimes?: string[] }[];
+  // Taken doses: key "date|medication|HH:MM" -> when it was marked taken
+  doseLog?: Record<string, string>;
   conditions?: string[];
   allergies?: string[];
   medications?: string[];
