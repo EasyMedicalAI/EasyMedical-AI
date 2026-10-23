@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DateWheel, { dateFromText, textFromDate } from '@/components/DateWheel';
+import FindDoctor from '@/components/FindDoctor';
+import InsuranceScan, { CardDetails } from '@/components/InsuranceScan';
 import {
   ScrollView,
   View,
@@ -170,6 +172,8 @@ export default function HomeScreen() {
   const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
   const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
   const [editingEmergencyContactId, setEditingEmergencyContactId] = useState<number | null>(null);
+  const [insuranceScanOpen, setInsuranceScanOpen] = useState(false);
+  const [insuranceManualNext, setInsuranceManualNext] = useState(false);
   const [pharmacyName, setPharmacyName] = useState('');
   const [pharmacyAddress, setPharmacyAddress] = useState('');
   const [pharmacyPhone, setPharmacyPhone] = useState('');
@@ -345,6 +349,18 @@ export default function HomeScreen() {
     openEditorFromPage(() => setEditingSection('emergency'));
   };
 
+  // Opens the card scan once the Insurance page has closed
+  const openInsuranceScan = () => openEditorFromPage(() => setInsuranceScanOpen(true));
+  // Adds a plan read from a card
+  const saveScannedInsurance = async (card: CardDetails) => {
+    await patchUserData({
+      insurances: [
+        ...(userData.insurances || []),
+        { provider: card.provider, memberId: card.memberId, groupNumber: card.groupNumber || undefined, plan: card.plan || undefined, payerPhone: card.payerPhone || undefined },
+      ],
+    });
+    setInsuranceScanOpen(false);
+  };
   // Opens the insurance editor once the Insurance page has closed
   const openInsuranceEditor = (index: number | null) => {
     const item = index !== null ? (userData.insurances || [])[index] : undefined;
@@ -858,7 +874,7 @@ export default function HomeScreen() {
           // Update existing insurance
           updatedInsurances = (editData.insurances || []).map((insurance, idx) =>
             idx === editingInsuranceId
-              ? { provider: insuranceProvider, memberId: insuranceMemberId, groupNumber: insuranceGroupNumber }
+              ? { ...insurance, provider: insuranceProvider, memberId: insuranceMemberId, groupNumber: insuranceGroupNumber }
               : insurance
           );
           setEditingInsuranceId(null);
@@ -1531,6 +1547,8 @@ export default function HomeScreen() {
           <View style={styles.listCard}>
             <VitalRow icon="calendar-outline" label="Appointments" value={appointmentValue} onPress={() => setOpenPage('appointments')} />
             <View style={styles.divider} />
+            <VitalRow icon="doctor" label="Find a doctor" value="" onPress={() => setOpenPage('find-doctor')} />
+            <View style={styles.divider} />
             <VitalRow icon="needle" label="Vaccines" value={vaccinesValue} onPress={() => setOpenPage('vaccines')} />
             <View style={styles.divider} />
             <VitalRow icon="clipboard-pulse-outline" label="Screenings" value={screeningsValue} onPress={() => setOpenPage('screenings')} />
@@ -1771,6 +1789,14 @@ export default function HomeScreen() {
             {(userData.pastConditions || []).length + pastEpicConditions.length === 0 && <Text style={styles.emptyText}>No resolved conditions</Text>}
           </ListCard>
         </Section>
+      </DetailModal>
+
+      <DetailModal visible={openPage === 'find-doctor'} title="Find a doctor" onClose={closeDetail}>
+        <FindDoctor
+          plan={userData.insurances?.[0]?.provider || undefined}
+          planName={userData.insurances?.[0]?.plan}
+          payerPhone={userData.insurances?.[0]?.payerPhone}
+        />
       </DetailModal>
 
       <DetailModal visible={openPage === 'allergies'} title="Allergies" onClose={closeDetail} onDismiss={runPendingEditor}>
@@ -2158,14 +2184,16 @@ export default function HomeScreen() {
                 <ListRow
                   icon="card-account-details-outline"
                   label={insurance.provider}
-                  hint={[insurance.memberId && `Member ID ${insurance.memberId}`, insurance.groupNumber && `Group ${insurance.groupNumber}`].filter(Boolean).join(' · ') || undefined}
+                  hint={[insurance.plan, insurance.memberId && `Member ID ${insurance.memberId}`, insurance.groupNumber && `Group ${insurance.groupNumber}`].filter(Boolean).join(' · ') || undefined}
                   onPress={() => openInsuranceEditor(idx)}
                 />
               </React.Fragment>
             ))}
-            {(userData.insurances || []).length === 0 && <Text style={styles.emptyText}>No insurance added</Text>}
+            {(userData.insurances || []).length === 0 && <Text style={styles.emptyText}>Scan your insurance card to add your plan</Text>}
             {(userData.insurances || []).length > 0 && <Divider />}
-            <ListRow icon="plus-circle-outline" label="Add insurance" onPress={() => openInsuranceEditor(null)} />
+            <ListRow icon="card-account-details-outline" label="Scan insurance card" onPress={openInsuranceScan} />
+            <Divider />
+            <ListRow icon="pencil-outline" label="Enter details by hand" onPress={() => openInsuranceEditor(null)} />
           </ListCard>
         </Section>
       </DetailModal>
@@ -3039,6 +3067,27 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      <InsuranceScan
+        visible={insuranceScanOpen}
+        onClose={() => setInsuranceScanOpen(false)}
+        onEnterByHand={() => {
+          setInsuranceScanOpen(false);
+          setInsuranceManualNext(true);
+        }}
+        onSave={saveScannedInsurance}
+        onDismiss={() => {
+          // Entering by hand opens the editor once the scan screen has closed
+          if (!insuranceManualNext) return;
+          setInsuranceManualNext(false);
+          setEditData(userData);
+          setEditingInsuranceId(null);
+          setInsuranceProvider('');
+          setInsuranceMemberId('');
+          setInsuranceGroupNumber('');
+          setEditingSection('insurance');
+        }}
+      />
 
       <InsuranceEditor
         visible={editingSection === 'insurance'}

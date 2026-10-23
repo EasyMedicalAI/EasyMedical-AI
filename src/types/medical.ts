@@ -96,7 +96,7 @@ export interface UserHealthData {
     memberId: string;
     groupNumber?: string;
   };
-  insurances?: { provider: string; memberId: string; groupNumber?: string }[];
+  insurances?: { provider: string; memberId: string; groupNumber?: string; plan?: string; payerPhone?: string }[];
   birthday?: string;
   gender?: string;
   prescriptionMedications?: string[];
