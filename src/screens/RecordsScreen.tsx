@@ -916,8 +916,6 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
     <>
     <ScrollView style={styles.container}>
       <ScreenHeader title="Records" action={{ label: 'Upload a record', onPress: () => setUploadingSpecialty('') }} />
-      <Text style={styles.headerSubtitle}>{specialties.length} specialties available</Text>
-
       {/* My Records Section */}
       <View style={styles.myRecordsSection}>
         <Text style={styles.sectionTitle}>My records</Text>
