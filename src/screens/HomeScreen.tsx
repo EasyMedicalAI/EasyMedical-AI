@@ -35,8 +35,8 @@ import AppointmentQuickAdd from '@/components/AppointmentQuickAdd';
 import AppointmentEditor, { formatAppointmentDateTime, appointmentPartsFrom, defaultAppointmentTime } from '@/components/AppointmentEditor';
 import AppointmentReminderOptions from '@/components/AppointmentReminderOptions';
 import { appointmentMoment } from '@/services/reminders';
-import HealthHistoryEditor, { HistoryType, FAMILY_MEMBERS, formatHistoryDate, historyDateFrom } from '@/components/HealthHistoryEditor';
-import PregnancyEditor, { PregnancyFormValues, blankPregnancyForm, isBirthOutcome, isLossOutcome } from '@/components/PregnancyEditor';
+import MedicalHistoryForm, { HistoryDraft, blankHistoryDraft, FAMILY_MEMBERS, formatHistoryDate, historyDateFrom } from '@/components/MedicalHistoryForm';
+import { isBirthOutcome, isLossOutcome } from '@/components/PregnancyEditor';
 import InsuranceEditor from '@/components/InsuranceEditor';
 import FieldFormEditor from '@/components/FieldFormEditor';
 import { Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
@@ -184,16 +184,8 @@ export default function HomeScreen() {
   const [birthdayPick, setBirthdayPick] = useState<Date>(() => new Date(1990, 0, 1, 12));
   const [selectedGender, setSelectedGender] = useState('Other');
   const [customGender, setCustomGender] = useState('');
-  const [editingHistoryType, setEditingHistoryType] = useState<HistoryType | null>(null);
-  const [surgeryName, setSurgeryName] = useState('');
-  const [familyMember, setFamilyMember] = useState('');
-  const [familyMemberCustomMode, setFamilyMemberCustomMode] = useState(false);
-  const [familyCondition, setFamilyCondition] = useState('');
-  const [hospitalizationReason, setHospitalizationReason] = useState('');
-  const [editingIndex, setEditingIndex] = useState<number | null>(null);
-  const [historyDate, setHistoryDate] = useState<Date>(() => new Date());
-  const [editingPregnancy, setEditingPregnancy] = useState<{ index: number | null } | null>(null);
-  const [pregnancyForm, setPregnancyForm] = useState<PregnancyFormValues>(blankPregnancyForm());
+  const [openHistory, setOpenHistory] = useState<{ key: string } | null>(null);
+  const [historyDraft, setHistoryDraft] = useState<HistoryDraft>(blankHistoryDraft());
   const [addingPrescriptionMed, setAddingPrescriptionMed] = useState(false);
   const [newPrescriptionMed, setNewPrescriptionMed] = useState('');
   const [editingMed, setEditingMed] = useState<{ kind: 'prescription' | 'otc'; index: number } | null>(null);
@@ -446,71 +438,106 @@ export default function HomeScreen() {
     setOpenScreening(null);
   };
 
-  // Obstetric history: a summary from the pregnancy list, newest first
+  // Medical history: an entry's form opens inside its row. Rows are "surgery-<n>", "family-<n>", "hospital-<n>",
+  // "pregnancy-<n>", or "<kind>-new" for a new entry.
+  const familyGroups = Object.entries(
+    (userData.familyHistory || []).reduce<Record<string, { key: string; member: string; items: { condition: string; index: number }[] }>>((groups, item, index) => {
+      const key = item.familyMember.trim().toLowerCase();
+      if (!groups[key]) groups[key] = { key, member: item.familyMember, items: [] };
+      groups[key].items.push({ condition: item.condition, index });
+      return groups;
+    }, {})
+  ).map(([, group]) => group);
   const pregnancyList = (userData.pregnancies || [])
     .map((pregnancy, index) => ({ pregnancy, index }))
     .sort((a, b) => Number(b.pregnancy.year) - Number(a.pregnancy.year));
   const pregnancyCount = (userData.pregnancies || []).length;
   const birthCount = (userData.pregnancies || []).filter((p) => isBirthOutcome(p.outcome)).length;
   const lossCount = (userData.pregnancies || []).filter((p) => isLossOutcome(p.outcome)).length;
-  const openPregnancyEditor = (index: number | null) => {
-    const item = index !== null ? (userData.pregnancies || [])[index] : undefined;
-    setPregnancyForm(item ? { year: item.year, outcome: item.outcome, complications: [...item.complications] } : blankPregnancyForm());
-    openEditorFromPage(() => setEditingPregnancy({ index }));
-  };
-  const savePregnancy = async () => {
-    const year = pregnancyForm.year.trim();
-    const yearNumber = parseInt(year, 10);
-    if (!/^\d{4}$/.test(year) || yearNumber < 1900 || yearNumber > new Date().getFullYear()) {
-      Alert.alert('Check the year', 'Enter the four-digit year of the pregnancy.');
-      return;
+  // With no pregnancies recorded, the summary greys out; it still opens for adding
+  const obUnused = pregnancyCount === 0;
+
+  const patchHistoryDraft = (patch: Partial<HistoryDraft>) => setHistoryDraft((draft) => ({ ...draft, ...patch }));
+  const closeHistory = () => setOpenHistory(null);
+
+  // Opens the entry's form under its row, or closes it if it's already open
+  const startHistory = (kind: 'surgery' | 'family' | 'hospital' | 'pregnancy', index: number | null) => {
+    const key = `${kind}-${index === null ? 'new' : index}`;
+    if (openHistory?.key === key) return setOpenHistory(null);
+    let values = blankHistoryDraft();
+    if (index !== null && kind === 'surgery') {
+      const item = (userData.surgicalHistory || [])[index];
+      values = { ...values, name: item.surgeryName, date: historyDateFrom(item.date) };
+    } else if (index !== null && kind === 'hospital') {
+      const item = (userData.hospitalizations || [])[index];
+      values = { ...values, name: item.reason, date: historyDateFrom(item.date) };
+    } else if (index !== null && kind === 'family') {
+      const item = (userData.familyHistory || [])[index];
+      values = { ...values, member: item.familyMember, customMember: !FAMILY_MEMBERS.includes(item.familyMember), condition: item.condition };
+    } else if (index !== null && kind === 'pregnancy') {
+      const item = (userData.pregnancies || [])[index];
+      values = { ...values, year: item.year, outcome: item.outcome, complications: [...item.complications] };
     }
-    if (!pregnancyForm.outcome) {
-      Alert.alert('Choose how it ended', 'Pick one of the options.');
-      return;
-    }
-    const entry = { year, outcome: pregnancyForm.outcome, complications: pregnancyForm.complications };
-    const list = [...(userData.pregnancies || [])];
-    if (editingPregnancy?.index != null) list[editingPregnancy.index] = entry;
-    else list.push(entry);
-    await patchUserData({ pregnancies: list });
-    setEditingPregnancy(null);
-  };
-  const deletePregnancy = async () => {
-    if (editingPregnancy?.index == null) return;
-    const list = (userData.pregnancies || []).filter((_, i) => i !== editingPregnancy.index);
-    await patchUserData({ pregnancies: list });
-    setEditingPregnancy(null);
+    setHistoryDraft(values);
+    setOpenHistory({ key });
   };
 
-  // Opens the medical history editor once the Medical history page has closed
-  const openHistoryEditor = (kind: HistoryType, index: number | null) => {
-    setEditData(userData);
-    setEditingIndex(index);
-    setSurgeryName('');
-    setHospitalizationReason('');
-    setFamilyMember('');
-    setFamilyMemberCustomMode(false);
-    setFamilyCondition('');
-    setHistoryDate(new Date());
-    if (index !== null) {
-      if (kind === 'surgical') {
-        const item = userData.surgicalHistory?.[index];
-        setSurgeryName(item?.surgeryName || '');
-        setHistoryDate(historyDateFrom(item?.date));
-      } else if (kind === 'hospitalization') {
-        const item = userData.hospitalizations?.[index];
-        setHospitalizationReason(item?.reason || '');
-        setHistoryDate(historyDateFrom(item?.date));
-      } else {
-        const item = userData.familyHistory?.[index];
-        setFamilyMember(item?.familyMember || '');
-        setFamilyMemberCustomMode(!!item && !FAMILY_MEMBERS.includes(item.familyMember));
-        setFamilyCondition(item?.condition || '');
-      }
-    }
-    openEditorFromPage(() => setEditingHistoryType(kind));
+  const historyIndex = (kind: string): number | null => {
+    const match = openHistory?.key.match(new RegExp(`^${kind}-(\\d+)$`));
+    return match ? parseInt(match[1], 10) : null;
   };
+
+  const saveHistory = async () => {
+    const kind = (openHistory?.key ?? '').split('-')[0];
+    const index = historyIndex(kind);
+    const draft = historyDraft;
+    if (kind === 'surgery') {
+      if (!draft.name.trim()) return Alert.alert('Add a name', 'Enter the surgery.');
+      const entry = { surgeryName: draft.name.trim(), date: formatHistoryDate(draft.date) };
+      const list = [...(userData.surgicalHistory || [])];
+      if (index !== null) list[index] = entry;
+      else list.push(entry);
+      await patchUserData({ surgicalHistory: list });
+    } else if (kind === 'family') {
+      if (!draft.member.trim() || !draft.condition.trim()) return Alert.alert('Fill in the fields', 'Enter who it is and the condition.');
+      const entry = { familyMember: draft.member.trim(), condition: draft.condition.trim() };
+      const list = [...(userData.familyHistory || [])];
+      if (index !== null) list[index] = entry;
+      else list.push(entry);
+      await patchUserData({ familyHistory: list });
+    } else if (kind === 'hospital') {
+      if (!draft.name.trim()) return Alert.alert('Add a reason', 'Enter the reason for the hospital stay.');
+      const entry = { reason: draft.name.trim(), date: formatHistoryDate(draft.date) };
+      const list = [...(userData.hospitalizations || [])];
+      if (index !== null) list[index] = entry;
+      else list.push(entry);
+      await patchUserData({ hospitalizations: list });
+    } else if (kind === 'pregnancy') {
+      const yearNumber = parseInt(draft.year, 10);
+      if (!/^\d{4}$/.test(draft.year) || yearNumber < 1900 || yearNumber > new Date().getFullYear()) {
+        return Alert.alert('Check the year', 'Enter the four-digit year of the pregnancy.');
+      }
+      if (!draft.outcome) return Alert.alert('Choose how it ended', 'Pick one of the options.');
+      const entry = { year: draft.year, outcome: draft.outcome, complications: draft.complications };
+      const list = [...(userData.pregnancies || [])];
+      if (index !== null) list[index] = entry;
+      else list.push(entry);
+      await patchUserData({ pregnancies: list });
+    }
+    setOpenHistory(null);
+  };
+
+  const deleteHistory = async () => {
+    const kind = (openHistory?.key ?? '').split('-')[0];
+    const index = historyIndex(kind);
+    if (index === null) return;
+    if (kind === 'surgery') await patchUserData({ surgicalHistory: (userData.surgicalHistory || []).filter((_, i) => i !== index) });
+    else if (kind === 'family') await patchUserData({ familyHistory: (userData.familyHistory || []).filter((_, i) => i !== index) });
+    else if (kind === 'hospital') await patchUserData({ hospitalizations: (userData.hospitalizations || []).filter((_, i) => i !== index) });
+    else if (kind === 'pregnancy') await patchUserData({ pregnancies: (userData.pregnancies || []).filter((_, i) => i !== index) });
+    setOpenHistory(null);
+  };
+
 
   // A blank appointment for the form editor, opened from the Appointments page
   const openNewAppointment = () => {
@@ -907,14 +934,6 @@ export default function HomeScreen() {
         Alert.alert('Add details', 'Enter the contact name and phone number.');
         return;
       }
-      const historyNameMissing =
-        (editingHistoryType === 'surgical' && !surgeryName.trim()) ||
-        (editingHistoryType === 'hospitalization' && !hospitalizationReason.trim()) ||
-        (editingHistoryType === 'family' && (!familyMember.trim() || !familyCondition.trim()));
-      if (historyNameMissing) {
-        Alert.alert('Fill in the fields', 'Add a name, and for family history, who and what condition.');
-        return;
-      }
       if (editingSection === 'appointments') {
         const dateTime = formatAppointmentDateTime(appointmentDate, appointmentTime);
         let updatedAppointments;
@@ -1002,25 +1021,8 @@ export default function HomeScreen() {
         setPharmacyName('');
         setPharmacyAddress('');
         setPharmacyPhone('');
-      } else if (editingHistoryType === 'surgical') {
-        const entry = { surgeryName: surgeryName.trim(), date: formatHistoryDate(historyDate) };
-        const list = [...(editData.surgicalHistory || [])];
-        if (editingIndex !== null) list[editingIndex] = entry;
-        else list.push(entry);
-        await patchUserData({ surgicalHistory: list });
-      } else if (editingHistoryType === 'family') {
-        const entry = { familyMember: familyMember.trim(), condition: familyCondition.trim() };
-        const list = [...(editData.familyHistory || [])];
-        if (editingIndex !== null) list[editingIndex] = entry;
-        else list.push(entry);
-        await patchUserData({ familyHistory: list });
-      } else if (editingHistoryType === 'hospitalization') {
-        const entry = { reason: hospitalizationReason.trim(), date: formatHistoryDate(historyDate) };
-        const list = [...(editData.hospitalizations || [])];
-        if (editingIndex !== null) list[editingIndex] = entry;
-        else list.push(entry);
-        await patchUserData({ hospitalizations: list });
       } else {
+        // Save only what differs      } else {
         // Save only what differs from the current profile, so nothing else is written back
         const changes = Object.fromEntries(
           Object.entries(editData).filter(([key, value]) => (userData as any)[key] !== value)
@@ -1028,8 +1030,6 @@ export default function HomeScreen() {
         await patchUserData(changes);
       }
       setEditingSection(null);
-      setEditingHistoryType(null);
-      setFamilyMemberCustomMode(false);
       Alert.alert('Success', 'Changes saved');
     } catch (error) {
       Alert.alert('Error', 'Failed to save changes');
@@ -1039,8 +1039,6 @@ export default function HomeScreen() {
   const handleCancel = () => {
     setEditData(userData);
     setEditingSection(null);
-    setEditingHistoryType(null);
-    setFamilyMemberCustomMode(false);
     setMedicationPhoto(null);
     setEditingAppointmentId(null);
     setAppointmentDoctorName('');
@@ -1218,20 +1216,6 @@ export default function HomeScreen() {
         Alert.alert('Success', 'Insurance deleted');
         setEditingSection(null);
         setEditingInsuranceId(null);
-      } else if (editingHistoryType && editingIndex !== null) {
-        if (editingHistoryType === 'surgical') {
-          const updated = (editData.surgicalHistory || []).filter((_, i) => i !== editingIndex);
-          await patchUserData({ surgicalHistory: updated });
-        } else if (editingHistoryType === 'family') {
-          const updated = (editData.familyHistory || []).filter((_, i) => i !== editingIndex);
-          await patchUserData({ familyHistory: updated });
-        } else if (editingHistoryType === 'hospitalization') {
-          const updated = (editData.hospitalizations || []).filter((_, i) => i !== editingIndex);
-          await patchUserData({ hospitalizations: updated });
-        }
-        Alert.alert('Success', 'Entry deleted');
-        setEditingHistoryType(null);
-        setEditingIndex(null);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to delete');
@@ -1887,63 +1871,137 @@ export default function HomeScreen() {
       <DetailModal visible={openPage === 'history'} onClose={closeDetail} title="Medical history" onDismiss={runPendingEditor}>
         <Section title="Surgeries">
           <ListCard>
-            {(userData.surgicalHistory || []).map((surgery, idx) => (
-              <React.Fragment key={'surgery-' + idx}>
-                {idx > 0 && <Divider />}
-                <ListRow icon="content-cut" label={surgery.surgeryName} value={surgery.date} onPress={() => openHistoryEditor('surgical', idx)} />
-              </React.Fragment>
-            ))}
+            {openHistory?.key === 'surgery-new' && (
+              <View style={styles.inlineForm}>
+                <MedicalHistoryForm kind="surgery" values={historyDraft} onChange={patchHistoryDraft} onSave={saveHistory} onCancel={closeHistory} />
+              </View>
+            )}
+            {(userData.surgicalHistory || []).map((surgery, index) => {
+              const key = `surgery-${index}`;
+              return (
+                <React.Fragment key={key}>
+                  {index > 0 && <Divider />}
+                  {openHistory?.key === key ? (
+                    <View style={styles.inlineForm}>
+                      <MedicalHistoryForm kind="surgery" values={historyDraft} onChange={patchHistoryDraft} onSave={saveHistory} onCancel={closeHistory} onDelete={deleteHistory} />
+                    </View>
+                  ) : (
+                    <ListRow icon="content-cut" label={surgery.surgeryName} value={surgery.date} onPress={() => startHistory('surgery', index)} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+            {(userData.surgicalHistory || []).length === 0 && openHistory?.key !== 'surgery-new' && <Text style={styles.emptyText}>No surgical history added</Text>}
             {(userData.surgicalHistory || []).length > 0 && <Divider />}
-            <ListRow icon="plus-circle-outline" label="Add surgery" onPress={() => openHistoryEditor('surgical', null)} />
+            {openHistory?.key !== 'surgery-new' && <ListRow icon="plus-circle-outline" label="Add surgery" onPress={() => startHistory('surgery', null)} />}
           </ListCard>
         </Section>
 
         <Section title="Family history">
           <ListCard>
-            {(userData.familyHistory || []).map((item, idx) => (
-              <React.Fragment key={'family-' + idx}>
-                {idx > 0 && <Divider />}
-                <ListRow icon="account-group-outline" label={item.familyMember} hint={item.condition} onPress={() => openHistoryEditor('family', idx)} />
+            {openHistory?.key === 'family-new' && (
+              <View style={styles.inlineForm}>
+                <MedicalHistoryForm kind="family" values={historyDraft} onChange={patchHistoryDraft} onSave={saveHistory} onCancel={closeHistory} />
+              </View>
+            )}
+            {familyGroups.map((group, groupIndex) => (
+              <React.Fragment key={'family-group-' + group.key}>
+                {groupIndex > 0 && <Divider />}
+                <Text style={styles.familyPerson}>{group.member}</Text>
+                {group.items.map((item) => {
+                  const key = `family-${item.index}`;
+                  return (
+                    <React.Fragment key={key}>
+                      {openHistory?.key === key ? (
+                        <View style={styles.inlineForm}>
+                          <MedicalHistoryForm kind="family" values={historyDraft} onChange={patchHistoryDraft} onSave={saveHistory} onCancel={closeHistory} onDelete={deleteHistory} />
+                        </View>
+                      ) : (
+                        <ListRow icon="account-outline" label={item.condition} onPress={() => startHistory('family', item.index)} />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </React.Fragment>
             ))}
+            {(userData.familyHistory || []).length === 0 && openHistory?.key !== 'family-new' && <Text style={styles.emptyText}>No family history added</Text>}
             {(userData.familyHistory || []).length > 0 && <Divider />}
-            <ListRow icon="plus-circle-outline" label="Add family history" onPress={() => openHistoryEditor('family', null)} />
+            {openHistory?.key !== 'family-new' && <ListRow icon="plus-circle-outline" label="Add family history" onPress={() => startHistory('family', null)} />}
           </ListCard>
         </Section>
 
         <Section title="Hospitalizations">
           <ListCard>
-            {(userData.hospitalizations || []).map((stay, idx) => (
-              <React.Fragment key={'hospital-' + idx}>
-                {idx > 0 && <Divider />}
-                <ListRow icon="hospital-box-outline" label={stay.reason} value={stay.date} onPress={() => openHistoryEditor('hospitalization', idx)} />
-              </React.Fragment>
-            ))}
+            {openHistory?.key === 'hospital-new' && (
+              <View style={styles.inlineForm}>
+                <MedicalHistoryForm kind="hospitalization" values={historyDraft} onChange={patchHistoryDraft} onSave={saveHistory} onCancel={closeHistory} />
+              </View>
+            )}
+            {(userData.hospitalizations || []).map((stay, index) => {
+              const key = `hospital-${index}`;
+              return (
+                <React.Fragment key={key}>
+                  {index > 0 && <Divider />}
+                  {openHistory?.key === key ? (
+                    <View style={styles.inlineForm}>
+                      <MedicalHistoryForm kind="hospitalization" values={historyDraft} onChange={patchHistoryDraft} onSave={saveHistory} onCancel={closeHistory} onDelete={deleteHistory} />
+                    </View>
+                  ) : (
+                    <ListRow icon="hospital-box-outline" label={stay.reason} value={stay.date} onPress={() => startHistory('hospital', index)} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+            {(userData.hospitalizations || []).length === 0 && openHistory?.key !== 'hospital-new' && <Text style={styles.emptyText}>No hospitalizations added</Text>}
             {(userData.hospitalizations || []).length > 0 && <Divider />}
-            <ListRow icon="plus-circle-outline" label="Add hospitalization" onPress={() => openHistoryEditor('hospitalization', null)} />
+            {openHistory?.key !== 'hospital-new' && <ListRow icon="plus-circle-outline" label="Add hospitalization" onPress={() => startHistory('hospital', null)} />}
           </ListCard>
         </Section>
+
         <Section title="Obstetric history (if applicable)">
           <ListCard>
-            <ListRow icon="human-pregnant" label="Pregnancies" value={String(pregnancyCount)} />
-            <Divider />
-            <ListRow icon="baby-face-outline" label="Births" value={String(birthCount)} />
-            <Divider />
-            <ListRow icon="heart-outline" label="Losses" value={String(lossCount)} />
-            {pregnancyList.map(({ pregnancy, index }) => (
-              <React.Fragment key={'pregnancy-' + index}>
+            <View style={obUnused ? styles.greyedOut : undefined}>
+              <ListRow icon="human-pregnant" label="Pregnancies" value={String(pregnancyCount)} />
+              <Divider />
+              <ListRow icon="baby-face-outline" label="Births" value={String(birthCount)} />
+              <Divider />
+              <ListRow icon="heart-outline" label="Losses" value={String(lossCount)} />
+            </View>
+            {openHistory?.key === 'pregnancy-new' && (
+              <>
                 <Divider />
-                <ListRow
-                  icon="baby-carriage"
-                  label={pregnancy.outcome}
-                  hint={pregnancy.complications.join(', ') || undefined}
-                  value={pregnancy.year}
-                  onPress={() => openPregnancyEditor(index)}
-                />
-              </React.Fragment>
-            ))}
-            <Divider />
-            <ListRow icon="plus-circle-outline" label="Add pregnancy" onPress={() => openPregnancyEditor(null)} />
+                <View style={styles.inlineForm}>
+                  <MedicalHistoryForm kind="pregnancy" values={historyDraft} onChange={patchHistoryDraft} onSave={saveHistory} onCancel={closeHistory} />
+                </View>
+              </>
+            )}
+            {pregnancyList.map(({ pregnancy, index }) => {
+              const key = `pregnancy-${index}`;
+              return (
+                <React.Fragment key={key}>
+                  <Divider />
+                  {openHistory?.key === key ? (
+                    <View style={styles.inlineForm}>
+                      <MedicalHistoryForm kind="pregnancy" values={historyDraft} onChange={patchHistoryDraft} onSave={saveHistory} onCancel={closeHistory} onDelete={deleteHistory} />
+                    </View>
+                  ) : (
+                    <ListRow
+                      icon="baby-carriage"
+                      label={pregnancy.outcome}
+                      hint={pregnancy.complications.join(', ') || undefined}
+                      value={pregnancy.year}
+                      onPress={() => startHistory('pregnancy', index)}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+            {openHistory?.key !== 'pregnancy-new' && (
+              <>
+                <Divider />
+                <ListRow icon="plus-circle-outline" label="Add pregnancy" onPress={() => startHistory('pregnancy', null)} />
+              </>
+            )}
           </ListCard>
         </Section>
 
@@ -2505,40 +2563,8 @@ export default function HomeScreen() {
       </Modal>
 
       {/* History Modal */}
-      <HealthHistoryEditor
-        visible={editingHistoryType !== null}
-        type={editingHistoryType}
-        isEditing={editingIndex !== null}
-        name={editingHistoryType === 'surgical' ? surgeryName : hospitalizationReason}
-        member={familyMember}
-        customMember={familyMemberCustomMode}
-        condition={familyCondition}
-        date={historyDate}
-        onChange={(patch) => {
-          if (patch.name !== undefined) {
-            if (editingHistoryType === 'surgical') setSurgeryName(patch.name);
-            else setHospitalizationReason(patch.name);
-          }
-          if (patch.member !== undefined) setFamilyMember(patch.member);
-          if (patch.customMember !== undefined) setFamilyMemberCustomMode(patch.customMember);
-          if (patch.condition !== undefined) setFamilyCondition(patch.condition);
-          if (patch.date) setHistoryDate(patch.date);
-        }}
-        onSave={handleSaveEdit}
-        onCancel={handleCancel}
-        onDelete={handleDelete}
-      />
 
 
-      <PregnancyEditor
-        visible={editingPregnancy !== null}
-        isEditing={editingPregnancy?.index != null}
-        values={pregnancyForm}
-        onChange={(patch) => setPregnancyForm((form) => ({ ...form, ...patch }))}
-        onSave={savePregnancy}
-        onCancel={() => setEditingPregnancy(null)}
-        onDelete={deletePregnancy}
-      />
 
       {/* Gender Modal */}
       <Modal visible={editingSection === 'gender'} animationType="slide" onRequestClose={handleCancel}>
@@ -3120,6 +3146,8 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  greyedOut: { opacity: 0.4 },
+  familyPerson: { fontSize: 13, fontWeight: '600', color: '#8E8E93', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   inlineForm: { padding: 14, backgroundColor: '#F7FAFF' },
   tapForHistory: {
     fontSize: 13,
