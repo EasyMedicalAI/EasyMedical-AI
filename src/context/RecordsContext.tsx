@@ -118,10 +118,22 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
     loadRecords();
   }, []);
 
+  // Older syncs saved lab report results as references like "Observation/123" instead of test names.
+  // Those are dropped on load. The lab values themselves are imported from the lab observations.
+  const withoutReferenceResults = (record: MedicalRecord): MedicalRecord => {
+    const results = record.extractedData?.testResults;
+    if (!results) return record;
+    const kept = Object.fromEntries(
+      Object.entries(results).filter(([, value]) => !/^(Observation|DiagnosticReport)\//.test(String(value)))
+    );
+    if (Object.keys(kept).length === Object.keys(results).length) return record;
+    return { ...record, extractedData: { ...record.extractedData, testResults: kept } };
+  };
+
   const loadRecords = async () => {
     try {
       const hub = await storageService.getMedicalHub();
-      setRecords(hub.records);
+      setRecords(hub.records.map(withoutReferenceResults));
       if (hub.userData) {
         setUserData(hub.userData);
         latestUserData.current = hub.userData;

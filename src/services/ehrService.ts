@@ -87,6 +87,9 @@ export const heightFromObservations = (observations: Observation[]): string => {
   return `${Math.floor(total / 12)}'${total % 12}"`;
 };
 
+// Epic records these when an allergy wasn't asked for or isn't known. They aren't allergies, so they aren't shown.
+const PLACEHOLDER_ALLERGY = /^(patient not asked|unknown|no known|nkda|nka|none|no allergies)/i;
+
 export interface Allergy {
   id: string;
   allergen: string;
@@ -379,11 +382,13 @@ class EhrService {
   async getAllergies(): Promise<Allergy[]> {
     return this.forEachConnection(async (c) => {
       const data = await this.fhirGet(c, `/AllergyIntolerance?patient=${c.patientId}`);
-      return (data?.entry || []).map((e: any) => ({
-        id: e.resource.id,
-        allergen: e.resource.code?.coding?.[0]?.display || 'Unknown',
-        reaction: e.resource.reaction?.[0]?.manifestation?.[0]?.coding?.[0]?.display || 'Unknown',
-      }));
+      return (data?.entry || [])
+        .map((e: any) => ({
+          id: e.resource.id,
+          allergen: e.resource.code?.coding?.[0]?.display || 'Unknown',
+          reaction: e.resource.reaction?.[0]?.manifestation?.[0]?.coding?.[0]?.display || 'Unknown',
+        }))
+        .filter((a: Allergy) => !PLACEHOLDER_ALLERGY.test(a.allergen));
     });
   }
 
