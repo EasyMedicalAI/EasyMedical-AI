@@ -73,6 +73,15 @@ export default function SettingsScreen() {
       if (connection) {
         await ehrService.saveConnection(connection);
         await refreshConnections();
+        // Bring in the records right away, so the patient doesn't have to tap Sync
+        setSyncing(true);
+        try {
+          await syncWithEHR();
+        } catch (error) {
+          console.warn('Sync after connecting failed:', error);
+        } finally {
+          setSyncing(false);
+        }
         Alert.alert('Connected', `Your ${system.name} account has been connected.`);
       } else {
         Alert.alert('Authorization Cancelled', `${system.name} authorization was cancelled or timed out.`);
