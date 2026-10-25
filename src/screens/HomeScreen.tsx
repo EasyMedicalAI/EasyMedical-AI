@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import DateWheel, { dateFromText, textFromDate } from '@/components/DateWheel';
 import FindDoctor from '@/components/FindDoctor';
+import FindPharmacy from '@/components/FindPharmacy';
+import InlineFieldsForm from '@/components/InlineFieldsForm';
 import InsuranceScan, { CardDetails } from '@/components/InsuranceScan';
 import VaccineForm, { VaccineFormValues, blankVaccineForm } from '@/components/VaccineEditor';
 import ScreeningForm, { ScreeningFormValues, blankScreeningForm } from '@/components/ScreeningForm';
@@ -37,7 +39,6 @@ import AppointmentReminderOptions from '@/components/AppointmentReminderOptions'
 import { appointmentMoment } from '@/services/reminders';
 import MedicalHistoryForm, { HistoryDraft, blankHistoryDraft, FAMILY_MEMBERS, formatHistoryDate, historyDateFrom } from '@/components/MedicalHistoryForm';
 import { isBirthOutcome, isLossOutcome } from '@/components/PregnancyEditor';
-import InsuranceEditor from '@/components/InsuranceEditor';
 import FieldFormEditor from '@/components/FieldFormEditor';
 import { Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -166,19 +167,20 @@ export default function HomeScreen() {
   const [appointmentDoctorName, setAppointmentDoctorName] = useState('');
   const [appointmentSpecialty, setAppointmentSpecialty] = useState('');
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
-  const [insuranceProvider, setInsuranceProvider] = useState('');
-  const [insuranceMemberId, setInsuranceMemberId] = useState('');
-  const [insuranceGroupNumber, setInsuranceGroupNumber] = useState('');
-  const [editingInsuranceId, setEditingInsuranceId] = useState<number | null>(null);
-  const [emergencyContactName, setEmergencyContactName] = useState('');
-  const [emergencyContactRelationship, setEmergencyContactRelationship] = useState('');
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState('');
-  const [editingEmergencyContactId, setEditingEmergencyContactId] = useState<number | null>(null);
+  const [insuranceDraft, setInsuranceDraft] = useState({ provider: '', memberId: '', groupNumber: '' });
+  // The plan being edited: its index, 'new' for a new plan, or null when none is open
+  const [editingInsurance, setEditingInsurance] = useState<number | 'new' | null>(null);
+  const [allergyDraft, setAllergyDraft] = useState('');
+  const [editingAllergy, setEditingAllergy] = useState<number | 'new' | null>(null);
+  const [conditionDraft, setConditionDraft] = useState('');
+  const [editingCondition, setEditingCondition] = useState<{ list: 'active' | 'resolved'; index: number } | 'new' | null>(null);
+  const [emergencyDraft, setEmergencyDraft] = useState({ name: '', relationship: '', phone: '' });
+  // The contact being edited: its index, 'new' for a new contact, or null when none is open
+  const [editingContact, setEditingContact] = useState<number | 'new' | null>(null);
   const [insuranceScanOpen, setInsuranceScanOpen] = useState(false);
   const [insuranceManualNext, setInsuranceManualNext] = useState(false);
-  const [pharmacyName, setPharmacyName] = useState('');
-  const [pharmacyAddress, setPharmacyAddress] = useState('');
-  const [pharmacyPhone, setPharmacyPhone] = useState('');
+  const [editingPharmacy, setEditingPharmacy] = useState(false);
+  const [pharmacyDraft, setPharmacyDraft] = useState({ name: '', address: '', phone: '' });
   const [openScreening, setOpenScreening] = useState<{ key: string } | null>(null);
   const [screeningForm, setScreeningForm] = useState<ScreeningFormValues>(blankScreeningForm());
   const [birthdayPick, setBirthdayPick] = useState<Date>(() => new Date(1990, 0, 1, 12));
@@ -232,112 +234,160 @@ export default function HomeScreen() {
     setPendingEditor(null);
     pendingEditor();
   };
-  // Allergies: your own can be added, renamed, or deleted. Epic allergies are edited through their Epic edit screen.
+  // Allergies: your own can be added, edited, or deleted right on the page. Epic allergies are edited through their Epic edit screen.
   const epicAllergyNames = new Set(epicAllergies.map((a) => a.allergen.trim().toLowerCase()));
   const manualAllergyRows = (userData.allergies || [])
     .map((allergy, index) => ({ allergy, index }))
     .filter(({ allergy }) => !epicAllergyNames.has(allergy.trim().toLowerCase()));
-  const addAllergy = () => {
-    Alert.prompt('New allergy', 'Enter the allergy.', async (text) => {
-      const name = text?.trim();
-      if (!name) return;
-      await patchUserData({ allergies: [...(userData.allergies || []), name] });
-    }, 'plain-text');
+  // An allergy row opens its form in place: its index in your list, or 'new' for a new allergy
+  const openAllergyEditor = (index: number | 'new') => {
+    setAllergyDraft(index === 'new' ? '' : (userData.allergies || [])[index] || '');
+    setEditingAllergy(index);
   };
-  const renameAllergy = (index: number) => {
-    Alert.prompt('Edit allergy', undefined, async (text) => {
-      const name = text?.trim();
-      if (!name) return;
-      const updated = [...(userData.allergies || [])];
-      updated[index] = name;
-      await patchUserData({ allergies: updated });
-    }, 'plain-text', (userData.allergies || [])[index]);
+  const saveAllergy = async () => {
+    const name = allergyDraft.trim();
+    if (!name) {
+      Alert.alert('Add an allergy', 'Enter the allergy.');
+      return;
+    }
+    const allergies = [...(userData.allergies || [])];
+    if (editingAllergy === 'new') allergies.push(name);
+    else if (editingAllergy !== null) allergies[editingAllergy] = name;
+    await patchUserData({ allergies });
+    setEditingAllergy(null);
   };
-  const manageAllergy = (index: number) => {
-    Alert.alert((userData.allergies || [])[index], undefined, [
-      { text: 'Edit', onPress: () => renameAllergy(index) },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: () => patchUserData({ allergies: (userData.allergies || []).filter((_, i) => i !== index) }),
-      },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+  const deleteAllergy = async () => {
+    if (typeof editingAllergy !== 'number') return;
+    await patchUserData({ allergies: (userData.allergies || []).filter((_, i) => i !== editingAllergy) });
+    setEditingAllergy(null);
   };
+  const renderAllergyForm = () => (
+    <InlineFieldsForm
+      fields={[{ key: 'name', label: 'Allergy', placeholder: 'e.g. Penicillin' }]}
+      values={{ name: allergyDraft }}
+      onChange={(_, value) => setAllergyDraft(value)}
+      onSave={saveAllergy}
+      onCancel={() => setEditingAllergy(null)}
+      onDelete={typeof editingAllergy === 'number' ? deleteAllergy : undefined}
+      deleteLabel="Delete allergy"
+    />
+  );
   // Conditions: add, rename, and move between Active and Resolved
   const epicConditionNames = new Set(epicConditions.map((c) => c.name.trim().toLowerCase()));
   const activeConditionRows = (userData.conditions || [])
     .map((condition, index) => ({ condition, index }))
     .filter(({ condition }) => !epicConditionNames.has(condition.trim().toLowerCase()));
-  const addCondition = () => {
-    Alert.prompt('New condition', undefined, async (text) => {
-      const name = text?.trim();
-      if (!name) return;
-      await patchUserData({ conditions: [...(userData.conditions || []), name] });
-    }, 'plain-text');
+  // A condition row opens its form in place: a plain index in its list, or 'new' for a condition added to Active
+  const openConditionEditor = (editing: { list: 'active' | 'resolved'; index: number } | 'new') => {
+    const name = editing === 'new' ? '' : editing.list === 'active' ? (userData.conditions || [])[editing.index] : (userData.pastConditions || [])[editing.index];
+    setConditionDraft(name || '');
+    setEditingCondition(editing);
   };
-  const renameCondition = (list: 'active' | 'resolved', index: number) => {
-    const current = list === 'active' ? (userData.conditions || [])[index] : (userData.pastConditions || [])[index];
-    Alert.prompt('Edit condition', undefined, async (text) => {
-      const name = text?.trim();
-      if (!name) return;
-      if (list === 'active') {
-        const updated = [...(userData.conditions || [])];
-        updated[index] = name;
-        await patchUserData({ conditions: updated });
-      } else {
-        const updated = [...(userData.pastConditions || [])];
-        updated[index] = name;
-        await patchUserData({ pastConditions: updated });
-      }
-    }, 'plain-text', current);
+  const saveCondition = async () => {
+    const name = conditionDraft.trim();
+    if (!name) {
+      Alert.alert('Add a condition', 'Enter the condition name.');
+      return;
+    }
+    const active = [...(userData.conditions || [])];
+    const resolved = [...(userData.pastConditions || [])];
+    if (editingCondition === 'new') active.push(name);
+    else if (editingCondition) (editingCondition.list === 'active' ? active : resolved)[editingCondition.index] = name;
+    await patchUserData({ conditions: active, pastConditions: resolved });
+    setEditingCondition(null);
   };
-  // Moves a condition to the other list, or removes it
-  const moveCondition = async (from: 'active' | 'resolved', index: number, to: 'active' | 'resolved' | 'delete') => {
+  // Moves a condition to the other list, or removes it. The name typed in the form is kept.
+  const moveCondition = async (from: 'active' | 'resolved', index: number, to: 'active' | 'resolved' | 'delete', name?: string) => {
     const active = [...(userData.conditions || [])];
     const resolved = [...(userData.pastConditions || [])];
     const [item] = (from === 'active' ? active : resolved).splice(index, 1);
-    if (to === 'active') active.push(item);
-    if (to === 'resolved') resolved.push(item);
+    if (to === 'active') active.push(name || item);
+    if (to === 'resolved') resolved.push(name || item);
     await patchUserData({ conditions: active, pastConditions: resolved });
+    setEditingCondition(null);
   };
-  const manageCondition = (list: 'active' | 'resolved', index: number) => {
-    const name = list === 'active' ? (userData.conditions || [])[index] : (userData.pastConditions || [])[index];
-    Alert.alert(name, undefined, [
-      { text: 'Edit', onPress: () => renameCondition(list, index) },
-      list === 'active'
-        ? { text: 'Mark as resolved', onPress: () => moveCondition('active', index, 'resolved') }
-        : { text: 'Mark as active', onPress: () => moveCondition('resolved', index, 'active') },
-      { text: 'Delete', style: 'destructive', onPress: () => moveCondition(list, index, 'delete') },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+  const moveEditingCondition = (to: 'active' | 'resolved' | 'delete') => {
+    if (editingCondition === null || editingCondition === 'new') return;
+    return moveCondition(editingCondition.list, editingCondition.index, to, conditionDraft.trim());
+  };
+  const renderConditionForm = () => {
+    const existing = editingCondition !== null && editingCondition !== 'new';
+    const markAs = existing && editingCondition.list === 'active' ? 'resolved' : 'active';
+    return (
+      <InlineFieldsForm
+        fields={[{ key: 'name', label: 'Condition', placeholder: 'e.g. Type 2 diabetes' }]}
+        values={{ name: conditionDraft }}
+        onChange={(_, value) => setConditionDraft(value)}
+        onSave={saveCondition}
+        onCancel={() => setEditingCondition(null)}
+        extraLabel={existing ? `Mark as ${markAs}` : undefined}
+        onExtra={existing ? () => moveEditingCondition(markAs) : undefined}
+        onDelete={existing ? () => moveEditingCondition('delete') : undefined}
+        deleteLabel="Delete condition"
+      />
+    );
   };
 
   // Opens the pharmacy editor once the Pharmacy page has closed
+  // Saves a pharmacy found by search as the preferred pharmacy
+  const usePharmacy = (pharmacy: { name: string; address: string; phone?: string }) =>
+    patchUserData({ pharmacy: { name: pharmacy.name, address: pharmacy.address, phone: pharmacy.phone ?? '' } });
   const openPharmacyEditor = () => {
-    setPharmacyName(userData.pharmacy?.name || '');
-    setPharmacyAddress(userData.pharmacy?.address || '');
-    setPharmacyPhone(userData.pharmacy?.phone || '');
-    openEditorFromPage(() => setEditingSection('pharmacy'));
+    setPharmacyDraft({ name: userData.pharmacy?.name || '', address: userData.pharmacy?.address || '', phone: userData.pharmacy?.phone || '' });
+    setEditingPharmacy(true);
+  };
+  const savePharmacy = async () => {
+    const name = pharmacyDraft.name.trim();
+    const phone = pharmacyDraft.phone.trim();
+    if (!name || !phone) {
+      Alert.alert('Add details', 'Enter the pharmacy name and phone number.');
+      return;
+    }
+    await patchUserData({ pharmacy: { name, address: pharmacyDraft.address.trim(), phone } });
+    setEditingPharmacy(false);
   };
   const deletePharmacy = async () => {
     await patchUserData({ pharmacy: undefined });
-    setEditingSection(null);
-    setPharmacyName('');
-    setPharmacyAddress('');
-    setPharmacyPhone('');
+    setEditingPharmacy(false);
   };
-  // Opens the emergency contact editor once the Emergency contacts page has closed
-  const openEmergencyEditor = (index: number | null) => {
-    const contact = index !== null ? (userData.emergencyContacts || [])[index] : undefined;
-    setEditData(userData);
-    setEditingEmergencyContactId(index);
-    setEmergencyContactName(contact?.name || '');
-    setEmergencyContactRelationship(contact?.relationship || '');
-    setEmergencyContactPhone(contact?.phone || '');
-    openEditorFromPage(() => setEditingSection('emergency'));
+  const openContactEditor = (index: number | 'new') => {
+    const contact = index === 'new' ? undefined : (userData.emergencyContacts || [])[index];
+    setEmergencyDraft({ name: contact?.name || '', relationship: contact?.relationship || '', phone: contact?.phone || '' });
+    setEditingContact(index);
   };
-
+  const saveEmergencyContact = async () => {
+    const name = emergencyDraft.name.trim();
+    const phone = emergencyDraft.phone.trim();
+    if (!name || !phone) {
+      Alert.alert('Add details', 'Enter the contact name and phone number.');
+      return;
+    }
+    const contact = { name, relationship: emergencyDraft.relationship.trim(), phone };
+    const contacts = userData.emergencyContacts || [];
+    const updated = editingContact === 'new' ? [...contacts, contact] : contacts.map((c, idx) => (idx === editingContact ? contact : c));
+    await patchUserData({ emergencyContacts: updated });
+    setEditingContact(null);
+  };
+  const deleteEmergencyContact = async () => {
+    if (typeof editingContact !== 'number') return;
+    await patchUserData({ emergencyContacts: (userData.emergencyContacts || []).filter((_, idx) => idx !== editingContact) });
+    setEditingContact(null);
+  };
+  const renderContactForm = () => (
+    <InlineFieldsForm
+      fields={[
+        { key: 'name', label: 'Name', placeholder: 'e.g. Jane Doe' },
+        { key: 'relationship', label: 'Relationship', placeholder: 'e.g. Spouse', optional: true },
+        { key: 'phone', label: 'Phone', placeholder: 'e.g. (555) 123-4567', keyboardType: 'phone-pad' },
+      ]}
+      values={emergencyDraft}
+      onChange={(key, value) => setEmergencyDraft((draft) => ({ ...draft, [key]: value }))}
+      onSave={saveEmergencyContact}
+      onCancel={() => setEditingContact(null)}
+      onDelete={typeof editingContact === 'number' ? deleteEmergencyContact : undefined}
+      deleteLabel="Delete contact"
+    />
+  );
   // Opens the card scan once the Insurance page has closed
   const openInsuranceScan = () => openEditorFromPage(() => setInsuranceScanOpen(true));
   // Adds a plan read from a card
@@ -350,16 +400,44 @@ export default function HomeScreen() {
     });
     setInsuranceScanOpen(false);
   };
-  // Opens the insurance editor once the Insurance page has closed
-  const openInsuranceEditor = (index: number | null) => {
-    const item = index !== null ? (userData.insurances || [])[index] : undefined;
-    setEditData(userData);
-    setEditingInsuranceId(index);
-    setInsuranceProvider(item?.provider || '');
-    setInsuranceMemberId(item?.memberId || '');
-    setInsuranceGroupNumber(item?.groupNumber || '');
-    openEditorFromPage(() => setEditingSection('insurance'));
+  const openInsuranceEditor = (index: number | 'new') => {
+    const item = index === 'new' ? undefined : (userData.insurances || [])[index];
+    setInsuranceDraft({ provider: item?.provider || '', memberId: item?.memberId || '', groupNumber: item?.groupNumber || '' });
+    setEditingInsurance(index);
   };
+  const saveInsurance = async () => {
+    const provider = insuranceDraft.provider.trim();
+    if (!provider) {
+      Alert.alert('Add a provider', 'Enter the insurance provider.');
+      return;
+    }
+    const values = { provider, memberId: insuranceDraft.memberId.trim(), groupNumber: insuranceDraft.groupNumber.trim() };
+    const insurances = userData.insurances || [];
+    // An existing plan keeps the fields that aren't in this form, such as the plan name and payer phone
+    const updated = editingInsurance === 'new' ? [...insurances, values] : insurances.map((item, idx) => (idx === editingInsurance ? { ...item, ...values } : item));
+    await patchUserData({ insurances: updated });
+    setEditingInsurance(null);
+  };
+  const deleteInsurance = async () => {
+    if (typeof editingInsurance !== 'number') return;
+    await patchUserData({ insurances: (userData.insurances || []).filter((_, idx) => idx !== editingInsurance) });
+    setEditingInsurance(null);
+  };
+  const renderInsuranceForm = () => (
+    <InlineFieldsForm
+      fields={[
+        { key: 'provider', label: 'Provider', placeholder: 'e.g. Blue Cross Blue Shield' },
+        { key: 'memberId', label: 'Member ID', placeholder: 'e.g. BCX123456789' },
+        { key: 'groupNumber', label: 'Group number', placeholder: 'e.g. GRP789', optional: true },
+      ]}
+      values={insuranceDraft}
+      onChange={(key, value) => setInsuranceDraft((draft) => ({ ...draft, [key]: value }))}
+      onSave={saveInsurance}
+      onCancel={() => setEditingInsurance(null)}
+      onDelete={typeof editingInsurance === 'number' ? deleteInsurance : undefined}
+      deleteLabel="Delete insurance"
+    />
+  );
 
   // Vaccines: a form opens inside the row that was tapped. Rows are "completed-<n>", "recommended-<n>", or "new".
   const safeDate = (text: string) => (/^\d{4}-\d{2}-\d{2}$/.test(text) ? dateFromKey(text) : new Date());
@@ -922,18 +1000,6 @@ export default function HomeScreen() {
 
   const handleSaveEdit = async () => {
     try {
-      if (editingSection === 'insurance' && !insuranceProvider.trim()) {
-        Alert.alert('Add a provider', 'Enter the insurance provider.');
-        return;
-      }
-      if (editingSection === 'pharmacy' && (!pharmacyName.trim() || !pharmacyPhone.trim())) {
-        Alert.alert('Add details', 'Enter the pharmacy name and phone number.');
-        return;
-      }
-      if (editingSection === 'emergency' && (!emergencyContactName.trim() || !emergencyContactPhone.trim())) {
-        Alert.alert('Add details', 'Enter the contact name and phone number.');
-        return;
-      }
       if (editingSection === 'appointments') {
         const dateTime = formatAppointmentDateTime(appointmentDate, appointmentTime);
         let updatedAppointments;
@@ -960,69 +1026,7 @@ export default function HomeScreen() {
         await patchUserData({ appointments: updatedAppointments });
         setAppointmentDoctorName('');
         setAppointmentSpecialty('');
-      } else if (editingSection === 'insurance' && insuranceProvider) {
-        let updatedInsurances;
-
-        if (editingInsuranceId !== null) {
-          // Update existing insurance
-          updatedInsurances = (editData.insurances || []).map((insurance, idx) =>
-            idx === editingInsuranceId
-              ? { ...insurance, provider: insuranceProvider, memberId: insuranceMemberId, groupNumber: insuranceGroupNumber }
-              : insurance
-          );
-          setEditingInsuranceId(null);
-        } else {
-          // Add new insurance
-          const newInsurance = {
-            provider: insuranceProvider,
-            memberId: insuranceMemberId,
-            groupNumber: insuranceGroupNumber,
-          };
-          updatedInsurances = [...(editData.insurances || []), newInsurance];
-        }
-
-        await patchUserData({ insurances: updatedInsurances });
-        setInsuranceProvider('');
-        setInsuranceMemberId('');
-        setInsuranceGroupNumber('');
-      } else if (editingSection === 'emergency') {
-        let updatedContacts;
-
-        if (editingEmergencyContactId !== null) {
-          // Update existing contact
-          updatedContacts = (editData.emergencyContacts || []).map((contact, idx) =>
-            idx === editingEmergencyContactId
-              ? { name: emergencyContactName, relationship: emergencyContactRelationship, phone: emergencyContactPhone }
-              : contact
-          );
-          setEditingEmergencyContactId(null);
-        } else {
-          // Add new contact
-          const newContact = {
-            name: emergencyContactName,
-            relationship: emergencyContactRelationship,
-            phone: emergencyContactPhone,
-          };
-          updatedContacts = [...(editData.emergencyContacts || []), newContact];
-        }
-
-        await patchUserData({ emergencyContacts: updatedContacts });
-        setEmergencyContactName('');
-        setEmergencyContactRelationship('');
-        setEmergencyContactPhone('');
-      } else if (editingSection === 'pharmacy') {
-        await patchUserData({
-          pharmacy: {
-            name: pharmacyName.trim(),
-            address: pharmacyAddress.trim(),
-            phone: pharmacyPhone.trim(),
-          },
-        });
-        setPharmacyName('');
-        setPharmacyAddress('');
-        setPharmacyPhone('');
       } else {
-        // Save only what differs      } else {
         // Save only what differs from the current profile, so nothing else is written back
         const changes = Object.fromEntries(
           Object.entries(editData).filter(([key, value]) => (userData as any)[key] !== value)
@@ -1043,13 +1047,6 @@ export default function HomeScreen() {
     setEditingAppointmentId(null);
     setAppointmentDoctorName('');
     setAppointmentSpecialty('');
-    setInsuranceProvider('');
-    setInsuranceMemberId('');
-    setInsuranceGroupNumber('');
-    setEmergencyContactName('');
-    setEmergencyContactRelationship('');
-    setEmergencyContactPhone('');
-    setEditingEmergencyContactId(null);
   };
 
 
@@ -1204,18 +1201,6 @@ export default function HomeScreen() {
         Alert.alert('Success', 'Appointment deleted');
         setEditingSection(null);
         setEditingAppointmentId(null);
-      } else if (editingSection === 'emergency' && editingEmergencyContactId !== null) {
-        const updatedContacts = (editData.emergencyContacts || []).filter((_, idx) => idx !== editingEmergencyContactId);
-        await patchUserData({ emergencyContacts: updatedContacts });
-        Alert.alert('Success', 'Emergency contact deleted');
-        setEditingSection(null);
-        setEditingEmergencyContactId(null);
-      } else if (editingSection === 'insurance' && editingInsuranceId !== null) {
-        const updatedInsurances = (editData.insurances || []).filter((_, idx) => idx !== editingInsuranceId);
-        await patchUserData({ insurances: updatedInsurances });
-        Alert.alert('Success', 'Insurance deleted');
-        setEditingSection(null);
-        setEditingInsuranceId(null);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to delete');
@@ -1773,7 +1758,11 @@ export default function HomeScreen() {
           <ListCard>
             {[
               ...activeConditionRows.map(({ condition, index }) => (
-                <ListRow key={'active-' + index} icon="stethoscope" label={condition} onPress={() => manageCondition('active', index)} />
+                editingCondition !== null && editingCondition !== 'new' && editingCondition.list === 'active' && editingCondition.index === index ? (
+                  <React.Fragment key={'active-' + index}>{renderConditionForm()}</React.Fragment>
+                ) : (
+                  <ListRow key={'active-' + index} icon="stethoscope" label={condition} onPress={() => openConditionEditor({ list: 'active', index })} />
+                )
               )),
               ...currentEpicConditions.map((cond) => {
                 const key = `condition:${cond.id}`;
@@ -1797,16 +1786,24 @@ export default function HomeScreen() {
             ))}
             {activeConditionRows.length + currentEpicConditions.length === 0 && <Text style={styles.emptyText}>No active conditions</Text>}
             {activeConditionRows.length + currentEpicConditions.length > 0 && <Divider />}
-            <ListRow icon="plus-circle-outline" label="Add condition" onPress={addCondition} />
+            {editingCondition === 'new' ? (
+              renderConditionForm()
+            ) : (
+              <ListRow icon="plus-circle-outline" label="Add condition" onPress={() => openConditionEditor('new')} />
+            )}
           </ListCard>
         </Section>
 
         <Section title="Resolved">
           <ListCard>
             {[
-              ...(userData.pastConditions || []).map((condition, index) => (
-                <ListRow key={'resolved-' + index} icon="check-circle-outline" label={condition} onPress={() => manageCondition('resolved', index)} />
-              )),
+              ...(userData.pastConditions || []).map((condition, index) =>
+                editingCondition !== null && editingCondition !== 'new' && editingCondition.list === 'resolved' && editingCondition.index === index ? (
+                  <React.Fragment key={'resolved-' + index}>{renderConditionForm()}</React.Fragment>
+                ) : (
+                  <ListRow key={'resolved-' + index} icon="check-circle-outline" label={condition} onPress={() => openConditionEditor({ list: 'resolved', index })} />
+                )
+              ),
               ...pastEpicConditions.map((cond) => (
                 <ListRow
                   key={'past-epic-' + cond.id}
@@ -1838,9 +1835,13 @@ export default function HomeScreen() {
         <Section title="Allergies">
           <ListCard>
             {[
-              ...manualAllergyRows.map(({ allergy, index }) => (
-                <ListRow key={'manual-' + index} icon="alert-outline" label={allergy} onPress={() => manageAllergy(index)} />
-              )),
+              ...manualAllergyRows.map(({ allergy, index }) =>
+                editingAllergy === index ? (
+                  <React.Fragment key={'manual-' + index}>{renderAllergyForm()}</React.Fragment>
+                ) : (
+                  <ListRow key={'manual-' + index} icon="alert-outline" label={allergy} onPress={() => openAllergyEditor(index)} />
+                )
+              ),
               ...epicAllergies.map((allergy) => {
                 const key = `allergy:${allergy.id}`;
                 const allergen = epicText(key, allergy.allergen, 'primary');
@@ -1863,7 +1864,11 @@ export default function HomeScreen() {
             ))}
             {manualAllergyRows.length + epicAllergies.length === 0 && <Text style={styles.emptyText}>No allergies added</Text>}
             {manualAllergyRows.length + epicAllergies.length > 0 && <Divider />}
-            <ListRow icon="plus-circle-outline" label="Add allergy" onPress={addAllergy} />
+            {editingAllergy === 'new' ? (
+              renderAllergyForm()
+            ) : (
+              <ListRow icon="plus-circle-outline" label="Add allergy" onPress={() => openAllergyEditor('new')} />
+            )}
           </ListCard>
         </Section>
       </DetailModal>
@@ -2246,26 +2251,50 @@ export default function HomeScreen() {
             {(userData.insurances || []).map((insurance, idx) => (
               <React.Fragment key={'plan-' + idx}>
                 {idx > 0 && <Divider />}
-                <ListRow
-                  icon="card-account-details-outline"
-                  label={insurance.provider}
-                  hint={[insurance.plan, insurance.memberId && `Member ID ${insurance.memberId}`, insurance.groupNumber && `Group ${insurance.groupNumber}`].filter(Boolean).join(' · ') || undefined}
-                  onPress={() => openInsuranceEditor(idx)}
-                />
+                {editingInsurance === idx ? (
+                  renderInsuranceForm()
+                ) : (
+                  <ListRow
+                    icon="card-account-details-outline"
+                    label={insurance.provider}
+                    hint={[insurance.plan, insurance.memberId && `Member ID ${insurance.memberId}`, insurance.groupNumber && `Group ${insurance.groupNumber}`].filter(Boolean).join(' · ') || undefined}
+                    onPress={() => openInsuranceEditor(idx)}
+                  />
+                )}
               </React.Fragment>
             ))}
             {(userData.insurances || []).length === 0 && <Text style={styles.emptyText}>Scan your insurance card to add your plan</Text>}
             {(userData.insurances || []).length > 0 && <Divider />}
-            <ListRow icon="card-account-details-outline" label="Scan insurance card" onPress={openInsuranceScan} />
-            <Divider />
-            <ListRow icon="pencil-outline" label="Enter details by hand" onPress={() => openInsuranceEditor(null)} />
+            {editingInsurance === 'new' ? (
+              renderInsuranceForm()
+            ) : (
+              <>
+                <ListRow icon="card-account-details-outline" label="Scan insurance card" onPress={openInsuranceScan} />
+                <Divider />
+                <ListRow icon="pencil-outline" label="Enter details by hand" onPress={() => openInsuranceEditor('new')} />
+              </>
+            )}
           </ListCard>
         </Section>
       </DetailModal>
       <DetailModal visible={openPage === 'pharmacy'} title="Pharmacy" onClose={closeDetail} onDismiss={runPendingEditor}>
         <Section title="Preferred pharmacy">
           <ListCard>
-            {userData.pharmacy ? (
+            {editingPharmacy ? (
+              <InlineFieldsForm
+                fields={[
+                  { key: 'name', label: 'Pharmacy name', placeholder: 'e.g. CVS on Main Street' },
+                  { key: 'address', label: 'Address', placeholder: 'e.g. 12 Main Street', optional: true },
+                  { key: 'phone', label: 'Phone', placeholder: 'e.g. (555) 123-4567', keyboardType: 'phone-pad' },
+                ]}
+                values={pharmacyDraft}
+                onChange={(key, value) => setPharmacyDraft((draft) => ({ ...draft, [key]: value }))}
+                onSave={savePharmacy}
+                onCancel={() => setEditingPharmacy(false)}
+                onDelete={userData.pharmacy ? deletePharmacy : undefined}
+                deleteLabel="Remove pharmacy"
+              />
+            ) : userData.pharmacy ? (
               <ListRow
                 icon="pill"
                 label={userData.pharmacy.name}
@@ -2277,6 +2306,7 @@ export default function HomeScreen() {
             )}
           </ListCard>
         </Section>
+        <FindPharmacy onUse={usePharmacy} />
       </DetailModal>
       <DetailModal visible={openPage === 'emergency'} title="Emergency contacts" onClose={closeDetail} onDismiss={runPendingEditor}>
         <Section title="Contacts">
@@ -2284,17 +2314,25 @@ export default function HomeScreen() {
             {(userData.emergencyContacts || []).map((contact, idx) => (
               <React.Fragment key={'contact-' + idx}>
                 {idx > 0 && <Divider />}
-                <ListRow
-                  icon="phone-outline"
-                  label={contact.name}
-                  hint={[contact.relationship, contact.phone].filter(Boolean).join(' · ') || undefined}
-                  onPress={() => openEmergencyEditor(idx)}
-                />
+                {editingContact === idx ? (
+                  renderContactForm()
+                ) : (
+                  <ListRow
+                    icon="phone-outline"
+                    label={contact.name}
+                    hint={[contact.relationship, contact.phone].filter(Boolean).join(' · ') || undefined}
+                    onPress={() => openContactEditor(idx)}
+                  />
+                )}
               </React.Fragment>
             ))}
             {(userData.emergencyContacts || []).length === 0 && <Text style={styles.emptyText}>No emergency contacts added</Text>}
             {(userData.emergencyContacts || []).length > 0 && <Divider />}
-            <ListRow icon="plus-circle-outline" label="Add contact" onPress={() => openEmergencyEditor(null)} />
+            {editingContact === 'new' ? (
+              renderContactForm()
+            ) : (
+              <ListRow icon="plus-circle-outline" label="Add contact" onPress={() => openContactEditor('new')} />
+            )}
           </ListCard>
         </Section>
       </DetailModal>
@@ -2899,37 +2937,6 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={editingSection === 'conditions'} animationType="slide" onRequestClose={handleCancel}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Conditions</Text>
-            <TouchableOpacity onPress={handleCancel}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.modalContent}>
-            <Text style={styles.label}>Conditions (one per line)</Text>
-            <TextInput
-              style={[styles.input, { minHeight: 120 }]}
-              multiline
-              value={editData.conditions?.join('\n') || ''}
-              onChangeText={(text) => setEditData({
-                ...editData,
-                conditions: text.split('\n').filter(c => c.trim())
-              })}
-              placeholder="Condition 1&#10;Condition 2"
-            />
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
-                <Text style={styles.buttonTextWhite}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
 
 
@@ -2944,53 +2951,15 @@ export default function HomeScreen() {
         }}
         onSave={saveScannedInsurance}
         onDismiss={() => {
-          // Entering by hand opens the editor once the scan screen has closed
+          // Entering by hand returns to the Insurance page with the new plan form open, once the scan screen has closed
           if (!insuranceManualNext) return;
           setInsuranceManualNext(false);
-          setEditData(userData);
-          setEditingInsuranceId(null);
-          setInsuranceProvider('');
-          setInsuranceMemberId('');
-          setInsuranceGroupNumber('');
-          setEditingSection('insurance');
+          setInsuranceDraft({ provider: '', memberId: '', groupNumber: '' });
+          setEditingInsurance('new');
+          setOpenPage('insurance');
         }}
       />
 
-      <InsuranceEditor
-        visible={editingSection === 'insurance'}
-        isEditing={editingInsuranceId !== null}
-        provider={insuranceProvider}
-        memberId={insuranceMemberId}
-        groupNumber={insuranceGroupNumber}
-        onChange={(patch) => {
-          if (patch.provider !== undefined) setInsuranceProvider(patch.provider);
-          if (patch.memberId !== undefined) setInsuranceMemberId(patch.memberId);
-          if (patch.groupNumber !== undefined) setInsuranceGroupNumber(patch.groupNumber);
-        }}
-        onSave={handleSaveEdit}
-        onCancel={handleCancel}
-        onDelete={handleDelete}
-      />
-
-      <FieldFormEditor
-        visible={editingSection === 'pharmacy'}
-        title="pharmacy"
-        isEditing={!!userData.pharmacy}
-        fields={[
-          { key: 'name', label: 'Pharmacy name', placeholder: 'e.g. CVS on Main Street' },
-          { key: 'address', label: 'Address', placeholder: 'e.g. 12 Main Street', optional: true },
-          { key: 'phone', label: 'Phone', placeholder: 'e.g. (555) 123-4567', keyboardType: 'phone-pad' },
-        ]}
-        values={{ name: pharmacyName, address: pharmacyAddress, phone: pharmacyPhone }}
-        onChange={(key, value) => {
-          if (key === 'name') setPharmacyName(value);
-          else if (key === 'address') setPharmacyAddress(value);
-          else setPharmacyPhone(value);
-        }}
-        onSave={handleSaveEdit}
-        onCancel={handleCancel}
-        onDelete={deletePharmacy}
-      />
 
 
       <AppointmentEditor
@@ -3005,26 +2974,6 @@ export default function HomeScreen() {
           if (patch.specialty !== undefined) setAppointmentSpecialty(patch.specialty);
           if (patch.date) setAppointmentDate(patch.date);
           if (patch.time) setAppointmentTime(patch.time);
-        }}
-        onSave={handleSaveEdit}
-        onCancel={handleCancel}
-        onDelete={handleDelete}
-      />
-
-      <FieldFormEditor
-        visible={editingSection === 'emergency'}
-        title="emergency contact"
-        isEditing={editingEmergencyContactId !== null}
-        fields={[
-          { key: 'name', label: 'Name', placeholder: 'e.g. Jane Doe' },
-          { key: 'relationship', label: 'Relationship', placeholder: 'e.g. Spouse', optional: true },
-          { key: 'phone', label: 'Phone', placeholder: 'e.g. (555) 123-4567', keyboardType: 'phone-pad' },
-        ]}
-        values={{ name: emergencyContactName, relationship: emergencyContactRelationship, phone: emergencyContactPhone }}
-        onChange={(key, value) => {
-          if (key === 'name') setEmergencyContactName(value);
-          else if (key === 'relationship') setEmergencyContactRelationship(value);
-          else setEmergencyContactPhone(value);
         }}
         onSave={handleSaveEdit}
         onCancel={handleCancel}

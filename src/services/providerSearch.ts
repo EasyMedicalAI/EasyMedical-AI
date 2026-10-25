@@ -86,3 +86,46 @@ export async function searchProviders(specialtyLabel: string, zip: string): Prom
   }
   return matches;
 }
+
+// Pharmacies are listed as organizations, not people, so they are searched with their own registry type
+export async function searchPharmacies(zip: string): Promise<ProviderResult[]> {
+  if (!/^\d{5}$/.test(zip)) return [];
+
+  const raw: any[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      version: '2.1',
+      enumeration_type: 'NPI-2',
+      taxonomy_description: 'Pharmacy',
+      postal_code: zip,
+      limit: String(PAGE_SIZE),
+      skip: String(page * PAGE_SIZE),
+    });
+    const response = await fetch(`${REGISTRY_URL}?${params.toString()}`);
+    if (!response.ok) throw new Error('The provider registry is not responding right now.');
+    const results = (await response.json()).results || [];
+    raw.push(...results);
+    if (results.length < PAGE_SIZE) break;
+  }
+
+  const seen = new Set<string>();
+  const matches: ProviderResult[] = [];
+  for (const result of raw) {
+    const npi = String(result.number);
+    if (seen.has(npi)) continue;
+    seen.add(npi);
+    const basic = result.basic || {};
+    const location = locationOf(result);
+    const name = basic.organization_name || [basic.first_name, basic.last_name].filter(Boolean).join(' ');
+    const address = [location.address_1, location.city, location.state].filter(Boolean).join(', ');
+    matches.push({
+      npi,
+      name: name || 'Pharmacy',
+      specialty: 'Pharmacy',
+      address,
+      zip: String(location.postal_code || '').slice(0, 5),
+      phone: location.telephone_number || undefined,
+    });
+  }
+  return matches;
+}
