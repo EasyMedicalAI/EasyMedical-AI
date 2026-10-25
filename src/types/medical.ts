@@ -51,6 +51,9 @@ export interface MedicalRecord {
 
 export interface VitalSigns {
   bloodPressure?: string;
+  // The latest readings from Epic, shown on the Home screen (for example "72 /min")
+  pulse?: string;
+  respirations?: string;
   heartRate?: number;
   temperature?: number;
   oxygenSaturation?: number;

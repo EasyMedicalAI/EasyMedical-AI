@@ -70,10 +70,22 @@ export interface Observation {
 
 // Vital signs are tracked on the Home screen, not as lab results
 export const isVitalObservation = (obs: Observation) =>
-  /weight|blood pressure|heart rate|temperature|respiratory|oxygen|spo2/i.test(obs.code);
+  /weight|blood pressure|heart rate|pulse|temperature|respirat|oxygen|spo2|height|body mass|bmi/i.test(obs.code);
 
 export const isWeightObservation = (obs: Observation) =>
   /body weight|^weight/i.test(obs.code) && !/height/i.test(obs.code);
+
+// Height from Epic, as feet and inches like 5'10" (the form the profile uses). Uses the most recent reading.
+export const heightFromObservations = (observations: Observation[]): string => {
+  const readings = observations
+    .filter((o) => /^height/i.test(o.code || '') && !isNaN(Number(o.value)))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  if (readings.length === 0) return '';
+  const { value, unit } = readings[0];
+  const inches = /cm/i.test(unit || '') ? Number(value) / 2.54 : Number(value);
+  const total = Math.round(inches);
+  return `${Math.floor(total / 12)}'${total % 12}"`;
+};
 
 export interface Allergy {
   id: string;
@@ -565,11 +577,8 @@ class EhrService {
       epicData.diagnostics.forEach((diag: any) => {
         const issuedDate = diag.issued || new Date().toISOString();
         const testResults: { [key: string]: string } = {};
-        if (diag.result) {
-          diag.result.forEach((resultRef: any) => {
-            testResults[resultRef.display || 'Result'] = resultRef.reference || '';
-          });
-        }
+        // The results are references to lab observations, which are already imported with their names and values.
+        // Only the report itself is kept here.
 
         records.push({
           id: generateId(),

@@ -130,7 +130,7 @@ function VitalRow({
   label: string;
   value: string;
   hint?: string;
-  onPress: () => void;
+  onPress?: () => void;
 }) {
   return (
     <View style={styles.vitalRow}>
@@ -141,7 +141,7 @@ function VitalRow({
           {hint ? <Text style={styles.vitalHint}>{hint}</Text> : null}
         </View>
         <Text style={styles.vitalValue}>{value}</Text>
-        <MaterialCommunityIcons name="chevron-right" size={20} color="#C7C7CC" style={styles.rowChevron} />
+        {onPress ? <MaterialCommunityIcons name="chevron-right" size={20} color="#C7C7CC" style={styles.rowChevron} /> : null}
       </TouchableOpacity>
     </View>
   );
@@ -1532,6 +1532,15 @@ export default function HomeScreen() {
               value={bloodPressureNow ? `${bloodPressureNow.systolic}/${bloodPressureNow.diastolic} mmHg` : userData.vitals?.bloodPressure || '—'}
               onPress={() => setVitalDetail('bp')}
             />
+
+            <View style={styles.divider} />
+
+            {/* Pulse and respirations, from Epic */}
+            <VitalRow icon="pulse" label="Pulse" value={userData.vitals?.pulse || '—'} />
+
+            <View style={styles.divider} />
+
+            <VitalRow icon="lungs" label="Respirations" value={userData.vitals?.respirations || '—'} />
 
             <View style={styles.divider} />
 

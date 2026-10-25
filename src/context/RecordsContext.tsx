@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { MedicalRecord, MedicalHub, UserHealthData, LabMetric } from '../types/medical';
 import { storageService } from '../services/storageService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ehrService, isWeightObservation } from '../services/ehrService';
+import { ehrService, isWeightObservation, heightFromObservations } from '../services/ehrService';
 import type { Appointment } from '../services/ehrService';
 import { birthdayFromFhir, genderFromFhir } from '../services/patientProfile';
 import { medicationNameFrom } from '../services/medicationName';
@@ -397,7 +397,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
       // Demographics from Epic fill in only blank fields. Anything already entered stays as it is.
       // "Other" is the default gender for a new profile, so Epic's value replaces it.
       const epicPatient = sources.map((s) => s.data?.patient).find(Boolean);
-      const demographics: { birthday?: string; gender?: string } = {};
+      const demographics: { birthday?: string; gender?: string; height?: string } = {};
       if (epicPatient) {
         if (!userData.birthday) {
           const birthday = birthdayFromFhir(epicPatient.birthDate);
@@ -407,6 +407,11 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
           const gender = genderFromFhir(epicPatient.gender);
           if (gender) demographics.gender = gender;
         }
+      }
+      // Height comes from the vital signs. It fills a blank profile only.
+      if (!userData.height) {
+        const height = heightFromObservations(sources.flatMap((s) => s.data?.observations || []));
+        if (height) demographics.height = height;
       }
       const demographicsChanged = Object.keys(demographics).length > 0;
 
@@ -488,9 +493,28 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
         (a, b) => a.date === b.date && a.systolic === b.systolic && a.diastolic === b.diastolic);
       const weightsAdded = weightHistory.length - (latestUserData.current.weightHistory || []).length;
       const bloodPressuresAdded = bloodPressureHistory.length - (latestUserData.current.bloodPressureHistory || []).length;
+      // The latest pulse and respirations from Epic, shown on the Home screen
+      const latestReading = (pattern: RegExp, unit: string): string => {
+        const readings = sources
+          .flatMap((s) => s.data?.observations || [])
+          .filter((o: any) => pattern.test(o.code || '') && !isNaN(Number(o.value)))
+          .sort((a: any, b: any) => (b.date || '').localeCompare(a.date || ''));
+        return readings.length > 0 ? `${readings[0].value} ${unit}` : '';
+      };
+      const epicPulse = latestReading(/pulse|heart rate/i, '/min');
+      const epicRespirations = latestReading(/respirat/i, '/min');
+      const vitalSigns = {
+        ...(epicPulse ? { pulse: epicPulse } : {}),
+        ...(epicRespirations ? { respirations: epicRespirations } : {}),
+      };
+      const vitalSignsChanged =
+        (vitalSigns.pulse !== undefined && vitalSigns.pulse !== latestUserData.current.vitals?.pulse) ||
+        (vitalSigns.respirations !== undefined && vitalSigns.respirations !== latestUserData.current.vitals?.respirations);
+
       const vitalsChanged =
         weightHistory.length !== (userData.weightHistory || []).length ||
-        bloodPressureHistory.length !== (userData.bloodPressureHistory || []).length;
+        bloodPressureHistory.length !== (userData.bloodPressureHistory || []).length ||
+        vitalSignsChanged;
 
       // Merge demographics, medications, allergies and conditions from all systems into userData in one save
       if (demographicsChanged || vitalsChanged || newPastMedications.length > 0 || newVaccines.length > 0 || misfiled.length > 0) {
@@ -498,6 +522,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
           ...demographics,
           weightHistory,
           bloodPressureHistory,
+          ...(vitalSignsChanged ? { vitals: { ...latestUserData.current.vitals, ...vitalSigns } } : {}),
           medicationHistory: [
             ...(latestUserData.current.medicationHistory || []).filter((m) => !misfiled.includes(m)),
             ...newPastMedications,
@@ -511,7 +536,7 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
       return {
         added,
         duplicates,
-        filled: Object.keys(demographics).map((key) => (key === 'birthday' ? 'birthday' : 'gender')),
+        filled: Object.keys(demographics),
         vaccines: newVaccines.length,
         pastMedications: newPastMedications.length,
         weights: weightsAdded,
