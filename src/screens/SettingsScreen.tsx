@@ -4,6 +4,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useRecords } from '@/context/RecordsContext';
 import { ehrService, EhrSystem } from '@/services/ehrService';
 import { ScreenHeader, Section, ListCard, ListRow, Divider, DetailPage } from '@/components/ScreenKit';
+import MyChartDisclosure from '@/components/MyChartDisclosure';
 
 export default function SettingsScreen() {
   const { records, clearAllData, syncWithEHR, profileBackups, restoreProfileBackup } = useRecords();
@@ -13,6 +14,9 @@ export default function SettingsScreen() {
   const [connectedIds, setConnectedIds] = useState<string[]>([]);
   const [expiredIds, setExpiredIds] = useState<string[]>([]);
   const [busySystemId, setBusySystemId] = useState<string | null>(null);
+  const [disclosureSystem, setDisclosureSystem] = useState<EhrSystem | null>(null);
+  // The system to sign in to once the disclosure has finished closing (iOS can't open the browser while a screen is closing)
+  const [pendingSystem, setPendingSystem] = useState<EhrSystem | null>(null);
   const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
@@ -34,7 +38,20 @@ export default function SettingsScreen() {
     await refreshConnections();
   };
 
-  const handleConnect = async (system: EhrSystem) => {
+  // Connecting starts with the disclosure, so the patient reads what we access before MyChart opens
+  const handleConnect = (system: EhrSystem) => setDisclosureSystem(system);
+
+  const continueToMyChart = () => {
+    setPendingSystem(disclosureSystem);
+    setDisclosureSystem(null);
+  };
+  const startPendingConnect = () => {
+    const system = pendingSystem;
+    setPendingSystem(null);
+    if (system) startConnect(system);
+  };
+
+  const startConnect = async (system: EhrSystem) => {
     try {
       setBusySystemId(system.id);
 
@@ -264,6 +281,12 @@ export default function SettingsScreen() {
           )}
         </View>
       </DetailPage>
+      <MyChartDisclosure
+        visible={disclosureSystem !== null}
+        onContinue={continueToMyChart}
+        onClose={() => setDisclosureSystem(null)}
+        onDismiss={startPendingConnect}
+      />
     </ScrollView>
   );
 }
