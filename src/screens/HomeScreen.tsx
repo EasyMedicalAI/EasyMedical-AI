@@ -168,6 +168,7 @@ export default function HomeScreen() {
   const [appointmentDoctorName, setAppointmentDoctorName] = useState('');
   const [appointmentSpecialty, setAppointmentSpecialty] = useState('');
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
+  const [appointmentTab, setAppointmentTab] = useState<'upcoming' | 'previous'>('upcoming');
   const [insuranceDraft, setInsuranceDraft] = useState({ provider: '', memberId: '', groupNumber: '' });
   // The plan being edited: its index, 'new' for a new plan, or null when none is open
   const [editingInsurance, setEditingInsurance] = useState<number | 'new' | null>(null);
@@ -1395,6 +1396,18 @@ export default function HomeScreen() {
   const appointmentValue = upcoming.length
     ? `Next ${upcoming[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
     : 'Next: none';
+  // Manual and Epic visits split into upcoming and previous by date. Each list is sorted so the nearest visit comes first.
+  const appointmentItems = [
+    ...(userData.appointments || []).map((apt) => ({ key: `manual-${apt.id}`, kind: 'manual' as const, apt, when: appointmentMoment(apt.dateTime)?.at })),
+    ...epicAppointments.map((apt) => ({ key: `epic-${apt.id}`, kind: 'epic' as const, apt, when: apt.start ? new Date(apt.start) : undefined })),
+  ].flatMap((item) => (item.when && !isNaN(item.when.getTime()) ? [{ ...item, when: item.when }] : []));
+  const upcomingItems = appointmentItems
+    .filter((item) => item.when.getTime() >= todayStart.getTime())
+    .sort((a, b) => a.when.getTime() - b.when.getTime());
+  const previousItems = appointmentItems
+    .filter((item) => item.when.getTime() < todayStart.getTime())
+    .sort((a, b) => b.when.getTime() - a.when.getTime());
+  const visibleAppointments = appointmentTab === 'upcoming' ? upcomingItems : previousItems;
   const vaccinesValue = String(getRecommendedVaccines().length) + ' recommended';
   const screeningsValue = String(getRecommendedScreenings().length) + ' recommended';
   const insuranceValue = (userData.insurances || []).length ? String((userData.insurances || []).length) + ' plans' : 'None';
@@ -2054,8 +2067,8 @@ export default function HomeScreen() {
           <View style={styles.cardWrapper}>
             <View style={styles.cardTitleRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Upcoming Appointments</Text>
-                <Text style={styles.cardMeta}>{(userData.appointments?.length || 0) + epicAppointments.length} total</Text>
+                <Text style={styles.cardTitle}>Appointments</Text>
+                <Text style={styles.cardMeta}>{upcomingItems.length} upcoming · {previousItems.length} previous</Text>
               </View>
               {epicAppointments.length > 0 && (
                 <TouchableOpacity onPress={loadEpicData}>
@@ -2064,62 +2077,61 @@ export default function HomeScreen() {
               )}
             </View>
             <View style={styles.card}>
-              {(userData.appointments && userData.appointments.length > 0) || epicAppointments.length > 0 ? (
-                <>
-                  {/* Manual appointments */}
-                  {userData.appointments && [...userData.appointments]
-                    .sort((a, b) => parseAppointmentDate(a.dateTime).getTime() - parseAppointmentDate(b.dateTime).getTime())
-                    .map((apt, idx) => (
-                      <View key={apt.id}>
-                        <View style={styles.appointmentItemRow}>
-                          <View style={styles.appointmentItem}>
-                            <Text style={styles.appointmentDate}>{apt.dateTime}</Text>
-                            <Text style={styles.appointmentDoctor}>{apt.doctorName}</Text>
-                            <Text style={styles.appointmentSpecialty}>{apt.specialty}</Text>
-                          </View>
-                          <TouchableOpacity onPress={() => {
-                            setEditData(userData);
-                            setEditingAppointmentId(apt.id);
-                            const parts = appointmentPartsFrom(apt.dateTime);
-                            setAppointmentDate(parts.date);
-                            setAppointmentTime(parts.time);
-                            setAppointmentDoctorName(apt.doctorName);
-                            setAppointmentSpecialty(apt.specialty);
-                            openEditorFromPage(() => setEditingSection('appointments'));
-                          }}>
-                            <Text style={styles.editLink}>Edit</Text>
-                          </TouchableOpacity>
+              <View style={styles.segmentedControl}>
+                {(['upcoming', 'previous'] as const).map((tab) => (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[styles.segment, appointmentTab === tab && styles.segmentOn]}
+                    onPress={() => setAppointmentTab(tab)}
+                  >
+                    <Text style={[styles.segmentText, appointmentTab === tab && styles.segmentTextOn]}>
+                      {tab === 'upcoming' ? `Upcoming (${upcomingItems.length})` : `Previous (${previousItems.length})`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {visibleAppointments.length > 0 ? (
+                visibleAppointments.map((item, idx) => (
+                  <View key={item.key}>
+                    {item.kind === 'manual' ? (
+                      <View style={styles.appointmentItemRow}>
+                        <View style={styles.appointmentItem}>
+                          <Text style={styles.appointmentDate}>{item.apt.dateTime}</Text>
+                          <Text style={styles.appointmentDoctor}>{item.apt.doctorName}</Text>
+                          <Text style={styles.appointmentSpecialty}>{item.apt.specialty}</Text>
                         </View>
-                        {idx < (userData.appointments?.length || 0) - 1 && <View style={styles.divider} />}
+                        <TouchableOpacity onPress={() => {
+                          setEditData(userData);
+                          setEditingAppointmentId(item.apt.id);
+                          const parts = appointmentPartsFrom(item.apt.dateTime);
+                          setAppointmentDate(parts.date);
+                          setAppointmentTime(parts.time);
+                          setAppointmentDoctorName(item.apt.doctorName);
+                          setAppointmentSpecialty(item.apt.specialty);
+                          openEditorFromPage(() => setEditingSection('appointments'));
+                        }}>
+                          <Text style={styles.editLink}>Edit</Text>
+                        </TouchableOpacity>
                       </View>
-                    ))}
-                  {/* Epic appointments */}
-                  {epicAppointments.map((apt, idx) => {
-                    const key = `appointment:${apt.id}`;
-                    const description = epicText(key, apt.description, 'primary');
-                    const doctor = epicText(key, apt.provider, 'secondary');
-                    return (
-                      <View key={apt.id}>
-                        <View style={styles.appointmentItemRow}>
-                          <View style={styles.appointmentItem}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
-                              <Text style={styles.appointmentDate}>{apt.date} at {apt.time}</Text>
-                              <EpicBadge />
-                            </View>
-                            <Text style={styles.appointmentDoctor}>{doctor}</Text>
-                            <Text style={styles.appointmentSpecialty}>{description}</Text>
-                            <TouchableOpacity onPress={() => openEpicEdit(key, 'appointment', description, doctor)}>
-                              <Text style={styles.epicEditLink}>Edit</Text>
-                            </TouchableOpacity>
+                    ) : (
+                      <View style={styles.appointmentItemRow}>
+                        <View style={styles.appointmentItem}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                            <Text style={styles.appointmentDate}>{item.apt.date} at {item.apt.time}</Text>
+                            <EpicBadge />
                           </View>
+                          <Text style={styles.appointmentDoctor}>{epicText(`appointment:${item.apt.id}`, item.apt.provider, 'secondary')}</Text>
+                          <Text style={styles.appointmentSpecialty}>{epicText(`appointment:${item.apt.id}`, item.apt.description, 'primary')}</Text>
                         </View>
-                        {idx < epicAppointments.length - 1 && <View style={styles.divider} />}
                       </View>
-                    );
-                  })}
-                </>
+                    )}
+                    {idx < visibleAppointments.length - 1 && <View style={styles.divider} />}
+                  </View>
+                ))
               ) : (
-                <Text style={styles.emptyText}>No upcoming appointments</Text>
+                <Text style={styles.emptyText}>
+                  {appointmentTab === 'upcoming' ? 'No upcoming appointments' : 'No previous appointments'}
+                </Text>
               )}
             </View>
           </View>
@@ -3857,6 +3869,24 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     flex: 1,
   },
+  segmentedControl: {
+    flexDirection: 'row',
+    backgroundColor: '#E9E9EB',
+    borderRadius: 9,
+    padding: 2,
+    margin: 12,
+  },
+  segment: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 7 },
+  segmentOn: {
+    backgroundColor: '#FFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  segmentText: { fontSize: 14, fontWeight: '500', color: '#000' },
+  segmentTextOn: { fontWeight: '600' },
   appointmentItemRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

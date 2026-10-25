@@ -341,17 +341,21 @@ class EhrService {
   async getAppointments(): Promise<Appointment[]> {
     return this.forEachConnection(async (c) => {
       const data = await this.fhirGet(c, `/Appointment?patient=${c.patientId}`);
-      return (data?.entry || []).map((e: any) => {
-        const startDate = new Date(e.resource.start);
-        return {
-          id: e.resource.id,
-          description: e.resource.description || 'Appointment',
-          provider: e.resource.participant?.[0]?.actor?.display || 'Unknown Provider',
-          date: startDate.toLocaleDateString(),
-          time: startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          start: e.resource.start,
-        };
-      });
+      // An appointment without a valid start time can't be placed on the calendar, so it isn't shown
+      return (data?.entry || [])
+        .map((e: any) => e.resource)
+        .filter((r: any) => r && !isNaN(new Date(r.start).getTime()))
+        .map((r: any, index: number) => {
+          const startDate = new Date(r.start);
+          return {
+            id: r.id || `${r.start}-${index}`,
+            description: r.description || 'Appointment',
+            provider: r.participant?.[0]?.actor?.display || 'Unknown Provider',
+            date: startDate.toLocaleDateString(),
+            time: startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            start: r.start,
+          };
+        });
     });
   }
 
