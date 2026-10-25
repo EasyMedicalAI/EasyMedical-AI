@@ -3,6 +3,7 @@ import DateWheel, { dateFromText, textFromDate } from '@/components/DateWheel';
 import FindDoctor from '@/components/FindDoctor';
 import FindPharmacy from '@/components/FindPharmacy';
 import InlineFieldsForm from '@/components/InlineFieldsForm';
+import EpicBadge from '@/components/EpicBadge';
 import InsuranceScan, { CardDetails } from '@/components/InsuranceScan';
 import VaccineForm, { VaccineFormValues, blankVaccineForm } from '@/components/VaccineEditor';
 import ScreeningForm, { ScreeningFormValues, blankScreeningForm } from '@/components/ScreeningForm';
@@ -1655,7 +1656,10 @@ export default function HomeScreen() {
                     return (
                       <View key={`epic-med-${index}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.medRowName}>{name}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                            <Text style={styles.medRowName}>{name}</Text>
+                            <EpicBadge />
+                          </View>
                           {dosage ? <Text style={styles.medRowDetail}>{dosage}</Text> : null}
                         </View>
                         {showMedicationControls && (
@@ -1730,9 +1734,12 @@ export default function HomeScreen() {
               {pastMedications.length > 0 ? (
                 pastMedications.map((med, idx) => (
                   <View key={`past-${idx}`} style={{ marginVertical: 4 }}>
-                    <Text style={styles.healthItem}>{[med.name, med.dose].filter(Boolean).join(' · ')}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                      <Text style={styles.healthItem}>{[med.name, med.dose].filter(Boolean).join(' · ')}</Text>
+                      {med.source === 'epic' && <EpicBadge />}
+                    </View>
                     <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                      {[med.startDate && `Started ${shortDate(med.startDate)}`, med.endDate && `Stopped ${shortDate(med.endDate)}`, !med.endDate && med.source === 'epic' && 'From Epic'].filter(Boolean).join(' · ')}
+                      {[med.startDate && `Started ${shortDate(med.startDate)}`, med.endDate && `Stopped ${shortDate(med.endDate)}`].filter(Boolean).join(' · ')}
                     </Text>
                   </View>
                 ))
@@ -1773,6 +1780,7 @@ export default function HomeScreen() {
                     key={'epic-' + cond.id}
                     icon="stethoscope"
                     label={name}
+                    badge={<EpicBadge />}
                     hint={detail || undefined}
                     onPress={() => openEditorFromPage(() => openEpicEdit(key, 'condition', name, detail))}
                   />
@@ -1809,6 +1817,7 @@ export default function HomeScreen() {
                   key={'past-epic-' + cond.id}
                   icon="check-circle-outline"
                   label={cond.name}
+                  badge={<EpicBadge />}
                   hint={[cond.status && `Status: ${cond.status}`, cond.onsetDate && `Started ${onsetText(cond.onsetDate)}`].filter(Boolean).join(' · ') || undefined}
                 />
               )),
@@ -1851,6 +1860,7 @@ export default function HomeScreen() {
                     key={'epic-' + allergy.id}
                     icon="alert-outline"
                     label={allergen}
+                    badge={<EpicBadge />}
                     hint={reaction ? `Reaction: ${reaction}` : undefined}
                     onPress={() => openEditorFromPage(() => openEpicEdit(key, 'allergy', allergen, reaction))}
                   />
@@ -2070,7 +2080,10 @@ export default function HomeScreen() {
                       <View key={apt.id}>
                         <View style={styles.appointmentItemRow}>
                           <View style={styles.appointmentItem}>
-                            <Text style={styles.appointmentDate}>{apt.date} at {apt.time}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                              <Text style={styles.appointmentDate}>{apt.date} at {apt.time}</Text>
+                              <EpicBadge />
+                            </View>
                             <Text style={styles.appointmentDoctor}>{doctor}</Text>
                             <Text style={styles.appointmentSpecialty}>{description}</Text>
                             <TouchableOpacity onPress={() => openEpicEdit(key, 'appointment', description, doctor)}>

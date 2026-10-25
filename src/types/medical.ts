@@ -32,6 +32,8 @@ export interface ExtractedData {
 
 export interface MedicalRecord {
   id: string;
+  // The health system a record was imported from. Records entered by hand or uploaded have none.
+  source?: string;
   uploadDate: string;
   appointmentDate?: string; // For organizing records by date
   imageUri?: string;

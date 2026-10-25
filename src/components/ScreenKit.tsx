@@ -54,6 +54,7 @@ export function ListRow({
   value,
   onPress,
   danger,
+  badge,
 }: {
   icon: IconName;
   label: string;
@@ -61,6 +62,7 @@ export function ListRow({
   value?: string;
   onPress?: () => void;
   danger?: boolean;
+  badge?: React.ReactNode;
 }) {
   const content = (
     <>
@@ -71,7 +73,10 @@ export function ListRow({
         style={kit.rowIcon}
       />
       <View style={kit.rowContent}>
-        <Text style={[kit.rowLabel, danger && kit.dangerText]}>{label}</Text>
+        <View style={kit.labelRow}>
+          <Text style={[kit.rowLabel, danger && kit.dangerText]}>{label}</Text>
+          {badge}
+        </View>
         {hint ? <Text style={kit.rowHint}>{hint}</Text> : null}
       </View>
       {value ? <Text style={kit.rowValue}>{value}</Text> : null}
@@ -183,6 +188,12 @@ const kit = StyleSheet.create({
   },
   rowContent: {
     flex: 1,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   rowLabel: {
     fontSize: 15,

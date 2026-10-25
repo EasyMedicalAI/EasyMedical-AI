@@ -24,6 +24,7 @@ import { ehrService, Appointment } from '@/services/ehrService';
 import { MedicalRecord } from '@/types/medical';
 import MetricDetailScreen from '@/screens/MetricDetailScreen';
 import RecordSummary from '@/components/RecordSummary';
+import EpicBadge from '@/components/EpicBadge';
 import { toMedicalRecord, ExtractedRecord } from '@/services/recordFormat';
 import { typicalRangeFor } from '@/services/labReferenceRanges';
 import LabTrendChart from '@/components/LabTrendChart';
@@ -931,6 +932,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
                     <ListRow
                       icon={getSpecialtyIcon(specialty)}
                       label={record.provider || 'Record'}
+                      badge={record.source ? <EpicBadge /> : undefined}
                       hint={record.reasonForVisit || record.summary || 'No description'}
                       value={new Date(record.appointmentDate || record.uploadDate).toLocaleDateString('en-US', {
                         month: 'short',
