@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import DateWheel, { dateFromText, textFromDate } from '@/components/DateWheel';
 import FindDoctor from '@/components/FindDoctor';
 import InsuranceScan, { CardDetails } from '@/components/InsuranceScan';
+import VaccineForm, { VaccineFormValues, blankVaccineForm } from '@/components/VaccineEditor';
+import ScreeningForm, { ScreeningFormValues, blankScreeningForm } from '@/components/ScreeningForm';
 import {
   ScrollView,
   View,
@@ -26,7 +28,7 @@ import { ehrService, Medication, Appointment, Observation, Allergy, Condition, E
 import LabTrendChart from '@/components/LabTrendChart';
 import QuickLogBox from '@/components/QuickLogBox';
 import MedicationCalendar from '@/components/MedicationCalendar';
-import { nextDoseLabel, defaultTimes } from '@/services/doseSchedule';
+import { nextDoseLabel, defaultTimes, dateKey, dateFromKey } from '@/services/doseSchedule';
 import MedicationLabelReview, { MedicationDraft } from '@/components/MedicationLabelReview';
 import MedicationForm, { MedicationFormValues, blankMedicationForm, formFromMedication, medicationFieldsFromForm } from '@/components/MedicationForm';
 import AppointmentQuickAdd from '@/components/AppointmentQuickAdd';
@@ -177,14 +179,12 @@ export default function HomeScreen() {
   const [pharmacyName, setPharmacyName] = useState('');
   const [pharmacyAddress, setPharmacyAddress] = useState('');
   const [pharmacyPhone, setPharmacyPhone] = useState('');
-  const [screeningType, setScreeningType] = useState('');
-  const [screeningDate, setScreeningDate] = useState('');
-  const [screeningNotes, setScreeningNotes] = useState('');
-  const [editingScreeningId, setEditingScreeningId] = useState<number | null>(null);
+  const [openScreening, setOpenScreening] = useState<{ key: string } | null>(null);
+  const [screeningForm, setScreeningForm] = useState<ScreeningFormValues>(blankScreeningForm());
   const [birthdayPick, setBirthdayPick] = useState<Date>(() => new Date(1990, 0, 1, 12));
   const [selectedGender, setSelectedGender] = useState('Other');
   const [customGender, setCustomGender] = useState('');
-  const [editingHistoryType, setEditingHistoryType] = useState<'surgical' | 'family' | 'conditions' | 'hospitalization' | null>(null);
+  const [editingHistoryType, setEditingHistoryType] = useState<HistoryType | null>(null);
   const [surgeryName, setSurgeryName] = useState('');
   const [familyMember, setFamilyMember] = useState('');
   const [familyMemberCustomMode, setFamilyMemberCustomMode] = useState(false);
@@ -206,12 +206,9 @@ export default function HomeScreen() {
   const [newVaccine, setNewVaccine] = useState('');
   const [editingVaccineIdx, setEditingVaccineIdx] = useState<number | null>(null);
   const [editingVaccineValue, setEditingVaccineValue] = useState('');
-  const [newVaccineName, setNewVaccineName] = useState('');
-  const [newVaccineDate, setNewVaccineDate] = useState('');
-  const [newVaccineNextDue, setNewVaccineNextDue] = useState('');
   const [editingVaccineId, setEditingVaccineId] = useState<number | null>(null);
-  const [showVaccineModal, setShowVaccineModal] = useState(false);
-  const [selectedRecommendedVaccine, setSelectedRecommendedVaccine] = useState<string>('');
+  const [openVaccine, setOpenVaccine] = useState<{ key: string } | null>(null);
+  const [vaccineForm, setVaccineForm] = useState<VaccineFormValues>(blankVaccineForm());
   const [medicationInputMode, setMedicationInputMode] = useState<'method' | 'text' | 'photo' | 'label-review' | null>(null);
   const [labelDraft, setLabelDraft] = useState<MedicationDraft | null>(null);
   const [medicationType, setMedicationType] = useState<'prescription' | 'otc' | null>(null);
@@ -370,6 +367,83 @@ export default function HomeScreen() {
     setInsuranceMemberId(item?.memberId || '');
     setInsuranceGroupNumber(item?.groupNumber || '');
     openEditorFromPage(() => setEditingSection('insurance'));
+  };
+
+  // Vaccines: a form opens inside the row that was tapped. Rows are "completed-<n>", "recommended-<n>", or "new".
+  const safeDate = (text: string) => (/^\d{4}-\d{2}-\d{2}$/.test(text) ? dateFromKey(text) : new Date());
+  const openVaccineForm = (key: string, values: VaccineFormValues) => {
+    setVaccineForm(values);
+    setOpenVaccine({ key });
+  };
+  const toggleCompletedVaccine = (index: number) => {
+    const key = `completed-${index}`;
+    if (openVaccine?.key === key) return setOpenVaccine(null);
+    const vaccine = (userData.vaccines || [])[index];
+    openVaccineForm(key, { name: vaccine.name, date: safeDate(vaccine.date), nextDue: vaccine.nextDue ? safeDate(vaccine.nextDue) : null });
+  };
+  const toggleNewVaccine = (key: string, name = '') => {
+    if (openVaccine?.key === key) return setOpenVaccine(null);
+    openVaccineForm(key, blankVaccineForm(name));
+  };
+  const closeVaccine = () => setOpenVaccine(null);
+  const saveVaccine = async () => {
+    const name = vaccineForm.name.trim();
+    if (!name || !vaccineForm.date) {
+      Alert.alert('Add details', 'Enter the vaccine name and the date it was given.');
+      return;
+    }
+    const entry = { name, date: dateKey(vaccineForm.date), nextDue: vaccineForm.nextDue ? dateKey(vaccineForm.nextDue) : undefined };
+    const list = [...(userData.vaccines || [])];
+    const match = openVaccine?.key.match(/^completed-(\d+)$/);
+    if (match) list[parseInt(match[1], 10)] = entry;
+    else list.push(entry);
+    await patchUserData({ vaccines: list });
+    setOpenVaccine(null);
+  };
+  const deleteVaccine = async () => {
+    const match = openVaccine?.key.match(/^completed-(\d+)$/);
+    if (!match) return;
+    const index = parseInt(match[1], 10);
+    await patchUserData({ vaccines: (userData.vaccines || []).filter((_, i) => i !== index) });
+    setOpenVaccine(null);
+  };
+
+  // Screenings: a form opens inside the row that was tapped. Rows are "completed-<n>", "recommended-<n>", or "new".
+  const openScreeningForm = (key: string, values: ScreeningFormValues) => {
+    setScreeningForm(values);
+    setOpenScreening({ key });
+  };
+  const toggleCompletedScreening = (index: number) => {
+    const key = `completed-${index}`;
+    if (openScreening?.key === key) return setOpenScreening(null);
+    const screening = (userData.screenings || [])[index];
+    openScreeningForm(key, { type: screening.type, date: dateFromText(screening.date) ?? new Date(), notes: screening.notes || '' });
+  };
+  const toggleNewScreening = (key: string, type = '') => {
+    if (openScreening?.key === key) return setOpenScreening(null);
+    openScreeningForm(key, blankScreeningForm(type));
+  };
+  const closeScreening = () => setOpenScreening(null);
+  const saveScreening = async () => {
+    const type = screeningForm.type.trim();
+    if (!type || !screeningForm.date) {
+      Alert.alert('Add details', 'Enter the screening and the date it was done.');
+      return;
+    }
+    const entry = { type, date: textFromDate(screeningForm.date), notes: screeningForm.notes.trim() || undefined };
+    const list = [...(userData.screenings || [])];
+    const match = openScreening?.key.match(/^completed-(\d+)$/);
+    if (match) list[parseInt(match[1], 10)] = entry;
+    else list.push(entry);
+    await patchUserData({ screenings: list });
+    setOpenScreening(null);
+  };
+  const deleteScreening = async () => {
+    const match = openScreening?.key.match(/^completed-(\d+)$/);
+    if (!match) return;
+    const index = parseInt(match[1], 10);
+    await patchUserData({ screenings: (userData.screenings || []).filter((_, i) => i !== index) });
+    setOpenScreening(null);
   };
 
   // Obstetric history: a summary from the pregnancy list, newest first
@@ -928,29 +1002,6 @@ export default function HomeScreen() {
         setPharmacyName('');
         setPharmacyAddress('');
         setPharmacyPhone('');
-      } else if (editingSection === 'screenings' && screeningType && screeningDate) {
-        let updatedScreenings;
-
-        if (editingScreeningId !== null) {
-          updatedScreenings = (editData.screenings || []).map((screening, idx) =>
-            idx === editingScreeningId
-              ? { type: screeningType, date: screeningDate, notes: screeningNotes }
-              : screening
-          );
-          setEditingScreeningId(null);
-        } else {
-          const newScreening = {
-            type: screeningType,
-            date: screeningDate,
-            notes: screeningNotes,
-          };
-          updatedScreenings = [...(editData.screenings || []), newScreening];
-        }
-
-        await patchUserData({ screenings: updatedScreenings });
-        setScreeningType('');
-        setScreeningDate('');
-        setScreeningNotes('');
       } else if (editingHistoryType === 'surgical') {
         const entry = { surgeryName: surgeryName.trim(), date: formatHistoryDate(historyDate) };
         const list = [...(editData.surgicalHistory || [])];
@@ -1991,188 +2042,144 @@ export default function HomeScreen() {
         />
       </DetailModal>
 
-      <DetailModal visible={openPage === 'screenings'} onClose={closeDetail} onDismiss={runPendingEditor}>
-        {/* SCREENINGS Card */}
-        <View style={styles.section}>
-          <View style={styles.cardWrapper}>
-            <View style={styles.cardTitleRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Health Screenings</Text>
+      <DetailModal visible={openPage === 'screenings'} title="Health screenings" onClose={closeDetail} onDismiss={runPendingEditor}>
+        <Section title="Completed">
+          <ListCard>
+            {openScreening?.key === 'new' && (
+              <View style={styles.inlineForm}>
+                <ScreeningForm values={screeningForm} onChange={(patch) => setScreeningForm((form) => ({ ...form, ...patch }))} onSave={saveScreening} onCancel={closeScreening} />
               </View>
-            </View>
-            <View style={styles.card}>
-            {/* Screening Completed Section */}
-            <View style={styles.screeningSection}>
-              <View style={styles.screeningSectionHeader}>
-                <Text style={styles.screeningSectionTitle}>Screening Completed</Text>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  openEditorFromPage(() => setEditingSection('screenings'));
-                  setEditingScreeningId(null);
-                  setScreeningType('');
-                  setScreeningDate('');
-                  setScreeningNotes('');
-                }}>
-                  <Text style={styles.addButtonSmall}>+ Add</Text>
-                </TouchableOpacity>
-              </View>
-
-              {userData.screenings && userData.screenings.length > 0 ? (
-                <View>
-                  {userData.screenings.map((screening, idx) => (
-                    <View key={idx}>
-                      <TouchableOpacity
-                        style={styles.completedScreeningItem}
-                        onPress={() => {
-                          setEditData(userData);
-                          openEditorFromPage(() => setEditingSection('screenings'));
-                          setEditingScreeningId(idx);
-                          setScreeningType(screening.type);
-                          setScreeningDate(screening.date);
-                          setScreeningNotes(screening.notes || '');
-                        }}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.completedScreeningType}>{screening.type}</Text>
-                          <Text style={styles.completedScreeningDate}>{screening.date}</Text>
-                          {screening.notes && <Text style={styles.completedScreeningNotes}>{screening.notes}</Text>}
-                        </View>
-                        <Text style={styles.editLink}>Edit</Text>
-                      </TouchableOpacity>
-                      {idx < userData.screenings.length - 1 && <View style={styles.divider} />}
+            )}
+            {(userData.screenings || []).map((screening, index) => {
+              const key = `completed-${index}`;
+              return (
+                <React.Fragment key={key}>
+                  {index > 0 && <Divider />}
+                  {openScreening?.key === key ? (
+                    <View style={styles.inlineForm}>
+                      <ScreeningForm
+                        values={screeningForm}
+                        onChange={(patch) => setScreeningForm((form) => ({ ...form, ...patch }))}
+                        onSave={saveScreening}
+                        onCancel={closeScreening}
+                        onDelete={deleteScreening}
+                      />
                     </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.emptyScreeningText}>No screenings added yet</Text>
-              )}
-            </View>
+                  ) : (
+                    <ListRow
+                      icon="clipboard-pulse-outline"
+                      label={screening.type}
+                      hint={screening.notes || undefined}
+                      value={screening.date}
+                      onPress={() => toggleCompletedScreening(index)}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+            {(userData.screenings || []).length === 0 && openScreening?.key !== 'new' && <Text style={styles.emptyText}>No screenings added yet</Text>}
+            {(userData.screenings || []).length > 0 && <Divider />}
+            {openScreening?.key !== 'new' && <ListRow icon="plus-circle-outline" label="Add screening" onPress={() => toggleNewScreening('new')} />}
+          </ListCard>
+        </Section>
 
-            <View style={styles.sectionDivider} />
-
-            {/* Recommended Screenings Section */}
-            <View style={styles.screeningSection}>
-              <Text style={styles.screeningSectionTitle}>Recommended Screenings (USPSTF)</Text>
-              <Text style={styles.recommendedSubtitle}>Age-appropriate screenings based on your profile</Text>
-              <View style={styles.recommendedList}>
-                {getRecommendedScreenings().map((screening, idx) => {
-                  const isCompleted = userData.screenings?.some(s =>
-                    s.type.toLowerCase().includes(screening.toLowerCase().split('(')[0].trim().toLowerCase())
-                  );
-                  return (
-                    <TouchableOpacity
-                      key={idx}
-                      style={[styles.recommendedItem, isCompleted && styles.completedItem]}
-                      onPress={() => {
-                        if (!isCompleted) {
-                          setEditData(userData);
-                          openEditorFromPage(() => setEditingSection('screenings'));
-                          setEditingScreeningId(null);
-                          setScreeningType(screening);
-                          setScreeningDate('');
-                          setScreeningNotes('');
-                        }
-                      }}
-                    >
-                      <Text style={styles.recommendedCheckbox}>{isCompleted ? '✓' : '○'}</Text>
-                      <Text style={[styles.recommendedText, isCompleted && styles.completedText]}>
-                        {screening}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          </View>
-        </View>
-        </View>
-
+        <Section title="Recommended (USPSTF)">
+          <ListCard>
+            {getRecommendedScreenings().map((screening, index) => {
+              const key = `recommended-${index}`;
+              const isCompleted = (userData.screenings || []).some((s) =>
+                s.type.toLowerCase().includes(screening.toLowerCase().split('(')[0].trim().toLowerCase())
+              );
+              return (
+                <React.Fragment key={key}>
+                  {index > 0 && <Divider />}
+                  {openScreening?.key === key ? (
+                    <View style={styles.inlineForm}>
+                      <ScreeningForm values={screeningForm} onChange={(patch) => setScreeningForm((form) => ({ ...form, ...patch }))} onSave={saveScreening} onCancel={closeScreening} />
+                    </View>
+                  ) : (
+                    <ListRow
+                      icon={isCompleted ? 'check-circle' : 'circle-outline'}
+                      label={screening}
+                      hint={isCompleted ? 'Recorded' : undefined}
+                      onPress={isCompleted ? undefined : () => toggleNewScreening(key, screening)}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </ListCard>
+        </Section>
       </DetailModal>
 
-      <DetailModal visible={openPage === 'vaccines'} onClose={closeDetail} onDismiss={runPendingEditor}>
-        {/* VACCINES Card */}
-        <View style={styles.section}>
-          <View style={styles.cardWrapper}>
-            <View style={styles.cardTitleRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>Vaccines</Text>
+      <DetailModal visible={openPage === 'vaccines'} title="Vaccines" onClose={closeDetail} onDismiss={runPendingEditor}>
+        <Section title="Completed">
+          <ListCard>
+            {openVaccine?.key === 'new' && (
+              <View style={styles.inlineForm}>
+                <VaccineForm values={vaccineForm} onChange={(patch) => setVaccineForm((form) => ({ ...form, ...patch }))} onSave={saveVaccine} onCancel={closeVaccine} />
               </View>
-            </View>
-            <View style={styles.card}>
-            {/* Vaccines Completed Section */}
-            <View style={styles.screeningSection}>
-              <View style={styles.screeningSectionHeader}>
-                <Text style={styles.screeningSectionTitle}>Vaccines Completed</Text>
-                <TouchableOpacity onPress={() => {
-                  setEditData(userData);
-                  openEditorFromPage(() => setEditingSection('vaccines'));
-                  setEditingScreeningId(null);
-                  setScreeningType('');
-                  setScreeningDate('');
-                  setScreeningNotes('');
-                }}>
-                  <Text style={styles.addButtonSmall}>+ Add</Text>
-                </TouchableOpacity>
-              </View>
-
-              {userData.vaccines && userData.vaccines.length > 0 ? (
-                <View>
-                  {userData.vaccines.map((vaccine, idx) => (
-                    <View key={idx}>
-                      <View style={styles.completedScreeningItem}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.completedScreeningType}>{vaccine.name}</Text>
-                          <Text style={styles.completedScreeningDate}>{vaccine.date}</Text>
-                          {vaccine.nextDue && <Text style={styles.completedScreeningNotes}>Next due: {vaccine.nextDue}</Text>}
-                        </View>
-                      </View>
-                      {idx < userData.vaccines.length - 1 && <View style={styles.divider} />}
+            )}
+            {(userData.vaccines || []).map((vaccine, index) => {
+              const key = `completed-${index}`;
+              return (
+                <React.Fragment key={key}>
+                  {index > 0 && <Divider />}
+                  {openVaccine?.key === key ? (
+                    <View style={styles.inlineForm}>
+                      <VaccineForm
+                        values={vaccineForm}
+                        onChange={(patch) => setVaccineForm((form) => ({ ...form, ...patch }))}
+                        onSave={saveVaccine}
+                        onCancel={closeVaccine}
+                        onDelete={deleteVaccine}
+                      />
                     </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={styles.emptyScreeningText}>No vaccines recorded</Text>
-              )}
-            </View>
+                  ) : (
+                    <ListRow
+                      icon="needle"
+                      label={vaccine.name}
+                      hint={vaccine.nextDue ? `Next due ${vaccine.nextDue}` : undefined}
+                      value={vaccine.date}
+                      onPress={() => toggleCompletedVaccine(index)}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+            {(userData.vaccines || []).length === 0 && openVaccine?.key !== 'new' && <Text style={styles.emptyText}>No vaccines recorded</Text>}
+            {(userData.vaccines || []).length > 0 && <Divider />}
+            {openVaccine?.key !== 'new' && <ListRow icon="plus-circle-outline" label="Add vaccine" onPress={() => toggleNewVaccine('new')} />}
+          </ListCard>
+        </Section>
 
-            <View style={styles.sectionDivider} />
-
-            {/* Recommended Vaccines Section */}
-            <View style={styles.screeningSection}>
-              <Text style={styles.screeningSectionTitle}>Recommended Vaccines</Text>
-              <Text style={styles.recommendedSubtitle}>Age-appropriate vaccines for your profile</Text>
-              <View style={styles.recommendedList}>
-                {getRecommendedVaccines().map((vaccine, idx) => {
-                  const isCompleted = userData.vaccines?.some(v =>
-                    v.name.toLowerCase().includes(vaccine.toLowerCase().split('(')[0].split('-')[0].trim().toLowerCase())
-                  );
-                  return (
-                    <TouchableOpacity
-                      key={idx}
-                      style={[styles.recommendedItem, isCompleted && styles.completedItem]}
-                      onPress={() => {
-                        if (!isCompleted) {
-                          setSelectedRecommendedVaccine(vaccine);
-                          setNewVaccineName(vaccine.split('(')[0].trim());
-                          setNewVaccineDate(new Date().toISOString().split('T')[0]);
-                          setNewVaccineNextDue('');
-                          setShowVaccineModal(true);
-                        }
-                      }}
-                    >
-                      <Text style={styles.recommendedCheckbox}>{isCompleted ? '✓' : '○'}</Text>
-                      <Text style={[styles.recommendedText, isCompleted && styles.completedText]}>
-                        {vaccine}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          </View>
-        </View>
-        </View>
-
+        <Section title="Recommended">
+          <ListCard>
+            {getRecommendedVaccines().map((vaccine, index) => {
+              const key = `recommended-${index}`;
+              const isCompleted = (userData.vaccines || []).some((v) =>
+                v.name.toLowerCase().includes(vaccine.toLowerCase().split('(')[0].split('-')[0].trim().toLowerCase())
+              );
+              return (
+                <React.Fragment key={key}>
+                  {index > 0 && <Divider />}
+                  {openVaccine?.key === key ? (
+                    <View style={styles.inlineForm}>
+                      <VaccineForm values={vaccineForm} onChange={(patch) => setVaccineForm((form) => ({ ...form, ...patch }))} onSave={saveVaccine} onCancel={closeVaccine} />
+                    </View>
+                  ) : (
+                    <ListRow
+                      icon={isCompleted ? 'check-circle' : 'circle-outline'}
+                      label={vaccine}
+                      hint={isCompleted ? 'Recorded' : undefined}
+                      onPress={isCompleted ? undefined : () => toggleNewVaccine(key, vaccine.split('(')[0].trim())}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </ListCard>
+        </Section>
       </DetailModal>
 
       <DetailModal visible={openPage === 'insurance'} title="Insurance" onClose={closeDetail} onDismiss={runPendingEditor}>
@@ -2899,174 +2906,8 @@ export default function HomeScreen() {
       </Modal>
 
 
-      <Modal visible={editingSection === 'vaccines'} animationType="slide" onRequestClose={handleCancel}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Edit Vaccinations</Text>
-            <TouchableOpacity onPress={handleCancel}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            {userData.vaccines && userData.vaccines.length > 0 ? (
-              <View>
-                {userData.vaccines.map((vaccine, idx) => (
-                  <View key={idx} style={{ marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#E0E0E0' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.entryTitle}>{vaccine.name}</Text>
-                        <Text style={styles.entryMeta}>Date: {vaccine.date}</Text>
-                        {vaccine.nextDue && <Text style={styles.entryMeta}>Next due: {vaccine.nextDue}</Text>}
-                      </View>
-                      <TouchableOpacity
-                        onPress={async () => {
-                          const updatedVaccines = userData.vaccines!.filter((_, i) => i !== idx);
-                          await patchUserData({ vaccines: updatedVaccines });
-                          Alert.alert('Success', 'Vaccine deleted');
-                        }}
-                        style={{ marginLeft: 12 }}
-                      >
-                        <Text style={{ color: '#FF3B30', fontWeight: '600' }}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <Text style={styles.emptyText}>No vaccines recorded</Text>
-            )}
-
-            <View style={{ marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#E0E0E0' }}>
-              <Text style={styles.fieldLabel}>Add New Vaccine</Text>
-
-              <Text style={styles.label}>Vaccine Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., COVID-19 (Booster)"
-                placeholderTextColor="#999"
-                value={newVaccineName}
-                onChangeText={setNewVaccineName}
-              />
-
-              <Text style={styles.label}>Date Received</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., 2024-01-15"
-                placeholderTextColor="#999"
-                value={newVaccineDate}
-                onChangeText={setNewVaccineDate}
-              />
-
-              <Text style={styles.label}>Next Due (Optional)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., 2025-01-15"
-                placeholderTextColor="#999"
-                value={newVaccineNextDue}
-                onChangeText={setNewVaccineNextDue}
-              />
-
-              <TouchableOpacity
-                style={styles.saveButton}
-                onPress={async () => {
-                  if (newVaccineName.trim() && newVaccineDate.trim()) {
-                    const updatedVaccines = [...(userData.vaccines || []), {
-                      name: newVaccineName.trim(),
-                      date: newVaccineDate.trim(),
-                      nextDue: newVaccineNextDue.trim() || undefined,
-                    }];
-                    await patchUserData({ vaccines: updatedVaccines });
-                    setNewVaccineName('');
-                    setNewVaccineDate('');
-                    setNewVaccineNextDue('');
-                    Alert.alert('Success', 'Vaccine added');
-                  } else {
-                    Alert.alert('Error', 'Please fill in vaccine name and date');
-                  }
-                }}
-              >
-                <Text style={styles.buttonTextWhite}>+ Add Vaccine</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity style={styles.backButton} onPress={handleCancel}>
-              <Text style={styles.buttonText}>Back</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </Modal>
 
       {/* Add Vaccine from Recommended Modal */}
-      <Modal visible={showVaccineModal} animationType="slide" onRequestClose={() => setShowVaccineModal(false)}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Add Vaccine</Text>
-            <TouchableOpacity onPress={() => setShowVaccineModal(false)}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <Text style={styles.label}>Vaccine Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Vaccine name"
-              placeholderTextColor="#999"
-              value={newVaccineName}
-              onChangeText={setNewVaccineName}
-              editable={false}
-            />
-
-            <Text style={styles.label}>Date Received</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#999"
-              value={newVaccineDate}
-              onChangeText={setNewVaccineDate}
-            />
-
-            <Text style={styles.label}>Next Due (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#999"
-              value={newVaccineNextDue}
-              onChangeText={setNewVaccineNextDue}
-            />
-
-            <TouchableOpacity
-              style={styles.saveButton}
-              onPress={async () => {
-                if (newVaccineName.trim() && newVaccineDate.trim()) {
-                  const updatedVaccines = [...(userData.vaccines || []), {
-                    name: newVaccineName.trim(),
-                    date: newVaccineDate.trim(),
-                    nextDue: newVaccineNextDue.trim() || undefined,
-                  }];
-                  setEditData({ ...editData, vaccines: updatedVaccines });
-                  await patchUserData({ vaccines: updatedVaccines });
-                  setNewVaccineName('');
-                  setNewVaccineDate('');
-                  setNewVaccineNextDue('');
-                  setShowVaccineModal(false);
-                  Alert.alert('Success', 'Vaccine added successfully!');
-                } else {
-                  Alert.alert('Error', 'Please fill in vaccine name and date');
-                }
-              }}
-            >
-              <Text style={styles.buttonTextWhite}>Add Vaccine</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => setShowVaccineModal(false)}
-            >
-              <Text style={styles.buttonText}>Cancel</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </Modal>
 
       <InsuranceScan
         visible={insuranceScanOpen}
@@ -3125,53 +2966,6 @@ export default function HomeScreen() {
         onDelete={deletePharmacy}
       />
 
-      <Modal visible={editingSection === 'screenings'} animationType="slide" onRequestClose={handleCancel}>
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{editingScreeningId !== null ? 'Edit Screening' : 'Add Screening'}</Text>
-            <TouchableOpacity onPress={handleCancel}>
-              <Text style={styles.closeButton}>✕</Text>
-            </TouchableOpacity>
-          </View>
-          <ScrollView style={styles.modalContent}>
-            <Text style={styles.label}>Screening Type</Text>
-            <TextInput
-              style={styles.input}
-              value={screeningType}
-              onChangeText={setScreeningType}
-              placeholder="e.g., Colonoscopy, Mammogram, Eye Exam, Dental, Blood Pressure"
-            />
-            <Text style={styles.label}>Date</Text>
-            <TextInput
-              style={styles.input}
-              value={screeningDate}
-              onChangeText={setScreeningDate}
-              placeholder="e.g., 03/15/2024"
-            />
-            <Text style={styles.label}>Notes (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              value={screeningNotes}
-              onChangeText={setScreeningNotes}
-              placeholder="e.g., Provider name, results, next due date"
-              multiline
-            />
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.saveButton} onPress={handleSaveEdit}>
-                <Text style={styles.buttonTextWhite}>Save</Text>
-              </TouchableOpacity>
-            </View>
-            {editingScreeningId !== null && (
-              <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-                <Text style={styles.deleteButtonText}>Delete Screening</Text>
-              </TouchableOpacity>
-            )}
-          </ScrollView>
-        </View>
-      </Modal>
 
       <AppointmentEditor
         visible={editingSection === 'appointments'}
@@ -3326,6 +3120,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  inlineForm: { padding: 14, backgroundColor: '#F7FAFF' },
   tapForHistory: {
     fontSize: 13,
     fontWeight: '600',

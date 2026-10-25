@@ -9,7 +9,10 @@ export const SPECIALTIES: { label: string; taxonomy: string }[] = [
   { label: 'Dermatology', taxonomy: 'Dermatology' },
   { label: 'OB/GYN', taxonomy: 'Obstetrics & Gynecology' },
   { label: 'Pediatrics', taxonomy: 'Pediatrics' },
-  { label: 'Psychiatry', taxonomy: 'Psychiatry' },
+  { label: 'Psychiatrist', taxonomy: 'Psychiatry' },
+  { label: 'Psychologist', taxonomy: 'Psychologist' },
+  { label: 'Dentist', taxonomy: 'Dentist' },
+  { label: 'Ophthalmologist', taxonomy: 'Ophthalmology' },
 ];
 
 export interface ProviderResult {
@@ -78,7 +81,7 @@ export async function searchProviders(specialtyLabel: string, zip: string): Prom
       specialty: primary.desc || specialtyLabel,
       address,
       zip: String(location.postal_code || '').slice(0, 5),
-      phone: location.telephone || undefined,
+      phone: location.telephone_number || undefined,
     });
   }
   return matches;

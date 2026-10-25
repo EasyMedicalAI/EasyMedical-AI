@@ -173,12 +173,16 @@ export default function FindDoctor({ plan, planName, payerPhone }: { plan?: stri
           </ListCard>
         </Section>
       )}
+
+      {/* Room below the results, so they can be scrolled into view while the keyboard is up */}
+      <View style={styles.keyboardSpace} />
     </>
   );
 }
 
 const styles = StyleSheet.create({
   padded: { padding: 14 },
+  keyboardSpace: { height: 340 },
   planName: { fontSize: 17, color: '#000', fontWeight: '500' },
   hint: { fontSize: 13, color: '#8E8E93', marginTop: 6 },
   label: { fontSize: 12, fontWeight: '600', color: '#8E8E93', letterSpacing: 0.5, marginBottom: 6 },
@@ -188,7 +192,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 14, color: '#000', fontWeight: '500' },
   chipTextOn: { color: '#FFF' },
   input: { backgroundColor: '#F2F2F7', borderRadius: 12, paddingHorizontal: 14, minHeight: 50, fontSize: 17, color: '#000' },
-  searchButton: { backgroundColor: '#007AFF', borderRadius: 12, minHeight: 50, alignItems: 'center', justifyContent: 'center', marginTop: 14 },
+  searchButton: { backgroundColor: '#007AFF', borderRadius: 12, minHeight: 50, alignItems: 'center', justifyContent: 'center', marginTop: 24, marginBottom: 12 },
   searchDisabled: { backgroundColor: '#A9CFFF' },
   searchText: { color: '#FFF', fontSize: 17, fontWeight: '600' },
   empty: { fontSize: 14, color: '#8E8E93', textAlign: 'center', marginTop: 16, paddingHorizontal: 20 },
