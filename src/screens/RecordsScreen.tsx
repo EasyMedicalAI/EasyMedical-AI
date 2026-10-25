@@ -1423,7 +1423,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
       <Modal visible={showRecordDetail && selectedRecord !== null} animationType="slide" onRequestClose={() => { setShowRecordDetail(false); setIsEditingRecord(false); }}>
         <View style={styles.modalContainer}>
           <View style={styles.detailHeaderRow}>
-            <TouchableOpacity onPress={() => {
+            {!selectedRecord?.source && <TouchableOpacity onPress={() => {
               if (isEditingRecord) {
                 setEditedReason('');
                 setEditedSummary('');
@@ -1433,7 +1433,7 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               setIsEditingRecord(!isEditingRecord);
             }}>
               <Text style={styles.detailAction}>{isEditingRecord ? 'Cancel' : 'Edit'}</Text>
-            </TouchableOpacity>
+            </TouchableOpacity>}
             <TouchableOpacity onPress={() => { setShowRecordDetail(false); setIsEditingRecord(false); }} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={styles.detailClose}>✕</Text>
             </TouchableOpacity>
@@ -1660,12 +1660,14 @@ export default function RecordsScreen({ onRecordSelected }: RecordsScreenProps) 
               <TouchableOpacity style={[styles.backButton, { flex: 1 }]} onPress={() => setShowRecordDetail(false)}>
                 <Text style={styles.buttonText}>Close</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveButton, { flex: 1 }]}
-                onPress={() => setIsEditingRecord(true)}
-              >
-                <Text style={styles.buttonTextWhite}>Edit</Text>
-              </TouchableOpacity>
+              {!selectedRecord?.source && (
+                <TouchableOpacity
+                  style={[styles.saveButton, { flex: 1 }]}
+                  onPress={() => setIsEditingRecord(true)}
+                >
+                  <Text style={styles.buttonTextWhite}>Edit</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[styles.deleteButton, { flex: 1 }]}
                 onPress={() => {

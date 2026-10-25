@@ -1,9 +1,10 @@
 // The single layout every medical record is shown in, using the same sections and lists as Home:
 // header, reason, summary, findings, lab table, diagnoses, medications, next steps, and the original document.
-import React from 'react';
-import { View, Text, Image, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { MedicalRecord } from '@/types/medical';
 import { LabFlag, formatRecordDate, getDisplayData } from '@/services/recordFormat';
+import { decodeEntities } from '@/services/ehrService';
 import { Section, ListCard, ListRow, Divider } from '@/components/ScreenKit';
 
 const FLAG_STYLE: Record<LabFlag, { label: string; color: string }> = {
@@ -28,7 +29,66 @@ function TextList({ items }: { items: string[] }) {
   );
 }
 
+// A clinical note from Epic: a Summary tab with the reason and key finding, and a Full note tab with the whole text
+function EpicNote({ record }: { record: MedicalRecord }) {
+  const [tab, setTab] = useState<'summary' | 'note'>('summary');
+  const text = decodeEntities(record.originalText || '');
+  const keyFinding = text.split(/(?<=[.!?])\s+/).slice(0, 2).join(' ');
+  const reason = record.reasonForVisit || record.summary;
+
+  return (
+    <View>
+      <View style={styles.header}>
+        <Text style={styles.title}>{record.provider}</Text>
+        <Text style={styles.subtitle}>
+          {[record.specialty, formatRecordDate(record.appointmentDate || record.uploadDate)].filter(Boolean).join(' · ')}
+        </Text>
+      </View>
+
+      <View style={styles.segmented}>
+        {(['summary', 'note'] as const).map((option) => (
+          <TouchableOpacity
+            key={option}
+            style={[styles.segment, tab === option && styles.segmentOn]}
+            onPress={() => setTab(option)}
+          >
+            <Text style={[styles.segmentText, tab === option && styles.segmentTextOn]}>
+              {option === 'summary' ? 'Summary' : 'Full note'}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {tab === 'summary' ? (
+        <>
+          {reason ? (
+            <Section title="Reason">
+              <ListCard>
+                <Text style={styles.rowText}>{reason}</Text>
+              </ListCard>
+            </Section>
+          ) : null}
+          {keyFinding ? (
+            <Section title="Key finding">
+              <ListCard>
+                <Text style={styles.rowText}>{keyFinding}</Text>
+              </ListCard>
+            </Section>
+          ) : null}
+        </>
+      ) : (
+        <Section title="Full note">
+          <ListCard>
+            <Text style={styles.rowText}>{text}</Text>
+          </ListCard>
+        </Section>
+      )}
+    </View>
+  );
+}
+
 export default function RecordSummary({ record }: { record: MedicalRecord }) {
+  if (record.source && record.originalText) return <EpicNote record={record} />;
   const data = getDisplayData(record);
   const subtitle = [data.provider ? data.specialty : '', formatRecordDate(data.date), data.facility]
     .filter(Boolean)
@@ -56,6 +116,7 @@ export default function RecordSummary({ record }: { record: MedicalRecord }) {
           </ListCard>
         </Section>
       ) : null}
+
 
       {data.keyFindings.length > 0 && (
         <Section title="Key findings">
@@ -135,6 +196,25 @@ export default function RecordSummary({ record }: { record: MedicalRecord }) {
 }
 
 const styles = StyleSheet.create({
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: '#E9E9EB',
+    borderRadius: 9,
+    padding: 2,
+    marginHorizontal: 20,
+    marginBottom: 16,
+  },
+  segment: { flex: 1, alignItems: 'center', paddingVertical: 6, borderRadius: 7 },
+  segmentOn: {
+    backgroundColor: '#FFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  segmentText: { fontSize: 14, fontWeight: '500', color: '#000' },
+  segmentTextOn: { fontWeight: '600' },
   header: {
     paddingHorizontal: 20,
     marginBottom: 24,

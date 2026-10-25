@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { MedicalRecord, MedicalHub, UserHealthData, LabMetric } from '../types/medical';
 import { storageService } from '../services/storageService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ehrService, isWeightObservation, heightFromObservations } from '../services/ehrService';
+import { ehrService, isWeightObservation, heightFromObservations, noteSpecialty } from '../services/ehrService';
 import type { Appointment } from '../services/ehrService';
 import { birthdayFromFhir, genderFromFhir } from '../services/patientProfile';
 import { medicationNameFrom } from '../services/medicationName';
@@ -137,7 +137,12 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
       // elsewhere in the app, so older copies of them are dropped here. Labs stay, since the labs page reads them.
       const epicOnlyNotesAndLabs = (record: MedicalRecord) =>
         !record.source || record.specialty === 'Clinical Notes' || record.specialty === 'Lab';
-      setRecords(hub.records.filter(epicOnlyNotesAndLabs).map(withoutReferenceResults));
+      // Notes saved before they were grouped by type are grouped by their title here
+      const withNoteGroup = (record: MedicalRecord): MedicalRecord =>
+        record.source && record.specialty === 'Clinical Notes'
+          ? { ...record, specialty: noteSpecialty([], record.reasonForVisit || record.summary || '') }
+          : record;
+      setRecords(hub.records.filter(epicOnlyNotesAndLabs).map(withoutReferenceResults).map(withNoteGroup));
       if (hub.userData) {
         setUserData(hub.userData);
         latestUserData.current = hub.userData;

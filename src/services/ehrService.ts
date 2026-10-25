@@ -112,22 +112,37 @@ export interface EpicOverride {
 }
 
 // Note text from Epic is usually HTML. This keeps the words and drops the markup.
-const plainTextFromHtml = (html: string): string =>
-  html
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
+// Turns HTML character codes like &amp;, &#183;, and &#x2022; into the characters they stand for
+export const decodeEntities = (text: string): string =>
+  text
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec: string) => String.fromCodePoint(parseInt(dec, 10)))
     .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+
+const plainTextFromHtml = (html: string): string =>
+  decodeEntities(
+    html
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ')
+  )
     .replace(/[ \t]+/g, ' ')
     .replace(/\n\s*\n+/g, '\n\n')
     .trim();
+
+// The group a note belongs to on the Records screen, from its type code or its title
+export const noteSpecialty = (typeCodes: string[], title: string): string => {
+  if (typeCodes.includes('11506-3') || /progress/i.test(title)) return 'Progress Notes';
+  if (typeCodes.includes('18748-4') || /imaging|radiolog|x-ray|\bct\b|\bmri\b/i.test(title)) return 'Imaging';
+  return 'Clinical Notes';
+};
 
 class EhrService {
   private connections: EhrConnection[] = [];
@@ -531,7 +546,7 @@ class EhrService {
           id: generateId(),
           uploadDate: noteDate,
           appointmentDate: noteDate,
-          specialty: 'Clinical Notes',
+          specialty: noteSpecialty((doc.type?.coding || []).map((c: any) => c.code), title),
           provider: doc.author?.[0]?.display || label,
           summary: title,
           reasonForVisit: title,
