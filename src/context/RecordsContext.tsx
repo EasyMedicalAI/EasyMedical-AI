@@ -133,7 +133,11 @@ export function RecordsProvider({ children }: { children: React.ReactNode }) {
   const loadRecords = async () => {
     try {
       const hub = await storageService.getMedicalHub();
-      setRecords(hub.records.map(withoutReferenceResults));
+      // The Records screen shows clinical notes from Epic. Conditions, procedures, and visits from Epic are shown
+      // elsewhere in the app, so older copies of them are dropped here. Labs stay, since the labs page reads them.
+      const epicOnlyNotesAndLabs = (record: MedicalRecord) =>
+        !record.source || record.specialty === 'Clinical Notes' || record.specialty === 'Lab';
+      setRecords(hub.records.filter(epicOnlyNotesAndLabs).map(withoutReferenceResults));
       if (hub.userData) {
         setUserData(hub.userData);
         latestUserData.current = hub.userData;

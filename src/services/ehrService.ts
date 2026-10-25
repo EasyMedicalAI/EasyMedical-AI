@@ -111,6 +111,24 @@ export interface EpicOverride {
   hidden?: boolean;
 }
 
+// Note text from Epic is usually HTML. This keeps the words and drops the markup.
+const plainTextFromHtml = (html: string): string =>
+  html
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n+/g, '\n\n')
+    .trim();
+
 class EhrService {
   private connections: EhrConnection[] = [];
   private loaded = false;
@@ -456,32 +474,6 @@ class EhrService {
     const records: any[] = [];
     const generateId = () => Math.random().toString(36).substring(2, 11);
 
-    if (epicData.appointments && epicData.appointments.length > 0) {
-      epicData.appointments.forEach((apt: Appointment) => {
-        records.push({
-          id: generateId(),
-          uploadDate: apt.date,
-          appointmentDate: apt.date,
-          specialty: label,
-          provider: apt.provider,
-          summary: apt.description,
-          reasonForVisit: apt.description,
-          findings: `Appointment from ${label}`,
-          nextSteps: '',
-          notes: `Imported from ${label}`,
-          extractedData: {
-            medications: [],
-            allergies: [],
-            conditions: [],
-            testResults: {},
-            dates: { 'Appointment Date': apt.date },
-          },
-          processed: true,
-          source: systemId,
-        });
-      });
-    }
-
     // Lab observations, grouped by date into one record per date
     if (epicData.observations && epicData.observations.length > 0) {
       const obsGroupedByDate: { [key: string]: any[] } = {};
@@ -529,83 +521,30 @@ class EhrService {
       });
     }
 
-    if (epicData.conditions && epicData.conditions.length > 0) {
-      epicData.conditions.forEach((cond: Condition) => {
+    // Clinical notes. The text comes from the note's Binary link, and is kept as plain text.
+    if (epicData.documents && epicData.documents.length > 0) {
+      epicData.documents.forEach((doc: any) => {
+        if (!doc.noteText) return;
+        const noteDate = doc.date || new Date().toISOString();
+        const title = doc.description || doc.type?.text || doc.type?.coding?.[0]?.display || 'Clinical note';
         records.push({
           id: generateId(),
-          uploadDate: cond.onsetDate || new Date().toISOString(),
-          appointmentDate: cond.onsetDate || new Date().toISOString(),
-          specialty: 'Primary Care',
-          provider: `${label} - Conditions`,
-          summary: cond.name,
-          reasonForVisit: cond.name,
-          findings: `Status: ${cond.status}`,
+          uploadDate: noteDate,
+          appointmentDate: noteDate,
+          specialty: 'Clinical Notes',
+          provider: doc.author?.[0]?.display || label,
+          summary: title,
+          reasonForVisit: title,
+          findings: '',
           nextSteps: '',
+          originalText: plainTextFromHtml(doc.noteText),
           notes: `Imported from ${label}`,
           extractedData: {
             medications: [],
             allergies: [],
-            conditions: [cond.name],
-            testResults: {},
-            dates: { 'Onset Date': cond.onsetDate || '' },
-          },
-          processed: true,
-          source: systemId,
-        });
-      });
-    }
-
-    if (epicData.procedures && epicData.procedures.length > 0) {
-      epicData.procedures.forEach((proc: any) => {
-        const performedDate = proc.performedDateTime || proc.performedDate || new Date().toISOString();
-        records.push({
-          id: generateId(),
-          uploadDate: performedDate,
-          appointmentDate: performedDate,
-          specialty: 'Surgical',
-          provider: `${label} - Procedures`,
-          summary: proc.code?.coding?.[0]?.display || proc.code?.text || 'Procedure',
-          reasonForVisit: proc.code?.coding?.[0]?.display || 'Medical Procedure',
-          findings: `Status: ${proc.status}`,
-          nextSteps: '',
-          notes: proc.note?.[0]?.text || `Imported from ${label}`,
-          extractedData: {
-            medications: [],
-            allergies: [],
             conditions: [],
             testResults: {},
-            dates: { 'Procedure Date': performedDate },
-          },
-          processed: true,
-          source: systemId,
-        });
-      });
-    }
-
-    if (epicData.diagnostics && epicData.diagnostics.length > 0) {
-      epicData.diagnostics.forEach((diag: any) => {
-        const issuedDate = diag.issued || new Date().toISOString();
-        const testResults: { [key: string]: string } = {};
-        // The results are references to lab observations, which are already imported with their names and values.
-        // Only the report itself is kept here.
-
-        records.push({
-          id: generateId(),
-          uploadDate: issuedDate,
-          appointmentDate: issuedDate,
-          specialty: 'Lab',
-          provider: `${label} - Diagnostic Report`,
-          summary: `${diag.code?.coding?.[0]?.display || 'Diagnostic Report'} - ${diag.status}`,
-          reasonForVisit: 'Diagnostic Testing',
-          findings: `Status: ${diag.status}`,
-          nextSteps: '',
-          notes: diag.conclusion || `Imported from ${label}`,
-          extractedData: {
-            medications: [],
-            allergies: [],
-            conditions: [],
-            testResults,
-            dates: { 'Report Date': issuedDate },
+            dates: { 'Note Date': noteDate },
           },
           processed: true,
           source: systemId,
