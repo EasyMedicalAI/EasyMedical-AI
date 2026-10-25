@@ -92,6 +92,8 @@ export interface Condition {
 export interface EpicOverride {
   primary?: string;
   secondary?: string;
+  // Removed in this app. The item stays in Epic and is only hidden here.
+  hidden?: boolean;
 }
 
 class EhrService {

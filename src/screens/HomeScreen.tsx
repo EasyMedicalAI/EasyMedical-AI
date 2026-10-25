@@ -696,6 +696,19 @@ export default function HomeScreen() {
   const epicText = (key: string, original: string, field: 'primary' | 'secondary') =>
     epicOverrides[key]?.[field] || original;
 
+  // Epic medications the patient has removed here. They stay in Epic and are only hidden in this app.
+  const visibleEpicMedications = epicMedications.filter((m) => !epicOverrides[`medication:${m.id}`]?.hidden);
+  const removeEpicMedication = (key: string, name: string) => {
+    Alert.alert('Remove medication?', `${name} will be hidden in this app. Epic's record is not changed.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => setEpicOverrides(await ehrService.saveOverride(key, { ...epicOverrides[key], hidden: true })),
+      },
+    ]);
+  };
+
   const openEpicEdit = (key: string, kind: 'medication' | 'allergy' | 'appointment' | 'condition', primary: string, secondary: string) => {
     const labels = {
       medication: ['Medication name', 'Dosage'],
@@ -1360,7 +1373,7 @@ export default function HomeScreen() {
     return isNaN(d.getTime()) ? value : shortDate(value);
   };
   const medicationCount =
-    new Set([...(userData.prescriptionMedications || []), ...epicMedications.map((m) => m.name)]).size +
+    new Set([...(userData.prescriptionMedications || []), ...visibleEpicMedications.map((m) => m.name)]).size +
     (userData.otcMedications || []).length;
   const allergyNames = [...new Set([...(userData.allergies || []), ...epicAllergies.map((a) => a.allergen)])];
   const allergyValue = allergyNames.length === 1 ? allergyNames[0] : String(allergyNames.length);
@@ -1629,10 +1642,10 @@ export default function HomeScreen() {
               <View style={styles.healthSectionHeader}>
                 <Text style={styles.healthSectionTitle}>Current prescription medications</Text>
               </View>
-              {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) || epicMedications.length > 0 ? (
+              {(userData.prescriptionMedications && userData.prescriptionMedications.length > 0) || visibleEpicMedications.length > 0 ? (
                 <>
                   {/* Manual medications */}
-                  {userData.prescriptionMedications && userData.prescriptionMedications.map((med, idx) => new Set(epicMedications.map((m) => m.name.trim().toLowerCase())).has(med.trim().toLowerCase()) ? null : (
+                  {userData.prescriptionMedications && userData.prescriptionMedications.map((med, idx) => new Set(visibleEpicMedications.map((m) => m.name.trim().toLowerCase())).has(med.trim().toLowerCase()) ? null : (
                     <View key={`manual-${idx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 4 }}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.medRowName}>{med}</Text>
@@ -1649,7 +1662,7 @@ export default function HomeScreen() {
                     </View>
                   ))}
                   {/* Epic medications */}
-                  {epicMedications.map((med, index) => {
+                  {visibleEpicMedications.map((med, index) => {
                     const key = `medication:${med.id}`;
                     const name = epicText(key, String(med.name ?? ''), 'primary');
                     const dosage = epicText(key, String(med.dosage ?? ''), 'secondary');
@@ -1663,8 +1676,8 @@ export default function HomeScreen() {
                           {dosage ? <Text style={styles.medRowDetail}>{dosage}</Text> : null}
                         </View>
                         {showMedicationControls && (
-                          <TouchableOpacity onPress={() => openEpicEdit(key, 'medication', name, dosage)}>
-                            <Text style={styles.editLink}>Edit</Text>
+                          <TouchableOpacity onPress={() => removeEpicMedication(key, name)}>
+                            <Text style={[styles.editLink, { color: '#FF3B30' }]}>Remove</Text>
                           </TouchableOpacity>
                         )}
                       </View>
