@@ -4,6 +4,7 @@ import FindDoctor from '@/components/FindDoctor';
 import FindPharmacy from '@/components/FindPharmacy';
 import InlineFieldsForm from '@/components/InlineFieldsForm';
 import EpicBadge from '@/components/EpicBadge';
+import BloodPressureChart from '@/components/BloodPressureChart';
 import InsuranceScan, { CardDetails } from '@/components/InsuranceScan';
 import VaccineForm, { VaccineFormValues, blankVaccineForm } from '@/components/VaccineEditor';
 import ScreeningForm, { ScreeningFormValues, blankScreeningForm } from '@/components/ScreeningForm';
@@ -810,6 +811,11 @@ export default function HomeScreen() {
   // Newest first in the list, keeping each reading's original index for deleting
   const weightList = weightSorted.map((r) => ({ ...r, index: (userData.weightHistory || []).indexOf(r) })).reverse();
   const bpList = bpSorted.map((r) => ({ ...r, index: (userData.bloodPressureHistory || []).indexOf(r) })).reverse();
+  // The newest reading, shown at the top of the blood pressure screen
+  const latestBp = bpList[0];
+  // Normal under 120/80, elevated 120–129 with diastolic under 80, high otherwise
+  const bpStatus = (r: { systolic: number; diastolic: number }) =>
+    r.systolic >= 130 || r.diastolic >= 80 ? 'High' : r.systolic >= 120 ? 'Elevated' : 'Normal';
 
   const deleteWeightReading = (index: number) => {
     Alert.alert('Delete reading', 'Remove this weight reading?', [
@@ -2461,39 +2467,43 @@ export default function HomeScreen() {
           {vitalDetail === 'bp' && (
             <>
               <Text style={styles.epicEditTitle}>Blood pressure</Text>
-              <Text style={styles.detailCurrent}>{userData.vitals?.bloodPressure || 'No reading yet'}</Text>
+              {latestBp ? (
+                <View style={styles.latestBpCard}>
+                  <Text style={styles.latestBpLabel}>Latest</Text>
+                  <Text style={styles.latestBpValue}>
+                    {latestBp.systolic}/{latestBp.diastolic} <Text style={styles.latestBpUnit}>mmHg</Text>
+                  </Text>
+                  <Text style={styles.readingDate}>{formatReadingDate(latestBp.date)} · {bpStatus(latestBp)}</Text>
+                </View>
+              ) : (
+                <Text style={styles.detailCurrent}>No reading yet</Text>
+              )}
               {bpHint ? <Text style={styles.vitalHint}>{bpHint}</Text> : null}
 
               {bpSorted.length > 0 && (
                 <>
-                  <Text style={styles.vitalChartLabel}>Systolic (top number), mmHg</Text>
-                  <LabTrendChart
-                    history={bpSorted.map((b) => ({ value: String(b.systolic), date: b.date }))}
-                    range="Below 120 mmHg (normal)"
-                  />
-                  <Text style={styles.vitalChartLabel}>Diastolic (bottom number), mmHg</Text>
-                  <LabTrendChart
-                    history={bpSorted.map((b) => ({ value: String(b.diastolic), date: b.date }))}
-                    range="Below 80 mmHg (normal)"
-                  />
-                  <Text style={styles.sourceNote}>
-                    Normal values from MedlinePlus (National Library of Medicine). Your provider can tell you what your readings mean.
-                  </Text>
+                  <Text style={styles.vitalChartLabel}>Last {Math.min(20, bpSorted.length)} readings</Text>
+                  <BloodPressureChart points={bpSorted.slice(-20)} />
                 </>
               )}
 
               <Text style={styles.epicEditLabel}>All readings</Text>
+              <Text style={styles.sourceNote}>
+                Hold a reading to delete it. Normal values from MedlinePlus (National Library of Medicine).
+              </Text>
               {bpList.length === 0 && <Text style={styles.emptyText}>No readings saved yet.</Text>}
               {bpList.map((r) => (
-                <View key={`b-${r.index}`} style={styles.readingRow}>
+                <TouchableOpacity
+                  key={`b-${r.index}`}
+                  style={styles.readingRow}
+                  onLongPress={() => deleteBpReading(r.index)}
+                  delayLongPress={400}
+                >
                   <View>
                     <Text style={styles.readingValue}>{r.systolic}/{r.diastolic} mmHg</Text>
-                    <Text style={styles.readingDate}>{formatReadingDate(r.date)}</Text>
+                    <Text style={styles.readingDate}>{formatReadingDate(r.date)} · {bpStatus(r)}</Text>
                   </View>
-                  <TouchableOpacity onPress={() => deleteBpReading(r.index)}>
-                    <Text style={styles.epicEditLink}>Delete</Text>
-                  </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
               ))}
 
               <TouchableOpacity
@@ -3162,6 +3172,10 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 4,
   },
+  latestBpCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 16, marginTop: 8, marginBottom: 12 },
+  latestBpLabel: { fontSize: 12, fontWeight: '600', color: '#8E8E93', letterSpacing: 0.4, textTransform: 'uppercase' },
+  latestBpValue: { fontSize: 40, fontWeight: '700', color: '#000', marginTop: 4 },
+  latestBpUnit: { fontSize: 15, fontWeight: '500', color: '#8E8E93' },
   readingRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
