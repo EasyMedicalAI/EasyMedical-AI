@@ -4,6 +4,31 @@ import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Linking, St
 import { Section, ListCard, Divider } from '@/components/ScreenKit';
 import { searchMedicines, genericOptions, MedicineMatch, GenericOptions } from '@/services/medicineLookup';
 import { cashPrices, PriceLookup } from '@/services/cashPrices';
+import { searchPharmacies, ProviderResult } from '@/services/providerSearch';
+import { zipLocation, milesBetween } from '@/services/zipLocation';
+
+type Pharmacy = ProviderResult & { miles?: number };
+
+const MAX_MILES = 20;
+const MAX_PHARMACIES = 15;
+
+// Pharmacies near a ZIP code, nearest first, so the user can call for a cash price
+async function nearbyPharmacies(zip: string): Promise<Pharmacy[]> {
+  const found = await searchPharmacies(zip);
+  const origin = await zipLocation(zip);
+  const zips = [...new Set(found.map((p) => p.zip))];
+  const locations = await Promise.all(zips.map((z) => zipLocation(z)));
+  const locationByZip = new Map(zips.map((z, i) => [z, locations[i]]));
+  const withDistance: Pharmacy[] = found.map((p) => {
+    const here = locationByZip.get(p.zip);
+    return { ...p, miles: origin && here ? milesBetween(origin, here) : undefined };
+  });
+  // Pharmacies more than 20 miles away are left out. Pharmacies with no known distance are kept, at the end.
+  return withDistance
+    .filter((p) => p.miles === undefined || p.miles <= MAX_MILES)
+    .sort((a, b) => (a.miles ?? Number.MAX_SAFE_INTEGER) - (b.miles ?? Number.MAX_SAFE_INTEGER))
+    .slice(0, MAX_PHARMACIES);
+}
 
 export default function FindCheaper() {
   const [term, setTerm] = useState('');
@@ -18,6 +43,8 @@ export default function FindCheaper() {
   const [zip, setZip] = useState('');
   const [checking, setChecking] = useState(false);
   const [priceResult, setPriceResult] = useState<PriceLookup | null>(null);
+  const [pharmacies, setPharmacies] = useState<Pharmacy[] | null>(null);
+  const [pharmacyError, setPharmacyError] = useState('');
 
   const canSearch = term.trim().length > 0 && !searching;
   const canCheck = !!product && /^\d{5}$/.test(zip) && !checking;
@@ -56,8 +83,15 @@ export default function FindCheaper() {
   const checkPrices = async () => {
     if (!canCheck || !product) return;
     setChecking(true);
+    setPharmacyError('');
     try {
       setPriceResult(await cashPrices(product.name, zip));
+      try {
+        setPharmacies(await nearbyPharmacies(zip));
+      } catch (e) {
+        setPharmacies(null);
+        setPharmacyError(e instanceof Error ? e.message : 'Could not find pharmacies. Please try again.');
+      }
     } finally {
       setChecking(false);
     }
@@ -147,7 +181,12 @@ export default function FindCheaper() {
               <TextInput
                 style={styles.input}
                 value={zip}
-                onChangeText={(value) => setZip(value.replace(/\D/g, '').slice(0, 5))}
+                onChangeText={(value) => {
+                  setZip(value.replace(/\D/g, '').slice(0, 5));
+                  // Results are for the ZIP code they were searched with, so they clear when it changes
+                  setPriceResult(null);
+                  setPharmacies(null);
+                }}
                 placeholder="e.g. 08108"
                 placeholderTextColor="#8E8E93"
                 keyboardType="number-pad"
@@ -196,6 +235,43 @@ export default function FindCheaper() {
               ))}
             </ListCard>
           )}
+
+          {pharmacyError ? <Text style={styles.error}>{pharmacyError}</Text> : null}
+
+          {pharmacies && pharmacies.length === 0 && (
+            <Text style={styles.hint}>No pharmacies were found within {MAX_MILES} miles of {zip}.</Text>
+          )}
+
+          {pharmacies && pharmacies.length > 0 && (
+            <>
+              <Text style={styles.subhead}>Pharmacies near {zip}</Text>
+              <ListCard>
+                {pharmacies.map((pharmacy, index) => (
+                  <React.Fragment key={pharmacy.npi}>
+                    {index > 0 && <Divider />}
+                    <View style={styles.pharmacy}>
+                      <Text style={styles.rowText}>{pharmacy.name}</Text>
+                      <Text style={styles.hint}>
+                        {pharmacy.miles !== undefined ? `${pharmacy.miles.toFixed(1)} mi · ` : ''}
+                        {pharmacy.address}
+                      </Text>
+                      {pharmacy.phone ? (
+                        <TouchableOpacity
+                          style={styles.linkButton}
+                          onPress={() => Linking.openURL(`tel:${pharmacy.phone!.replace(/\D/g, '')}`)}
+                        >
+                          <Text style={styles.linkText}>Call for cash price</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  </React.Fragment>
+                ))}
+              </ListCard>
+              <Text style={styles.hint}>
+                Ask for the cash price of {product.name}. Not every pharmacy lists cash prices by phone.
+              </Text>
+            </>
+          )}
         </Section>
       )}
 
@@ -231,5 +307,7 @@ const styles = StyleSheet.create({
   linkButton: { alignSelf: 'flex-start', marginTop: 10, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10, backgroundColor: '#E5F0FF' },
   linkText: { fontSize: 14, color: '#007AFF', fontWeight: '600' },
   price: { fontSize: 17, fontWeight: '600', color: '#000' },
+  subhead: { fontSize: 13, fontWeight: '600', color: '#8E8E93', marginTop: 16, marginBottom: 6, paddingHorizontal: 2 },
+  pharmacy: { padding: 14 },
   disclaimer: { fontSize: 12, color: '#8E8E93', textAlign: 'center', marginTop: 16, paddingHorizontal: 20 },
 });
