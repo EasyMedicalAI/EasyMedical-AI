@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import DateWheel, { dateFromText, textFromDate } from '@/components/DateWheel';
 import FindDoctor from '@/components/FindDoctor';
 import FindCheaper from '@/components/FindCheaper';
+import ClinicalTrials from '@/components/ClinicalTrials';
 import FindPharmacy from '@/components/FindPharmacy';
 import InlineFieldsForm from '@/components/InlineFieldsForm';
 import EpicBadge from '@/components/EpicBadge';
@@ -1385,7 +1386,8 @@ export default function HomeScreen() {
     (userData.otcMedications || []).length;
   const allergyNames = [...new Set([...(userData.allergies || []), ...epicAllergies.map((a) => a.allergen)])];
   const allergyValue = allergyNames.length === 1 ? allergyNames[0] : String(allergyNames.length);
-  const conditionCount = new Set([...(userData.conditions || []), ...currentEpicConditions.map((c) => c.name)]).size;
+  const conditionNames = [...new Set([...(userData.conditions || []), ...currentEpicConditions.map((c) => c.name)])];
+  const conditionCount = conditionNames.length;
   const historyCount =
     (userData.surgicalHistory || []).length +
     (userData.familyHistory || []).length +
@@ -1638,6 +1640,8 @@ export default function HomeScreen() {
             <VitalRow icon="storefront-outline" label="Pharmacy" value={pharmacyValue} onPress={() => setOpenPage('pharmacy')} />
             <View style={styles.divider} />
             <VitalRow icon="phone-alert-outline" label="Emergency contacts" value={emergencyValue} onPress={() => setOpenPage('emergency')} />
+            <View style={styles.divider} />
+            <VitalRow icon="flask-outline" label="Clinical trials" value="" onPress={() => setOpenPage('trials')} />
           </View>
         </View>
 
@@ -1891,6 +1895,10 @@ export default function HomeScreen() {
 
       <DetailModal visible={openPage === 'find-cheaper'} title="Find medications cheaper" onClose={closeDetail}>
         <FindCheaper />
+      </DetailModal>
+
+      <DetailModal visible={openPage === 'trials'} title="Clinical trials" onClose={closeDetail}>
+        <ClinicalTrials conditions={conditionNames} />
       </DetailModal>
 
       <DetailModal visible={openPage === 'allergies'} title="Allergies" onClose={closeDetail} onDismiss={runPendingEditor}>
