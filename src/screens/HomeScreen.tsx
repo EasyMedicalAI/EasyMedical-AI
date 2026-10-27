@@ -3,6 +3,7 @@ import DateWheel, { dateFromText, textFromDate } from '@/components/DateWheel';
 import FindDoctor from '@/components/FindDoctor';
 import FindCheaper from '@/components/FindCheaper';
 import ClinicalTrials from '@/components/ClinicalTrials';
+import ConditionPicker from '@/components/ConditionPicker';
 import FindPharmacy from '@/components/FindPharmacy';
 import InlineFieldsForm from '@/components/InlineFieldsForm';
 import EpicBadge from '@/components/EpicBadge';
@@ -288,8 +289,8 @@ export default function HomeScreen() {
     setConditionDraft(name || '');
     setEditingCondition(editing);
   };
-  const saveCondition = async () => {
-    const name = conditionDraft.trim();
+  const saveCondition = async (picked?: string) => {
+    const name = (picked ?? conditionDraft).trim();
     if (!name) {
       Alert.alert('Add a condition', 'Enter the condition name.');
       return;
@@ -323,7 +324,7 @@ export default function HomeScreen() {
         fields={[{ key: 'name', label: 'Condition', placeholder: 'e.g. Type 2 diabetes' }]}
         values={{ name: conditionDraft }}
         onChange={(_, value) => setConditionDraft(value)}
-        onSave={saveCondition}
+        onSave={() => saveCondition()}
         onCancel={() => setEditingCondition(null)}
         extraLabel={existing ? `Mark as ${markAs}` : undefined}
         onExtra={existing ? () => moveEditingCondition(markAs) : undefined}
@@ -1848,7 +1849,7 @@ export default function HomeScreen() {
             {activeConditionRows.length + currentEpicConditions.length === 0 && <Text style={styles.emptyText}>No active conditions</Text>}
             {activeConditionRows.length + currentEpicConditions.length > 0 && <Divider />}
             {editingCondition === 'new' ? (
-              renderConditionForm()
+              <ConditionPicker onSave={(name) => saveCondition(name)} onCancel={() => setEditingCondition(null)} />
             ) : (
               <ListRow icon="plus-circle-outline" label="Add condition" onPress={() => openConditionEditor('new')} />
             )}
