@@ -4,9 +4,7 @@ import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Linking, Sh
 import { Section, ListCard, Divider } from '@/components/ScreenKit';
 import { zipLocation } from '@/services/zipLocation';
 import { findTrials, Trial, TrialSite } from '@/services/clinicalTrials';
-
-// Each condition is its own search, so a long list is cut to this many
-const MAX_CONDITIONS = 3;
+import ConditionPicker from '@/components/ConditionPicker';
 
 function distanceLabel(site: TrialSite | null): string {
   return site && site.miles !== undefined ? `${site.miles.toFixed(1)} mi` : '';
@@ -23,8 +21,32 @@ export default function ClinicalTrials({ conditions }: { conditions: string[] })
   const [error, setError] = useState('');
   const [picked, setPicked] = useState<Trial | null>(null);
 
-  const searchConditions = conditions.slice(0, MAX_CONDITIONS);
-  const canSearch = /^\d{5}$/.test(zip) && searchConditions.length > 0 && !searching;
+  // The condition to search for. Starts with the first one in your records, or one searched for outside them.
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [otherSearch, setOtherSearch] = useState<string | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
+  const condition = otherSearch ?? (chosen && conditions.includes(chosen) ? chosen : (conditions[0] ?? null));
+  const inRecords = condition !== null && conditions.includes(condition);
+  const chipNames = otherSearch ? [...conditions, otherSearch] : conditions;
+  const canSearch = /^\d{5}$/.test(zip) && condition !== null && !searching;
+
+  const chooseCondition = (name: string) => {
+    setChosen(name);
+    setOtherSearch(null);
+    setTrials(null);
+    setError('');
+  };
+
+  const pickOther = (name: string) => {
+    setShowPicker(false);
+    if (conditions.includes(name)) {
+      chooseCondition(name);
+    } else {
+      setOtherSearch(name);
+      setTrials(null);
+      setError('');
+    }
+  };
 
   const changeZip = (value: string) => {
     setZip(value.replace(/\D/g, '').slice(0, 5));
@@ -33,7 +55,7 @@ export default function ClinicalTrials({ conditions }: { conditions: string[] })
   };
 
   const search = async () => {
-    if (!canSearch) return;
+    if (!canSearch || !condition) return;
     setSearching(true);
     setError('');
     setTrials(null);
@@ -43,7 +65,7 @@ export default function ClinicalTrials({ conditions }: { conditions: string[] })
         setError("That ZIP code couldn't be found.");
         return;
       }
-      setTrials(await findTrials(searchConditions, origin));
+      setTrials(await findTrials([condition], origin));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Please try again.');
     } finally {
@@ -51,7 +73,7 @@ export default function ClinicalTrials({ conditions }: { conditions: string[] })
     }
   };
 
-  if (picked) return <TrialDetail trial={picked} onBack={() => setPicked(null)} />;
+  if (picked) return <TrialDetail trial={picked} fromRecords={inRecords} onBack={() => setPicked(null)} />;
 
   return (
     <>
@@ -68,11 +90,38 @@ export default function ClinicalTrials({ conditions }: { conditions: string[] })
               placeholder="e.g. 08108"
               placeholderTextColor="#8E8E93"
             />
-            <Text style={styles.hint}>
-              {searchConditions.length > 0
-                ? `Searching for: ${searchConditions.join(', ')}`
-                : 'Add a condition to your records to find trials that may fit.'}
-            </Text>
+            <View style={styles.section}>
+              <Text style={styles.label}>CONDITION</Text>
+              <View style={styles.chips}>
+                  {chipNames.map((name) => {
+                    const isOn = name === condition;
+                    return (
+                      <TouchableOpacity
+                        key={name}
+                        style={[styles.chip, isOn && styles.chipOn]}
+                        onPress={() => chooseCondition(name)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isOn }}
+                      >
+                        <Text style={[styles.chipText, isOn && styles.chipTextOn]}>
+                          {name === otherSearch ? `${name} (not in records)` : name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  <TouchableOpacity
+                    style={styles.chipAdd}
+                    onPress={() => setShowPicker((shown) => !shown)}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: showPicker }}
+                  >
+                    <Text style={styles.chipAddText}>+ Search another</Text>
+                  </TouchableOpacity>
+              </View>
+              {chipNames.length === 0 && (
+                <Text style={styles.hint}>Add a condition to your records, or search for one.</Text>
+              )}
+            </View>
             <TouchableOpacity
               style={[styles.primaryButton, !canSearch && styles.disabled]}
               onPress={search}
@@ -85,6 +134,20 @@ export default function ClinicalTrials({ conditions }: { conditions: string[] })
         </ListCard>
       </Section>
 
+      {showPicker && (
+        <Section title="Search another condition">
+          <ConditionPicker
+            actionLabel="Search this condition"
+            hintText="Pick a condition from the list. Only listed conditions can be searched."
+            onSave={pickOther}
+            onCancel={() => setShowPicker(false)}
+          />
+          {/* Room below the picker, so the page can scroll it above the keyboard */}
+          <View style={styles.keyboardSpace} />
+        </Section>
+      )}
+
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {trials && trials.length === 0 && (
@@ -92,7 +155,7 @@ export default function ClinicalTrials({ conditions }: { conditions: string[] })
       )}
 
       {trials && trials.length > 0 && (
-        <Section title={`${trials.length} studies near ${zip}`}>
+        <Section title={`${trials.length} studies for ${condition} near ${zip}`}>
           <ListCard>
             {trials.map((trial, index) => (
               <React.Fragment key={trial.nctId}>
@@ -103,7 +166,11 @@ export default function ClinicalTrials({ conditions }: { conditions: string[] })
                   </Text>
                   <Text style={styles.trialTitle}>{trial.title}</Text>
                   {trial.nearestSite && <Text style={styles.trialSite}>{trial.nearestSite.facility}</Text>}
-                  <Text style={styles.match}>May fit: matches {trial.matchedCondition} in your records.</Text>
+                  <Text style={styles.match}>
+                    {inRecords
+                      ? `May fit: matches ${trial.matchedCondition} in your records.`
+                      : `Search result for ${trial.matchedCondition}. Not in your records.`}
+                  </Text>
                 </TouchableOpacity>
               </React.Fragment>
             ))}
@@ -118,7 +185,7 @@ export default function ClinicalTrials({ conditions }: { conditions: string[] })
   );
 }
 
-function TrialDetail({ trial, onBack }: { trial: Trial; onBack: () => void }) {
+function TrialDetail({ trial, fromRecords, onBack }: { trial: Trial; fromRecords: boolean; onBack: () => void }) {
   const [showAllCriteria, setShowAllCriteria] = useState(false);
   const site = trial.nearestSite;
   const minAge = ageNumber(trial.minimumAge);
@@ -164,7 +231,9 @@ function TrialDetail({ trial, onBack }: { trial: Trial; onBack: () => void }) {
 
       <View style={styles.noteBox}>
         <Text style={styles.noteText}>
-          {`Your records list ${trial.matchedCondition}. Check with your doctor before you contact the study team.`}
+          {fromRecords
+            ? `Your records list ${trial.matchedCondition}. Check with your doctor before you contact the study team.`
+            : `You searched for ${trial.matchedCondition}, which isn't in your records. Check with your doctor before you contact the study team.`}
         </Text>
       </View>
 
@@ -251,6 +320,15 @@ const styles = StyleSheet.create({
   criterionText: { flex: 1, fontSize: 15, color: '#000', lineHeight: 22 },
   criteriaHeading: { fontSize: 15, fontWeight: '600', color: '#000', marginTop: 8, lineHeight: 22 },
   padded: { padding: 14 },
+  section: { marginTop: 14 },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderRadius: 999, borderWidth: 1, borderColor: '#D1D1D6', paddingHorizontal: 12, paddingVertical: 7, backgroundColor: '#FFF' },
+  chipOn: { backgroundColor: '#E5F0FF', borderColor: '#007AFF' },
+  chipAdd: { borderRadius: 999, borderWidth: 1, borderStyle: 'dashed', borderColor: '#007AFF', paddingHorizontal: 12, paddingVertical: 7 },
+  chipAddText: { fontSize: 14, color: '#007AFF' },
+  keyboardSpace: { height: 340 },
+  chipText: { fontSize: 14, color: '#000' },
+  chipTextOn: { color: '#007AFF', fontWeight: '600' },
   label: { fontSize: 12, fontWeight: '600', color: '#8E8E93', letterSpacing: 0.5, marginBottom: 6 },
   input: { backgroundColor: '#F2F2F7', borderRadius: 12, paddingHorizontal: 14, minHeight: 50, fontSize: 17, color: '#000' },
   hint: { fontSize: 13, color: '#8E8E93', marginTop: 6, paddingHorizontal: 2 },

@@ -9,7 +9,17 @@ import { searchConditionNames, ConditionName, MIN_CHARACTERS } from '@/services/
 // Waits this long after the last keystroke before searching
 const SEARCH_DELAY_MS = 300;
 
-export default function ConditionPicker({ onSave, onCancel }: { onSave: (name: string) => void; onCancel: () => void }) {
+export default function ConditionPicker({
+  onSave,
+  onCancel,
+  actionLabel = 'Add condition',
+  hintText = 'Pick a condition from the list. Only listed conditions can be added.',
+}: {
+  onSave: (name: string) => void;
+  onCancel: () => void;
+  actionLabel?: string;
+  hintText?: string;
+}) {
   const [query, setQuery] = useState('');
   // Set only when a suggestion is tapped. Typing again clears it.
   const [selected, setSelected] = useState<ConditionName | null>(null);
@@ -87,7 +97,7 @@ export default function ConditionPicker({ onSave, onCancel }: { onSave: (name: s
             autoCorrect={false}
             autoFocus
           />
-          <Text style={styles.hint}>Pick a condition from the list. Only listed conditions can be added.</Text>
+          <Text style={styles.hint}>{hintText}</Text>
         </View>
 
         {loading && (
@@ -130,7 +140,7 @@ export default function ConditionPicker({ onSave, onCancel }: { onSave: (name: s
           disabled={!selected}
           accessibilityRole="button"
         >
-          <Text style={styles.saveText}>Add condition</Text>
+          <Text style={styles.saveText}>{actionLabel}</Text>
         </TouchableOpacity>
       </View>
     </View>
