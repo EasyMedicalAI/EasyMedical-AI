@@ -105,6 +105,8 @@ export interface UserHealthData {
   birthday?: string;
   gender?: string;
   prescriptionMedications?: string[];
+  // RxNorm product code for each medication you entered, keyed by its name. Epic medications get theirs from Epic on each sync.
+  medicationProductIds?: Record<string, string>;
   otcMedications?: string[];
   pastConditions?: string[];
   pregnancies?: { year: string; outcome: string; complications: string[] }[];

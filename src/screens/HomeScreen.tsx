@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DateWheel, { dateFromText, textFromDate } from '@/components/DateWheel';
 import FindDoctor from '@/components/FindDoctor';
+import FindCheaper from '@/components/FindCheaper';
 import FindPharmacy from '@/components/FindPharmacy';
 import InlineFieldsForm from '@/components/InlineFieldsForm';
 import EpicBadge from '@/components/EpicBadge';
@@ -1591,6 +1592,13 @@ export default function HomeScreen() {
           <View style={styles.listCard}>
             <VitalRow icon="pill" label="Medications" value={String(medicationCount)} onPress={() => setOpenPage('meds')} />
             <View style={styles.divider} />
+            <VitalRow
+              icon="tag-outline"
+              label="Find medications cheaper"
+              value=""
+              onPress={() => setOpenPage('find-cheaper')}
+            />
+            <View style={styles.divider} />
             <VitalRow icon="alert-outline" iconColor="#FF9500" label="Allergies" value={allergyValue} onPress={() => setOpenPage('allergies')} />
             <View style={styles.divider} />
             <VitalRow icon="stethoscope" label="Conditions" value={String(conditionCount)} onPress={() => setOpenPage('conditions')} />
@@ -1879,6 +1887,10 @@ export default function HomeScreen() {
           planName={userData.insurances?.[0]?.plan}
           payerPhone={userData.insurances?.[0]?.payerPhone}
         />
+      </DetailModal>
+
+      <DetailModal visible={openPage === 'find-cheaper'} title="Find medications cheaper" onClose={closeDetail}>
+        <FindCheaper />
       </DetailModal>
 
       <DetailModal visible={openPage === 'allergies'} title="Allergies" onClose={closeDetail} onDismiss={runPendingEditor}>

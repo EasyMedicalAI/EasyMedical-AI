@@ -9,3 +9,9 @@ export function medicationNameFrom(request: any): string {
     ''
   );
 }
+
+// The RxNorm product code for a medication, when the coded concept includes one. Returns '' when none is found.
+export function rxnormCodeFrom(concept: any): string {
+  const coding: any[] = concept?.coding || [];
+  return coding.find((c) => /rxnorm/i.test(c?.system || ''))?.code || '';
+}

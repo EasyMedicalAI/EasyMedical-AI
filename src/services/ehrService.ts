@@ -1,7 +1,7 @@
 // Connects EasyMedical to one or more EHR systems (Epic, Oracle Health, ...) over SMART on FHIR.
 // Several systems can be connected at once. Reads and sync merge results from all of them.
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { medicationNameFrom } from './medicationName';
+import { medicationNameFrom, rxnormCodeFrom } from './medicationName';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://easymedical-backend-new-production.up.railway.app';
 const CONNECTIONS_KEY = 'ehr_connections';
@@ -46,6 +46,8 @@ export interface Medication {
   dosage: string;
   date: string;
   status: 'active' | 'inactive';
+  // RxNorm product code, when Epic includes one. Used to match generic options and prices.
+  productId?: string;
 }
 
 export interface Appointment {
@@ -340,12 +342,12 @@ class EhrService {
     return results.reduce((all, r) => all.concat(r), [] as T[]);
   }
 
-  // Some Epic prescriptions only point to a separate Medication record, which holds the name
-  private async medicationNameFromReference(c: EhrConnection, request: any): Promise<string> {
+  // Some Epic prescriptions only point to a separate Medication record, which holds the name and code
+  private async medicationConceptFromReference(c: EhrConnection, request: any): Promise<any> {
     const reference: string | undefined = request?.medicationReference?.reference;
-    if (!reference) return '';
+    if (!reference) return null;
     const medication = await this.fhirGet(c, `/${reference}`).catch(() => null);
-    return medication?.code?.coding?.[0]?.display || medication?.code?.text || '';
+    return medication?.code || null;
   }
 
   async getMedications(): Promise<Medication[]> {
@@ -354,19 +356,25 @@ class EhrService {
       const entries: any[] = data?.entry || [];
       // Medications without a name (from Epic or its linked record) are left out, since they can't be identified
       const resolved = await Promise.all(
-        entries.map(async (e: any) => ({
-          entry: e,
-          name: medicationNameFrom(e.resource) || (await this.medicationNameFromReference(c, e.resource)),
-        }))
+        entries.map(async (e: any) => {
+          const name = medicationNameFrom(e.resource);
+          const linked = name ? null : await this.medicationConceptFromReference(c, e.resource);
+          return {
+            entry: e,
+            name: name || linked?.coding?.[0]?.display || linked?.text || '',
+            productId: rxnormCodeFrom(e.resource.medicationCodeableConcept) || rxnormCodeFrom(linked),
+          };
+        })
       );
       return resolved
         .filter(({ name }) => name)
-        .map(({ entry, name }) => ({
+        .map(({ entry, name, productId }) => ({
           id: entry.resource.id,
           name,
           dosage: entry.resource.dosageInstruction?.[0]?.text || 'No dosage info',
           date: entry.resource.authoredOn || '',
           status: entry.resource.status || 'active',
+          productId: productId || undefined,
         }));
     });
   }
