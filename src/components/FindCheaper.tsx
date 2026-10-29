@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Linking, StyleSheet } from 'react-native';
 import { Section, ListCard, Divider } from '@/components/ScreenKit';
 import { searchMedicines, genericOptions, MedicineMatch, GenericOptions } from '@/services/medicineLookup';
-import { cashPrices, PriceLookup } from '@/services/cashPrices';
+import { cashPrices, CashPrice } from '@/services/cashPrices';
 import { searchPharmacies, ProviderResult } from '@/services/providerSearch';
 import { zipLocation, milesBetween } from '@/services/zipLocation';
 
@@ -42,12 +42,14 @@ export default function FindCheaper() {
 
   const [zip, setZip] = useState('');
   const [checking, setChecking] = useState(false);
-  const [priceResult, setPriceResult] = useState<PriceLookup | null>(null);
+  const [prices, setPrices] = useState<CashPrice[] | null>(null);
+  const [priceError, setPriceError] = useState('');
+  const [loadingPrices, setLoadingPrices] = useState(false);
   const [pharmacies, setPharmacies] = useState<Pharmacy[] | null>(null);
   const [pharmacyError, setPharmacyError] = useState('');
 
   const canSearch = term.trim().length > 0 && !searching;
-  const canCheck = !!product && /^\d{5}$/.test(zip) && !checking;
+  const canShowPharmacies = !!product && /^\d{5}$/.test(zip) && !checking;
 
   const search = async () => {
     if (!canSearch) return;
@@ -56,7 +58,8 @@ export default function FindCheaper() {
     setPicked(null);
     setOptions(null);
     setProduct(null);
-    setPriceResult(null);
+    setPrices(null);
+    setPriceError('');
     try {
       setMatches(await searchMedicines(term));
     } catch (e) {
@@ -71,7 +74,8 @@ export default function FindCheaper() {
     setPicked(match);
     setOptions(null);
     setProduct(null);
-    setPriceResult(null);
+    setPrices(null);
+    setPriceError('');
     setError('');
     try {
       setOptions(await genericOptions(match.rxcui));
@@ -80,18 +84,36 @@ export default function FindCheaper() {
     }
   };
 
-  const checkPrices = async () => {
-    if (!canCheck || !product) return;
+  // Cost Plus prices don't depend on the ZIP code, so they load as soon as a form is picked
+  const loadPrices = async (chosen: MedicineMatch) => {
+    setLoadingPrices(true);
+    setPrices(null);
+    setPriceError('');
+    try {
+      setPrices(await cashPrices(chosen, options?.genericName ?? null));
+    } catch (e) {
+      setPriceError(e instanceof Error ? e.message : 'Prices could not be loaded. Please try again.');
+    } finally {
+      setLoadingPrices(false);
+    }
+  };
+
+  const chooseProduct = (chosen: MedicineMatch) => {
+    setProduct(chosen);
+    setPharmacies(null);
+    setPharmacyError('');
+    loadPrices(chosen);
+  };
+
+  const showPharmacies = async () => {
+    if (!canShowPharmacies) return;
     setChecking(true);
     setPharmacyError('');
     try {
-      setPriceResult(await cashPrices(product.name, zip));
-      try {
-        setPharmacies(await nearbyPharmacies(zip));
-      } catch (e) {
-        setPharmacies(null);
-        setPharmacyError(e instanceof Error ? e.message : 'Could not find pharmacies. Please try again.');
-      }
+      setPharmacies(await nearbyPharmacies(zip));
+    } catch (e) {
+      setPharmacies(null);
+      setPharmacyError(e instanceof Error ? e.message : 'Could not find pharmacies. Please try again.');
     } finally {
       setChecking(false);
     }
@@ -99,7 +121,7 @@ export default function FindCheaper() {
 
   return (
     <>
-      <Section title="Medication">
+      <Section title="1. Medication">
         <ListCard>
           <View style={styles.padded}>
             <Text style={styles.label}>MEDICATION NAME</Text>
@@ -143,7 +165,7 @@ export default function FindCheaper() {
       )}
 
       {picked && options && (
-        <Section title="Generic version">
+        <Section title="2. Form">
           <ListCard>
             <View style={styles.padded}>
               {options.genericName ? (
@@ -158,7 +180,7 @@ export default function FindCheaper() {
             {options.products.map((p) => (
               <React.Fragment key={p.rxcui}>
                 <Divider />
-                <TouchableOpacity style={styles.row} onPress={() => setProduct(p)}>
+                <TouchableOpacity style={styles.row} onPress={() => chooseProduct(p)}>
                   <Text style={[styles.rowText, product?.rxcui === p.rxcui && styles.rowTextOn]}>{p.name}</Text>
                   {product?.rxcui === p.rxcui && <Text style={styles.selected}>Selected</Text>}
                 </TouchableOpacity>
@@ -174,17 +196,54 @@ export default function FindCheaper() {
       )}
 
       {product && (
-        <Section title="Prices near you">
+        <Section title="3. Prices">
+          {loadingPrices && <ActivityIndicator style={styles.loading} />}
+
+          {priceError ? <Text style={styles.error}>{priceError}</Text> : null}
+
+          {prices && prices.length === 0 && (
+            <Text style={styles.hint}>Cost Plus Drugs doesn&apos;t list this medication. Ask a pharmacy for the cash price.</Text>
+          )}
+
+          {prices && prices.length > 0 && (
+            <>
+              <ListCard>
+                {prices.map((price, index) => (
+                  <React.Fragment key={`${price.pharmacy}-${index}`}>
+                    {index > 0 && <Divider />}
+                    <TouchableOpacity
+                      style={styles.row}
+                      disabled={!price.url}
+                      onPress={() => price.url && Linking.openURL(price.url)}
+                      accessibilityRole="link"
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.rowText}>{price.pharmacy}</Text>
+                        <Text style={styles.hint}>
+                          {price.quantity} · as of {price.asOf}
+                        </Text>
+                      </View>
+                      <Text style={styles.price}>${price.price.toFixed(2)}</Text>
+                    </TouchableOpacity>
+                  </React.Fragment>
+                ))}
+              </ListCard>
+              <Text style={styles.hint}>
+                Prices from Cost Plus Drugs, a mail-order pharmacy. Shipping is not included yet.
+              </Text>
+              <Text style={styles.hint}>No insurance needed. Cost Plus Drugs sells at cash prices.</Text>
+            </>
+          )}
+
           <ListCard>
             <View style={styles.padded}>
-              <Text style={styles.label}>ZIP CODE</Text>
+              <Text style={styles.label}>ZIP CODE FOR NEARBY PHARMACIES</Text>
               <TextInput
                 style={styles.input}
                 value={zip}
                 onChangeText={(value) => {
                   setZip(value.replace(/\D/g, '').slice(0, 5));
-                  // Results are for the ZIP code they were searched with, so they clear when it changes
-                  setPriceResult(null);
+                  // Pharmacies are for the ZIP code they were searched with, so they clear when it changes
                   setPharmacies(null);
                 }}
                 placeholder="e.g. 08108"
@@ -192,49 +251,15 @@ export default function FindCheaper() {
                 keyboardType="number-pad"
                 maxLength={5}
               />
-              <TouchableOpacity style={[styles.primaryButton, !canCheck && styles.disabled]} onPress={checkPrices} disabled={!canCheck}>
-                {checking ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>Check prices</Text>}
+              <TouchableOpacity
+                style={[styles.primaryButton, !canShowPharmacies && styles.disabled]}
+                onPress={showPharmacies}
+                disabled={!canShowPharmacies}
+              >
+                {checking ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>Show nearby pharmacies</Text>}
               </TouchableOpacity>
             </View>
           </ListCard>
-
-          {priceResult?.status === 'not-connected' && (
-            <View style={styles.noteBox}>
-              <Text style={styles.noteTitle}>Prices aren&apos;t available yet</Text>
-              <Text style={styles.noteText}>
-                A price source for your ZIP code hasn&apos;t been connected to the app. You can check prices on these sites, or ask your pharmacy for the cash price.
-              </Text>
-              <TouchableOpacity style={styles.linkButton} onPress={() => Linking.openURL('https://www.goodrx.com')}>
-                <Text style={styles.linkText}>Open GoodRx</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.linkButton} onPress={() => Linking.openURL('https://costplusdrugs.com')}>
-                <Text style={styles.linkText}>Open Cost Plus Drugs</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {priceResult?.status === 'ok' && priceResult.prices.length === 0 && (
-            <Text style={styles.hint}>No prices were found near {zip}. Try a nearby ZIP code.</Text>
-          )}
-
-          {priceResult?.status === 'ok' && priceResult.prices.length > 0 && (
-            <ListCard>
-              {priceResult.prices.map((price, index) => (
-                <React.Fragment key={`${price.pharmacy}-${index}`}>
-                  {index > 0 && <Divider />}
-                  <View style={styles.row}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.rowText}>{price.pharmacy}</Text>
-                      <Text style={styles.hint}>
-                        {price.quantity} · as of {price.asOf}
-                      </Text>
-                    </View>
-                    <Text style={styles.price}>${price.price.toFixed(2)}</Text>
-                  </View>
-                </React.Fragment>
-              ))}
-            </ListCard>
-          )}
 
           {pharmacyError ? <Text style={styles.error}>{pharmacyError}</Text> : null}
 
@@ -288,6 +313,7 @@ export default function FindCheaper() {
 const styles = StyleSheet.create({
   padded: { padding: 14 },
   keyboardSpace: { height: 340 },
+  loading: { marginVertical: 12 },
   label: { fontSize: 12, fontWeight: '600', color: '#8E8E93', letterSpacing: 0.5, marginBottom: 6 },
   input: { backgroundColor: '#F2F2F7', borderRadius: 12, paddingHorizontal: 14, minHeight: 50, fontSize: 17, color: '#000' },
   primaryButton: { backgroundColor: '#007AFF', borderRadius: 12, minHeight: 50, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
