@@ -39,7 +39,7 @@ export interface AiPinionResult {
 }
 
 export type AiPinionTurnResponse =
-  | { type: 'question'; text: string }
+  | { type: 'question'; text: string; options?: string[] }
   | { type: 'emergency'; text: string; safetyNote: string }
   | ({ type: 'result' } & AiPinionResult);
 

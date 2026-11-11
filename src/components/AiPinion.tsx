@@ -33,6 +33,8 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
   const [error, setError] = useState('');
   const [result, setResult] = useState<AiPinionResult | null>(null);
   const [stopped, setStopped] = useState(false);
+  // Tappable answers for the question on screen (empty for an open question)
+  const [options, setOptions] = useState<string[]>([]);
   const nextId = useRef(1);
 
   const reset = () => {
@@ -40,25 +42,30 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
     setShown([]);
     setInput('');
     setError('');
+    setOptions([]);
     setResult(null);
     setStopped(false);
   };
 
-  const send = async () => {
-    const text = input.trim();
+  // Sends what is typed, or a tapped answer when one is passed in
+  const send = async (tapped?: string) => {
+    const text = (tapped ?? input).trim();
     if (!text || sending || result || stopped) return;
     Keyboard.dismiss();
+    const previousOptions = options;
     const nextHistory: ChatTurn[] = [...history, { role: 'user', content: text }];
     setHistory(nextHistory);
     setShown((prev) => [...prev, { id: nextId.current++, role: 'user', text }]);
     setInput('');
     setError('');
+    setOptions([]);
     setSending(true);
     try {
       const turn: AiPinionTurnResponse = await aiPinionTurn(nextHistory);
       if (turn.type === 'question') {
         setHistory([...nextHistory, { role: 'assistant', content: turn.text }]);
         setShown((prev) => [...prev, { id: nextId.current++, role: 'assistant', text: turn.text }]);
+        setOptions(turn.options || []);
       } else if (turn.type === 'emergency') {
         setShown((prev) => [...prev, { id: nextId.current++, role: 'assistant', text: turn.text, emergency: true }]);
         setStopped(true);
@@ -70,6 +77,7 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
       // Put the message back so the person can try again
       setHistory(history);
       setShown((prev) => prev.slice(0, -1));
+      setOptions(previousOptions);
       setInput(text);
       setError(e instanceof Error ? e.message : 'AI-pinion could not respond right now. Please try again.');
     } finally {
@@ -133,6 +141,19 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
         <Text style={styles.footer}>Only what you type is sent. Nothing is saved on the server.</Text>
       </ScrollView>
 
+      {canType && options.length > 0 && (
+        <View style={styles.optionBlock}>
+          <Text style={styles.optionHint}>Tap an answer, or type your own below.</Text>
+          <View style={styles.optionRow}>
+            {options.map((o) => (
+              <TouchableOpacity key={o} style={styles.optionChip} onPress={() => send(o)} accessibilityRole="button">
+                <Text style={styles.optionText}>{o}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
       {canType && (
         <View style={styles.inputBar}>
           <TextInput
@@ -146,7 +167,7 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
           />
           <TouchableOpacity
             style={[styles.sendButton, !input.trim() && styles.sendButtonDisabled]}
-            onPress={send}
+            onPress={() => send()}
             disabled={!input.trim()}
             accessibilityRole="button"
           >
@@ -284,6 +305,11 @@ const styles = StyleSheet.create({
   sourceTitle: { fontSize: 14, color: '#000' },
   sourceMeta: { fontSize: 12, color: '#6C6C70' },
   safety: { fontSize: 13, lineHeight: 18, color: '#6C6C70' },
+  optionBlock: { gap: 8 },
+  optionHint: { fontSize: 13, color: '#6C6C70' },
+  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  optionChip: { borderRadius: 999, paddingVertical: 9, paddingHorizontal: 14, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#007AFF' },
+  optionText: { fontSize: 15, color: '#007AFF', fontWeight: '500' },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   input: {
     flex: 1,
