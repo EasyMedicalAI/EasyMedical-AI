@@ -9,13 +9,16 @@ export interface HealthTopic {
 
 const SEARCH_URL = 'https://wsearch.nlm.nih.gov/ws/query';
 const MAX_TOPICS = 3;
+// Look past the first few results, so a close match is not missed
+const SEARCH_RESULTS = 8;
 const MAX_SUMMARY_CHARACTERS = 480;
 
-// The first few MedlinePlus topics that match the condition name, with a short plain-language summary
+// The MedlinePlus topics that match the condition name, with a short plain-language summary.
+// Search matches single words, so only topics whose title is the condition (or its parent term) are kept.
 export async function healthTopics(condition: string): Promise<HealthTopic[]> {
-  const term = condition.trim();
+  const term = cleanCondition(condition);
   if (!term) return [];
-  const params = new URLSearchParams({ db: 'healthTopics', term, retmax: String(MAX_TOPICS) });
+  const params = new URLSearchParams({ db: 'healthTopics', term, retmax: String(SEARCH_RESULTS) });
   const response = await fetch(`${SEARCH_URL}?${params.toString()}`);
   if (!response.ok) throw new Error('MedlinePlus is not responding right now.');
   const xml = await response.text();
@@ -26,10 +29,35 @@ export async function healthTopics(condition: string): Promise<HealthTopic[]> {
     const url = doc.match(/url="([^"]+)"/)?.[1];
     const title = contentOf(doc, 'title');
     if (!url || !title) continue;
+    if (!isRelevant(title, term)) continue;
     const summary = truncate(contentOf(doc, 'FullSummary'));
     topics.push({ title, url, summary });
+    if (topics.length === MAX_TOPICS) break;
   }
   return topics;
+}
+
+// Removes wording that search does not match, such as codes and "unspecified".
+// "Arthritis, psoriatic" becomes "psoriatic arthritis".
+export function cleanCondition(raw: string): string {
+  const text = raw
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/,?\s*\b(unspecified|nos|not otherwise specified)\b/gi, ' ')
+    .replace(/\bof (multiple|several|unspecified) sites?\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/[,\s]+$/, '')
+    .trim();
+  const parts = text.split(',').map((part) => part.trim()).filter(Boolean);
+  const ordered = parts.length === 2 ? `${parts[1]} ${parts[0]}` : text;
+  return ordered.toLowerCase();
+}
+
+// A topic is relevant when its title is the condition, or a broader term inside it
+// (for example "Arthritis" for "psoriatic arthritis"). Narrower topics such as "Juvenile Arthritis"
+// or "Pulmonary Hypertension" are left out, and so are short titles that could match by chance.
+function isRelevant(title: string, term: string): boolean {
+  const t = title.toLowerCase();
+  return t === term || (t.length >= 4 && term.includes(t));
 }
 
 // The text inside one <content name="..."> element, with the search highlighting and HTML tags removed

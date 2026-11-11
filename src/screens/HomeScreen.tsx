@@ -1612,7 +1612,7 @@ export default function HomeScreen() {
             <View style={styles.divider} />
             {__DEV__ && (
               <>
-                <VitalRow icon="stethoscope" label="Triage (developer preview)" value="" onPress={() => setOpenPage('triage')} />
+                <VitalRow icon="stethoscope" label="Where should I go?" value="" onPress={() => setOpenPage('triage')} />
                 <View style={styles.divider} />
               </>
             )}
@@ -1917,7 +1917,7 @@ export default function HomeScreen() {
       </DetailModal>
 
       {__DEV__ && (
-        <DetailModal visible={openPage === 'triage'} title="Triage (developer preview)" onClose={closeDetail}>
+        <DetailModal visible={openPage === 'triage'} title="Where should I go?" onClose={closeDetail}>
           <Triage />
         </DetailModal>
       )}

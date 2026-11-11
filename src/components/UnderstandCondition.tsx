@@ -1,7 +1,7 @@
 // Understand your condition: trusted, plain-language information on a condition, from MedlinePlus.
 // It explains and points to sources. It does not diagnose or recommend treatment.
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, Linking, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Keyboard, Linking, StyleSheet } from 'react-native';
 import { healthTopics, HealthTopic } from '@/services/medlinePlus';
 
 interface Lookup {
@@ -13,9 +13,47 @@ interface Lookup {
 export default function UnderstandCondition({ conditions }: { conditions: string[] }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [lookup, setLookup] = useState<Lookup | null>(null);
+  const [typed, setTyped] = useState('');
 
   // The first condition is shown when the screen opens
   const condition = selected ?? conditions[0] ?? null;
+
+  // Looks up a condition the person typed, even if it is not in their records
+  const lookUpTyped = () => {
+    const name = typed.trim();
+    if (!name) return;
+    Keyboard.dismiss();
+    setSelected(name);
+    setTyped('');
+  };
+
+  const typeOwn = (
+    <>
+      <Text style={styles.sectionLabel}>OR TYPE YOUR OWN</Text>
+      <View style={styles.typeRow}>
+        <TextInput
+          style={styles.input}
+          value={typed}
+          onChangeText={setTyped}
+          placeholder="For example, psoriatic arthritis"
+          placeholderTextColor="#8E8E93"
+          maxLength={100}
+          returnKeyType="search"
+          onSubmitEditing={lookUpTyped}
+          autoCorrect={false}
+          accessibilityLabel="Type a condition to look up"
+        />
+        <TouchableOpacity
+          style={[styles.lookUpButton, !typed.trim() && styles.lookUpButtonOff]}
+          onPress={lookUpTyped}
+          disabled={!typed.trim()}
+          accessibilityRole="button"
+        >
+          <Text style={styles.lookUpText}>Look up</Text>
+        </TouchableOpacity>
+      </View>
+    </>
+  );
 
   useEffect(() => {
     if (!condition) return;
@@ -37,7 +75,7 @@ export default function UnderstandCondition({ conditions }: { conditions: string
   const loading = !!condition && !current;
 
   return (
-    <>
+    <View style={styles.wrap}>
       <View style={styles.notice}>
         <Text style={styles.noticeTitle}>General information, not medical advice</Text>
         <Text style={styles.noticeText}>
@@ -46,10 +84,13 @@ export default function UnderstandCondition({ conditions }: { conditions: string
       </View>
 
       {conditions.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>No conditions yet</Text>
-          <Text style={styles.emptyText}>Add a condition to your records, and we’ll find trusted information about it.</Text>
-        </View>
+        <>
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyTitle}>No conditions yet</Text>
+            <Text style={styles.emptyText}>Add a condition to your records, or type one below to find trusted information about it.</Text>
+          </View>
+          {typeOwn}
+        </>
       ) : (
         <>
           <Text style={styles.sectionLabel}>CHOOSE A CONDITION</Text>
@@ -69,6 +110,7 @@ export default function UnderstandCondition({ conditions }: { conditions: string
               );
             })}
           </View>
+          {typeOwn}
 
           {condition && <Text style={styles.heading}>About {condition}</Text>}
 
@@ -79,7 +121,7 @@ export default function UnderstandCondition({ conditions }: { conditions: string
           {current?.topics && current.topics.length === 0 && (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyText}>
-                We didn’t find trusted information for “{condition}”. Ask your doctor for reliable sources.
+                We didn’t find an exact match for “{condition}” on MedlinePlus. Ask your doctor for reliable sources.
               </Text>
             </View>
           )}
@@ -108,11 +150,17 @@ export default function UnderstandCondition({ conditions }: { conditions: string
         <Text style={styles.emergencyTitle}>Severe or sudden symptoms?</Text>
         <Text style={styles.emergencyText}>Call 911 or go to the nearest emergency room. Don’t wait to read about it.</Text>
       </View>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: { paddingHorizontal: 16 },
+  typeRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 2 },
+  input: { flex: 1, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#D1D1D6', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16, color: '#000' },
+  lookUpButton: { backgroundColor: '#007AFF', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 11 },
+  lookUpButtonOff: { opacity: 0.4 },
+  lookUpText: { fontSize: 15, color: '#FFF', fontWeight: '600' },
   notice: { backgroundColor: '#FFF9E6', borderRadius: 14, padding: 16, marginBottom: 18, gap: 6 },
   noticeTitle: { fontSize: 15, fontWeight: '600', color: '#5C4700' },
   noticeText: { fontSize: 14, color: '#5C4700', lineHeight: 20 },
