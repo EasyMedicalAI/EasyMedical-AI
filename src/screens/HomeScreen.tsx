@@ -6,6 +6,7 @@ import ClinicalTrials from '@/components/ClinicalTrials';
 import ConditionPicker from '@/components/ConditionPicker';
 import UnderstandCondition from '@/components/UnderstandCondition';
 import Triage from '@/components/Triage';
+import AiPinion from '@/components/AiPinion';
 import FindPharmacy from '@/components/FindPharmacy';
 import InlineFieldsForm from '@/components/InlineFieldsForm';
 import EpicBadge from '@/components/EpicBadge';
@@ -1614,6 +1615,8 @@ export default function HomeScreen() {
               <>
                 <VitalRow icon="stethoscope" label="Where should I go?" value="" onPress={() => setOpenPage('triage')} />
                 <View style={styles.divider} />
+                <VitalRow icon="robot-outline" label="AI-pinion" value="" onPress={() => setOpenPage('aipinion')} />
+                <View style={styles.divider} />
               </>
             )}
             <VitalRow icon="book-open-page-variant-outline" label="Medical history" value={String(historyCount)} onPress={() => setOpenPage('history')} />
@@ -1919,6 +1922,12 @@ export default function HomeScreen() {
       {__DEV__ && (
         <DetailModal visible={openPage === 'triage'} title="Where should I go?" onClose={closeDetail}>
           <Triage />
+        </DetailModal>
+      )}
+
+      {__DEV__ && (
+        <DetailModal visible={openPage === 'aipinion'} title="AI-pinion" onClose={closeDetail}>
+          <AiPinion onLeave={closeDetail} />
         </DetailModal>
       )}
 
