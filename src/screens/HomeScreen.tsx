@@ -4,6 +4,8 @@ import FindDoctor from '@/components/FindDoctor';
 import FindCheaper from '@/components/FindCheaper';
 import ClinicalTrials from '@/components/ClinicalTrials';
 import ConditionPicker from '@/components/ConditionPicker';
+import UnderstandCondition from '@/components/UnderstandCondition';
+import Triage from '@/components/Triage';
 import FindPharmacy from '@/components/FindPharmacy';
 import InlineFieldsForm from '@/components/InlineFieldsForm';
 import EpicBadge from '@/components/EpicBadge';
@@ -1606,6 +1608,14 @@ export default function HomeScreen() {
             <View style={styles.divider} />
             <VitalRow icon="stethoscope" label="Conditions" value={String(conditionCount)} onPress={() => setOpenPage('conditions')} />
             <View style={styles.divider} />
+            <VitalRow icon="book-open-page-variant-outline" label="Understand your condition" value="" onPress={() => setOpenPage('understand')} />
+            <View style={styles.divider} />
+            {__DEV__ && (
+              <>
+                <VitalRow icon="stethoscope" label="Triage (developer preview)" value="" onPress={() => setOpenPage('triage')} />
+                <View style={styles.divider} />
+              </>
+            )}
             <VitalRow icon="book-open-page-variant-outline" label="Medical history" value={String(historyCount)} onPress={() => setOpenPage('history')} />
           </View>
         </View>
@@ -1901,6 +1911,16 @@ export default function HomeScreen() {
       <DetailModal visible={openPage === 'trials'} title="Clinical trials" onClose={closeDetail}>
         <ClinicalTrials conditions={conditionNames} />
       </DetailModal>
+
+      <DetailModal visible={openPage === 'understand'} title="Understand your condition" onClose={closeDetail}>
+        <UnderstandCondition conditions={conditionNames} />
+      </DetailModal>
+
+      {__DEV__ && (
+        <DetailModal visible={openPage === 'triage'} title="Triage (developer preview)" onClose={closeDetail}>
+          <Triage />
+        </DetailModal>
+      )}
 
       <DetailModal visible={openPage === 'allergies'} title="Allergies" onClose={closeDetail} onDismiss={runPendingEditor}>
         <Section title="Allergies">
