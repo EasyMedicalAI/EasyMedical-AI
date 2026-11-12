@@ -1,5 +1,7 @@
 // AI-pinion: a chat that works out the most likely causes of how a person feels, with a top three.
 // Only the typed conversation is sent to the backend. No records, names or dates of birth.
+//
+// Two calls: the chat gives the three possibilities first, then the articles for them are looked up.
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://easymedical-backend-new-production.up.railway.app';
 
@@ -22,12 +24,16 @@ export interface AiPinionParagraph {
   sources: AiPinionSource[];
 }
 
-export interface AiPinionCandidate {
+// One of the three possibilities, before its articles are looked up
+export interface AiPinionOutline {
   rank: number;
   name: string;
   why: string;
-  articlesSay: AiPinionParagraph[];
   askClinician: string[];
+}
+
+export interface AiPinionCandidate extends AiPinionOutline {
+  articlesSay: AiPinionParagraph[];
   limitedEvidence: boolean;
 }
 
@@ -41,13 +47,24 @@ export interface AiPinionResult {
 export type AiPinionTurnResponse =
   | { type: 'question'; text: string; options?: string[] }
   | { type: 'emergency'; text: string; safetyNote: string }
-  | ({ type: 'result' } & AiPinionResult);
+  | { type: 'candidates'; candidates: AiPinionOutline[] };
 
-export async function aiPinionTurn(messages: ChatTurn[]): Promise<AiPinionTurnResponse> {
-  const response = await fetch(`${BACKEND_URL}/api/ai-pinion/turn`, {
+export interface AiPinionArticleSummary {
+  rank: number;
+  name: string;
+  articlesSay: AiPinionParagraph[];
+  limitedEvidence: boolean;
+}
+
+export type AiPinionArticlesResponse =
+  | { type: 'emergency'; text: string; safetyNote: string }
+  | ({ type: 'result' } & Omit<AiPinionResult, 'candidates'> & { candidates: AiPinionArticleSummary[] });
+
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${BACKEND_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify(body),
   });
   // A 404 means the server does not have this route yet (the backend change is not deployed)
   if (response.status === 404) {
@@ -55,5 +72,15 @@ export async function aiPinionTurn(messages: ChatTurn[]): Promise<AiPinionTurnRe
   }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data?.error || 'AI-pinion could not respond right now. Please try again later.');
-  return data as AiPinionTurnResponse;
+  return data as T;
+}
+
+// The next question, an emergency stop, or the three possibilities
+export function aiPinionTurn(messages: ChatTurn[]): Promise<AiPinionTurnResponse> {
+  return postJson<AiPinionTurnResponse>('/api/ai-pinion/turn', { messages });
+}
+
+// Recent articles for the named possibilities, with summaries that cite them
+export function aiPinionArticles(messages: ChatTurn[], names: string[]): Promise<AiPinionArticlesResponse> {
+  return postJson<AiPinionArticlesResponse>('/api/ai-pinion/articles', { messages, names });
 }

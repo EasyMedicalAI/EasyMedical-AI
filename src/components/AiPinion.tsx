@@ -1,7 +1,8 @@
 // AI-pinion (personal use, development builds only): a chat that works out the most likely causes of how a person
 // feels, and gives a top three to talk through with a clinician. It is shown only after the person agrees that
-// it is a computer, not a doctor. The agreement is asked again each time the screen opens.
-import React, { useRef, useState } from 'react';
+// it is a computer, not a doctor. The agreement is asked again each time the screen opens, but the chat itself is
+// kept in memory, so closing the screen does not lose it. Nothing is written to disk.
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +14,14 @@ import {
   Linking,
   StyleSheet,
 } from 'react-native';
-import { aiPinionTurn, AiPinionResult, AiPinionTurnResponse, ChatTurn } from '@/services/aiPinionService';
+import {
+  aiPinionArticles,
+  aiPinionTurn,
+  AiPinionOutline,
+  AiPinionParagraph,
+  AiPinionResult,
+  ChatTurn,
+} from '@/services/aiPinionService';
 
 const GREETING = 'Tell me what has been going on, in your own words. I will ask a few questions, then give you three possibilities to talk through with a clinician.';
 
@@ -24,66 +32,127 @@ interface Shown {
   emergency?: boolean;
 }
 
+interface ChatState {
+  history: ChatTurn[];
+  shown: Shown[];
+  nextId: number;
+  input: string;
+  // Tappable answers for the question on screen (empty for an open question)
+  options: string[];
+  // 'asking': waiting for the next question. 'articles': looking up articles for the three possibilities.
+  stage: 'idle' | 'asking' | 'articles';
+  error: string;
+  // The three possibilities, shown before their articles arrive
+  pending: AiPinionOutline[] | null;
+  result: AiPinionResult | null;
+  stopped: boolean;
+}
+
+const freshChat = (): ChatState => ({
+  history: [],
+  shown: [],
+  nextId: 1,
+  input: '',
+  options: [],
+  stage: 'idle',
+  error: '',
+  pending: null,
+  result: null,
+  stopped: false,
+});
+
+// The chat lives here, outside the component, so it survives closing the screen partway through a reply.
+let savedChat: ChatState = freshChat();
+
+const messageOf = (e: unknown) =>
+  e instanceof Error ? e.message : 'AI-pinion could not respond right now. Please try again.';
+
+const addBubble = (c: ChatState, role: 'user' | 'assistant', text: string, emergency = false): ChatState => ({
+  ...c,
+  nextId: c.nextId + 1,
+  shown: [...c.shown, { id: c.nextId, role, text, emergency }],
+});
+
 export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
   const [agreed, setAgreed] = useState(false);
-  const [history, setHistory] = useState<ChatTurn[]>([]);
-  const [shown, setShown] = useState<Shown[]>([]);
-  const [input, setInput] = useState('');
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState('');
-  const [result, setResult] = useState<AiPinionResult | null>(null);
-  const [stopped, setStopped] = useState(false);
-  // Tappable answers for the question on screen (empty for an open question)
-  const [options, setOptions] = useState<string[]>([]);
-  const nextId = useRef(1);
+  const [chat, setChat] = useState<ChatState>(savedChat);
 
-  const reset = () => {
-    setHistory([]);
-    setShown([]);
-    setInput('');
-    setError('');
-    setOptions([]);
-    setResult(null);
-    setStopped(false);
+  // Every change goes through here. Replies that arrive after the screen closed are still saved.
+  const update = (change: (c: ChatState) => ChatState) => {
+    savedChat = change(savedChat);
+    setChat(savedChat);
+  };
+
+  // Looks up articles for the three possibilities. They stay on screen if the lookup fails, so it can be retried.
+  const loadArticles = async (history: ChatTurn[], candidates: AiPinionOutline[]) => {
+    update((c) => ({ ...c, stage: 'articles', error: '' }));
+    try {
+      const found = await aiPinionArticles(history, candidates.map((x) => x.name));
+      if (found.type === 'emergency') {
+        update((c) => ({ ...addBubble(c, 'assistant', found.text, true), stage: 'idle', pending: null, stopped: true }));
+        return;
+      }
+      const result: AiPinionResult = {
+        summary: found.summary,
+        sources: found.sources,
+        safetyNote: found.safetyNote,
+        candidates: candidates.map((x) => {
+          const articles = found.candidates.find((a) => a.name.toLowerCase() === x.name.toLowerCase());
+          return {
+            ...x,
+            articlesSay: articles?.articlesSay ?? [],
+            limitedEvidence: articles?.limitedEvidence ?? true,
+          };
+        }),
+      };
+      update((c) => ({ ...c, stage: 'idle', pending: null, result }));
+    } catch (e) {
+      update((c) => ({ ...c, stage: 'idle', error: messageOf(e) }));
+    }
   };
 
   // Sends what is typed, or a tapped answer when one is passed in
   const send = async (tapped?: string) => {
-    const text = (tapped ?? input).trim();
-    if (!text || sending || result || stopped) return;
+    const current = savedChat;
+    const text = (tapped ?? current.input).trim();
+    if (!text || current.stage !== 'idle' || current.result || current.stopped || current.pending) return;
     Keyboard.dismiss();
-    const previousOptions = options;
-    const nextHistory: ChatTurn[] = [...history, { role: 'user', content: text }];
-    setHistory(nextHistory);
-    setShown((prev) => [...prev, { id: nextId.current++, role: 'user', text }]);
-    setInput('');
-    setError('');
-    setOptions([]);
-    setSending(true);
-    try {
-      const turn: AiPinionTurnResponse = await aiPinionTurn(nextHistory);
-      if (turn.type === 'question') {
-        setHistory([...nextHistory, { role: 'assistant', content: turn.text }]);
-        setShown((prev) => [...prev, { id: nextId.current++, role: 'assistant', text: turn.text }]);
-        setOptions(turn.options || []);
-      } else if (turn.type === 'emergency') {
-        setShown((prev) => [...prev, { id: nextId.current++, role: 'assistant', text: turn.text, emergency: true }]);
-        setStopped(true);
-      } else {
-        const { type: _type, ...found } = turn;
-        setResult(found);
-      }
-    } catch (e) {
+    const history: ChatTurn[] = [...current.history, { role: 'user', content: text }];
+    update((c) => ({ ...addBubble(c, 'user', text), history, input: '', error: '', options: [], stage: 'asking' }));
+
+    const turn = await aiPinionTurn(history).catch((e: unknown) => {
       // Put the message back so the person can try again
-      setHistory(history);
-      setShown((prev) => prev.slice(0, -1));
-      setOptions(previousOptions);
-      setInput(text);
-      setError(e instanceof Error ? e.message : 'AI-pinion could not respond right now. Please try again.');
-    } finally {
-      setSending(false);
+      update((c) => ({
+        ...c,
+        history: current.history,
+        shown: current.shown,
+        nextId: current.nextId,
+        options: current.options,
+        input: text,
+        stage: 'idle',
+        error: messageOf(e),
+      }));
+      return null;
+    });
+    if (!turn) return;
+
+    if (turn.type === 'question') {
+      update((c) => ({
+        ...addBubble(c, 'assistant', turn.text),
+        history: [...history, { role: 'assistant', content: turn.text }],
+        options: turn.options || [],
+        stage: 'idle',
+      }));
+    } else if (turn.type === 'emergency') {
+      update((c) => ({ ...addBubble(c, 'assistant', turn.text, true), stage: 'idle', stopped: true }));
+    } else {
+      // The three possibilities show at once, and their articles follow
+      update((c) => ({ ...c, pending: turn.candidates, options: [], stage: 'idle' }));
+      await loadArticles(history, turn.candidates);
     }
   };
+
+  const startOver = () => update(() => freshChat());
 
   if (!agreed) {
     return (
@@ -108,7 +177,8 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
     );
   }
 
-  const canType = !sending && !result && !stopped;
+  const canType = chat.stage === 'idle' && !chat.result && !chat.stopped && !chat.pending;
+  const showPossibilities = chat.pending !== null || chat.result !== null;
 
   return (
     <View style={styles.container}>
@@ -118,34 +188,41 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
         keyboardShouldPersistTaps="handled"
       >
         <Bubble role="assistant" text={GREETING} />
-        {shown.map((m) => (
+        {chat.shown.map((m) => (
           <Bubble key={m.id} role={m.role} text={m.text} emergency={m.emergency} />
         ))}
-        {sending && (
+        {chat.stage === 'asking' && (
           <View style={styles.thinking}>
             <ActivityIndicator color="#007AFF" />
             <Text style={styles.thinkingText}>Thinking…</Text>
           </View>
         )}
-        {error ? (
+        {chat.error ? (
           <View style={styles.errorCard}>
-            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.errorText}>{chat.error}</Text>
           </View>
         ) : null}
-        {result && <ResultView result={result} />}
-        {(result || stopped) && (
-          <TouchableOpacity style={styles.secondaryButton} onPress={reset} accessibilityRole="button">
+        {showPossibilities && (
+          <Possibilities
+            candidates={chat.result ? chat.result.candidates : chat.pending ?? []}
+            result={chat.result}
+            loading={chat.stage === 'articles'}
+            onRetry={chat.pending && chat.stage === 'idle' ? () => loadArticles(savedChat.history, savedChat.pending ?? []) : undefined}
+          />
+        )}
+        {chat.stage === 'idle' && chat.history.length > 0 && (
+          <TouchableOpacity style={styles.secondaryButton} onPress={startOver} accessibilityRole="button">
             <Text style={styles.secondaryButtonText}>Start over</Text>
           </TouchableOpacity>
         )}
         <Text style={styles.footer}>Only what you type is sent. Nothing is saved on the server.</Text>
       </ScrollView>
 
-      {canType && options.length > 0 && (
+      {canType && chat.options.length > 0 && (
         <View style={styles.optionBlock}>
           <Text style={styles.optionHint}>Tap an answer, or type your own below.</Text>
           <View style={styles.optionRow}>
-            {options.map((o) => (
+            {chat.options.map((o) => (
               <TouchableOpacity key={o} style={styles.optionChip} onPress={() => send(o)} accessibilityRole="button">
                 <Text style={styles.optionText}>{o}</Text>
               </TouchableOpacity>
@@ -160,15 +237,15 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
             style={styles.input}
             placeholder="Type here"
             placeholderTextColor="#8E8E93"
-            value={input}
-            onChangeText={setInput}
+            value={chat.input}
+            onChangeText={(input) => update((c) => ({ ...c, input }))}
             multiline
             maxLength={1500}
           />
           <TouchableOpacity
-            style={[styles.sendButton, !input.trim() && styles.sendButtonDisabled]}
+            style={[styles.sendButton, !chat.input.trim() && styles.sendButtonDisabled]}
             onPress={() => send()}
-            disabled={!input.trim()}
+            disabled={!chat.input.trim()}
             accessibilityRole="button"
           >
             <Text style={styles.sendButtonText}>Send</Text>
@@ -199,47 +276,74 @@ function Bubble({ role, text, emergency }: { role: 'user' | 'assistant'; text: s
   );
 }
 
-function ResultView({ result }: { result: AiPinionResult }) {
+// The three possibilities. Articles and their summaries are added when they arrive.
+function Possibilities({
+  candidates,
+  result,
+  loading,
+  onRetry,
+}: {
+  candidates: AiPinionOutline[];
+  result: AiPinionResult | null;
+  loading: boolean;
+  onRetry?: () => void;
+}) {
   return (
     <View style={styles.result}>
       <Text style={styles.resultTitle}>Three possibilities to talk through</Text>
-      <Text style={styles.resultSummary}>{result.summary}</Text>
+      {result && <Text style={styles.resultSummary}>{result.summary}</Text>}
 
-      {result.candidates.map((c) => (
-        <View key={c.rank} style={styles.candidate}>
-          <View style={styles.candidateHeader}>
-            <Text style={styles.rank}>{c.rank}</Text>
-            <Text style={styles.candidateName}>{c.name}</Text>
+      {candidates.map((c) => {
+        const found = result?.candidates.find((r) => r.rank === c.rank);
+        return (
+          <View key={c.rank} style={styles.candidate}>
+            <View style={styles.candidateHeader}>
+              <Text style={styles.rank}>{c.rank}</Text>
+              <Text style={styles.candidateName}>{c.name}</Text>
+            </View>
+            <Text style={styles.label}>BASED ON WHAT YOU TOLD US</Text>
+            <Text style={styles.bodyText}>{c.why}</Text>
+
+            {found && found.limitedEvidence && (
+              <Text style={styles.limited}>We found few recent articles on this one, so treat it as less certain.</Text>
+            )}
+            {found && !found.limitedEvidence && (
+              <>
+                <Text style={styles.label}>WHAT RECENT ARTICLES SAY</Text>
+                {found.articlesSay.map((p: AiPinionParagraph, i: number) => (
+                  <View key={i} style={styles.paragraph}>
+                    <Text style={styles.bodyText}>{p.text}</Text>
+                    <Text style={styles.citation}>{p.sources.map((s) => `[${s.id}]`).join(' ')}</Text>
+                  </View>
+                ))}
+              </>
+            )}
+
+            {c.askClinician.length > 0 && (
+              <>
+                <Text style={styles.label}>ASK YOUR CLINICIAN</Text>
+                {c.askClinician.map((q, i) => (
+                  <Text key={i} style={styles.bodyText}>{`• ${q}`}</Text>
+                ))}
+              </>
+            )}
           </View>
-          <Text style={styles.label}>WHY IT MAY FIT</Text>
-          <Text style={styles.bodyText}>{c.why}</Text>
+        );
+      })}
 
-          {c.limitedEvidence ? (
-            <Text style={styles.limited}>We found few recent articles on this one, so treat it as less certain.</Text>
-          ) : (
-            <>
-              <Text style={styles.label}>WHAT RECENT ARTICLES SAY</Text>
-              {c.articlesSay.map((p, i) => (
-                <View key={i} style={styles.paragraph}>
-                  <Text style={styles.bodyText}>{p.text}</Text>
-                  <Text style={styles.citation}>{p.sources.map((s) => `[${s.id}]`).join(' ')}</Text>
-                </View>
-              ))}
-            </>
-          )}
-
-          {c.askClinician.length > 0 && (
-            <>
-              <Text style={styles.label}>ASK YOUR CLINICIAN</Text>
-              {c.askClinician.map((q, i) => (
-                <Text key={i} style={styles.bodyText}>{`• ${q}`}</Text>
-              ))}
-            </>
-          )}
+      {loading && (
+        <View style={styles.thinking}>
+          <ActivityIndicator color="#007AFF" />
+          <Text style={styles.thinkingText}>Looking up recent articles for these three…</Text>
         </View>
-      ))}
+      )}
+      {onRetry && (
+        <TouchableOpacity style={styles.secondaryButton} onPress={onRetry} accessibilityRole="button">
+          <Text style={styles.secondaryButtonText}>Try the articles again</Text>
+        </TouchableOpacity>
+      )}
 
-      {result.sources.length > 0 && (
+      {result && result.sources.length > 0 && (
         <View style={styles.sources}>
           <Text style={styles.label}>ARTICLES USED</Text>
           {result.sources.map((s) => (
@@ -254,7 +358,7 @@ function ResultView({ result }: { result: AiPinionResult }) {
         </View>
       )}
 
-      <Text style={styles.safety}>{result.safetyNote}</Text>
+      {result && <Text style={styles.safety}>{result.safetyNote}</Text>}
     </View>
   );
 }
