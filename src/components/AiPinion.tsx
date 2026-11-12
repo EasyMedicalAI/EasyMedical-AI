@@ -2,7 +2,7 @@
 // feels, and gives a top three to talk through with a clinician. It is shown only after the person agrees that
 // it is a computer, not a doctor. The agreement is asked again each time the screen opens, but the chat itself is
 // kept in memory, so closing the screen does not lose it. Nothing is written to disk.
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -76,6 +76,7 @@ const addBubble = (c: ChatState, role: 'user' | 'assistant', text: string, emerg
 export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
   const [agreed, setAgreed] = useState(false);
   const [chat, setChat] = useState<ChatState>(savedChat);
+  const scrollRef = useRef<ScrollView>(null);
 
   // Every change goes through here. Replies that arrive after the screen closed are still saved.
   const update = (change: (c: ChatState) => ChatState) => {
@@ -183,14 +184,25 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
   return (
     <View style={styles.container}>
       <ScrollView
+        ref={scrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        onContentSizeChange={() => {
+          // Keeps the newest question and its answers in view, unless the results are showing
+          if (!chat.result && !chat.pending) scrollRef.current?.scrollToEnd({ animated: true });
+        }}
       >
         <Bubble role="assistant" text={GREETING} />
         {chat.shown.map((m) => (
           <Bubble key={m.id} role={m.role} text={m.text} emergency={m.emergency} />
         ))}
+        {canType &&
+          chat.options.map((o) => (
+            <TouchableOpacity key={o} style={styles.optionButton} onPress={() => send(o)} accessibilityRole="button">
+              <Text style={styles.optionText}>{o}</Text>
+            </TouchableOpacity>
+          ))}
         {chat.stage === 'asking' && (
           <View style={styles.thinking}>
             <ActivityIndicator color="#007AFF" />
@@ -217,19 +229,6 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
         )}
         <Text style={styles.footer}>Only what you type is sent. Nothing is saved on the server.</Text>
       </ScrollView>
-
-      {canType && chat.options.length > 0 && (
-        <View style={styles.optionBlock}>
-          <Text style={styles.optionHint}>Tap an answer, or type your own below.</Text>
-          <View style={styles.optionRow}>
-            {chat.options.map((o) => (
-              <TouchableOpacity key={o} style={styles.optionChip} onPress={() => send(o)} accessibilityRole="button">
-                <Text style={styles.optionText}>{o}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
 
       {canType && (
         <View style={styles.inputBar}>
@@ -409,11 +408,8 @@ const styles = StyleSheet.create({
   sourceTitle: { fontSize: 14, color: '#000' },
   sourceMeta: { fontSize: 12, color: '#6C6C70' },
   safety: { fontSize: 13, lineHeight: 18, color: '#6C6C70' },
-  optionBlock: { gap: 8 },
-  optionHint: { fontSize: 13, color: '#6C6C70' },
-  optionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  optionChip: { borderRadius: 999, paddingVertical: 9, paddingHorizontal: 14, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#007AFF' },
-  optionText: { fontSize: 15, color: '#007AFF', fontWeight: '500' },
+  optionButton: { backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: '#8E8E93' },
+  optionText: { fontSize: 15, color: '#000' },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   input: {
     flex: 1,
