@@ -1930,13 +1930,6 @@ export default function HomeScreen() {
       {__DEV__ && (
         <Modal visible={openPage === 'aipinion'} animationType="slide" onRequestClose={closeDetail}>
           <KeyboardAvoidingView style={styles.detailModal} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <View style={styles.detailHeader}>
-              <View />
-              <TouchableOpacity onPress={closeDetail} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Text style={styles.detailClose}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.detailTitle}>AI-pinion</Text>
             <View style={styles.aiPinionBody}>
               <AiPinion onLeave={closeDetail} />
             </View>
@@ -3401,8 +3394,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FAFAFA',
   },
+  // The AI-pinion screen draws its own title bar, below the status bar, and keeps its input clear of the bottom edge
   aiPinionBody: {
     flex: 1,
+    paddingTop: 80,
+    paddingBottom: 28,
   },
   detailHeader: {
     flexDirection: 'row',

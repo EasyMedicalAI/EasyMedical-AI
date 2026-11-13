@@ -1,5 +1,6 @@
 // AI-pinion: a chat that works out the most likely causes of how a person feels, with a top three.
-// Only the typed conversation is sent to the backend. No records, names or dates of birth.
+// Only the typed conversation, and any lab results or imaging report the person types in, are sent to the backend.
+// No records, names or dates of birth.
 //
 // Two calls: the chat gives the three possibilities first, then the articles for them are looked up.
 
@@ -8,6 +9,20 @@ const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://easymedical-
 export interface ChatTurn {
   role: 'user' | 'assistant';
   content: string;
+}
+
+// A lab value the person typed in. The unit is required in the app, so values can be checked.
+export interface AddedResult {
+  test: string;
+  value: string;
+  unit: string;
+  range: string;
+  date: string;
+}
+
+export interface ChatExtras {
+  results: AddedResult[];
+  imaging: string;
 }
 
 export interface AiPinionSource {
@@ -76,11 +91,20 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 // The next question, an emergency stop, or the three possibilities
-export function aiPinionTurn(messages: ChatTurn[]): Promise<AiPinionTurnResponse> {
-  return postJson<AiPinionTurnResponse>('/api/ai-pinion/turn', { messages });
+export function aiPinionTurn(messages: ChatTurn[], extras?: ChatExtras): Promise<AiPinionTurnResponse> {
+  return postJson<AiPinionTurnResponse>('/api/ai-pinion/turn', {
+    messages,
+    results: extras?.results ?? [],
+    imaging: extras?.imaging ?? '',
+  });
 }
 
 // Recent articles for the named possibilities, with summaries that cite them
-export function aiPinionArticles(messages: ChatTurn[], names: string[]): Promise<AiPinionArticlesResponse> {
-  return postJson<AiPinionArticlesResponse>('/api/ai-pinion/articles', { messages, names });
+export function aiPinionArticles(messages: ChatTurn[], names: string[], extras?: ChatExtras): Promise<AiPinionArticlesResponse> {
+  return postJson<AiPinionArticlesResponse>('/api/ai-pinion/articles', {
+    messages,
+    names,
+    results: extras?.results ?? [],
+    imaging: extras?.imaging ?? '',
+  });
 }

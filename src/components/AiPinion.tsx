@@ -20,6 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   aiPinionArticles,
   aiPinionTurn,
+  AddedResult,
   AiPinionOutline,
   AiPinionParagraph,
   AiPinionResult,
@@ -67,6 +68,9 @@ interface ChatState {
   stopped: boolean;
   // The id of the saved copy of this result, once it has been saved
   savedId: string | null;
+  // Lab values and an imaging report the person typed in, sent with each step
+  results: AddedResult[];
+  imaging: string;
 }
 
 const freshChat = (): ChatState => ({
@@ -81,6 +85,8 @@ const freshChat = (): ChatState => ({
   result: null,
   stopped: false,
   savedId: null,
+  results: [],
+  imaging: '',
 });
 
 // The chat lives here, outside the component, so it survives closing the screen partway through a reply.
@@ -120,6 +126,10 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
   const [saved, setSaved] = useState<SavedItem[]>([]);
   const [view, setView] = useState<'chat' | 'saved'>('chat');
   const [openSaved, setOpenSaved] = useState<SavedItem | null>(null);
+  // The lab-and-imaging form, and what is typed in it
+  const [showLabs, setShowLabs] = useState(false);
+  const [draft, setDraft] = useState({ test: '', value: '', unit: '', range: '', date: '' });
+  const [draftError, setDraftError] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -136,7 +146,10 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
   const loadArticles = async (history: ChatTurn[], candidates: AiPinionOutline[]) => {
     update((c) => ({ ...c, stage: 'articles', error: '' }));
     try {
-      const found = await aiPinionArticles(history, candidates.map((x) => x.name));
+      const found = await aiPinionArticles(history, candidates.map((x) => x.name), {
+        results: savedChat.results,
+        imaging: savedChat.imaging,
+      });
       if (found.type === 'emergency') {
         update((c) => ({ ...addBubble(c, 'assistant', found.text, true), stage: 'idle', pending: null, stopped: true }));
         return;
@@ -169,7 +182,7 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
     const history: ChatTurn[] = [...current.history, { role: 'user', content: text }];
     update((c) => ({ ...addBubble(c, 'user', text), history, input: '', error: '', options: [], stage: 'asking' }));
 
-    const turn = await aiPinionTurn(history).catch((e: unknown) => {
+    const turn = await aiPinionTurn(history, { results: current.results, imaging: current.imaging }).catch((e: unknown) => {
       // Put the message back so the person can try again
       update((c) => ({
         ...c,
@@ -202,6 +215,53 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
   };
 
   const startOver = () => update(() => freshChat());
+
+  // Adds one lab value. The test, value and unit are required, so the value can be checked against its unit.
+  const addResult = () => {
+    const r: AddedResult = {
+      test: draft.test.trim(),
+      value: draft.value.trim(),
+      unit: draft.unit.trim(),
+      range: draft.range.trim(),
+      date: draft.date.trim(),
+    };
+    if (!r.test || !r.value) {
+      setDraftError('Add the test name and its value.');
+      return;
+    }
+    if (!r.unit) {
+      setDraftError('Add the unit, such as mmol/L, so the value can be checked.');
+      return;
+    }
+    if (savedChat.results.length >= 20) {
+      setDraftError('You can add up to 20 results in one chat.');
+      return;
+    }
+    setDraftError('');
+    setDraft({ test: '', value: '', unit: '', range: '', date: '' });
+    update((c) => ({ ...c, results: [...c.results, r] }));
+  };
+
+  const removeResult = (index: number) => update((c) => ({ ...c, results: c.results.filter((_, i) => i !== index) }));
+
+  // The title bar: the page title, a bookmark for saved results, and a close button
+  const titleRow = (
+    <View style={styles.titleRow}>
+      <Text style={styles.titleText}>AI-pinion</Text>
+      <View style={styles.titleActions}>
+        {saved.length > 0 && (
+          <TouchableOpacity onPress={() => setView('saved')} accessibilityRole="button" accessibilityLabel="Saved results">
+            <MaterialCommunityIcons name="bookmark-outline" size={22} color="#007AFF" />
+          </TouchableOpacity>
+        )}
+        {onLeave && (
+          <TouchableOpacity onPress={onLeave} accessibilityRole="button" accessibilityLabel="Close">
+            <MaterialCommunityIcons name="close" size={22} color="#3C3C43" />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
 
   // Keeps the finished result and the conversation that led to it, on this phone only
   const saveResult = async () => {
@@ -277,6 +337,7 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
   if (!agreed) {
     return (
       <View style={[styles.container, styles.belowTitle]}>
+        {titleRow}
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <View style={styles.intro}>
             <Text style={styles.introText}>{DESCRIPTION}</Text>
@@ -305,6 +366,7 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
   if (view === 'saved') {
     return (
       <SavedList
+        header={titleRow}
         saved={saved}
         openSaved={openSaved}
         onOpen={setOpenSaved}
@@ -320,16 +382,30 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
 
   const canType = chat.stage === 'idle' && !chat.result && !chat.stopped && !chat.pending;
   const showPossibilities = chat.pending !== null || chat.result !== null;
+  // What has been added, for the labs row, for example "2 results and an imaging report"
+  const labsSummary = [
+    chat.results.length ? `${chat.results.length} result${chat.results.length === 1 ? '' : 's'}` : '',
+    chat.imaging ? 'an imaging report' : '',
+  ]
+    .filter(Boolean)
+    .join(' and ');
 
   return (
     <View style={[styles.container, styles.belowTitle]}>
+      {titleRow}
       <View style={styles.intro}>
         <Text style={styles.introText}>{DESCRIPTION}</Text>
       </View>
-      {saved.length > 0 && (
-        <TouchableOpacity style={styles.savedChip} onPress={() => setView('saved')} accessibilityRole="button">
-          <MaterialCommunityIcons name="bookmark-outline" size={16} color="#007AFF" />
-          <Text style={styles.savedChipText}>Saved results ({saved.length})</Text>
+      {canType && !showLabs && (
+        <TouchableOpacity style={styles.labsRow} onPress={() => setShowLabs(true)} accessibilityRole="button">
+          <MaterialCommunityIcons name="flask-outline" size={20} color="#007AFF" />
+          <View style={styles.labsText}>
+            <Text style={styles.labsTitle}>
+              Add labs or imaging <Text style={styles.labsOptional}>Optional</Text>
+            </Text>
+            <Text style={styles.labsSub}>{labsSummary || 'Blood tests or scan reports help the answer be more specific'}</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={20} color="#C7C7CC" />
         </TouchableOpacity>
       )}
       <ScrollView
@@ -385,6 +461,76 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
             <Text style={styles.secondaryButtonText}>Start over</Text>
           </TouchableOpacity>
         )}
+        {canType && showLabs && (
+          <View style={styles.labPanel}>
+            <Text style={styles.label}>ADD LAB RESULTS OR IMAGING</Text>
+            <Text style={styles.savedMeta}>Only what you type is sent. Include the unit, so the value can be checked.</Text>
+            <View style={styles.labRow}>
+              <TextInput
+                style={[styles.labInput, { flex: 2 }]}
+                placeholder="Test, such as TSH"
+                placeholderTextColor="#8E8E93"
+                value={draft.test}
+                onChangeText={(test) => setDraft({ ...draft, test })}
+              />
+              <TextInput
+                style={[styles.labInput, { flex: 1 }]}
+                placeholder="Value"
+                placeholderTextColor="#8E8E93"
+                value={draft.value}
+                onChangeText={(value) => setDraft({ ...draft, value })}
+              />
+            </View>
+            <View style={styles.labRow}>
+              <TextInput
+                style={[styles.labInput, { flex: 1 }]}
+                placeholder="Unit"
+                placeholderTextColor="#8E8E93"
+                value={draft.unit}
+                onChangeText={(unit) => setDraft({ ...draft, unit })}
+              />
+              <TextInput
+                style={[styles.labInput, { flex: 2 }]}
+                placeholder="Reference range, optional"
+                placeholderTextColor="#8E8E93"
+                value={draft.range}
+                onChangeText={(range) => setDraft({ ...draft, range })}
+              />
+            </View>
+            <TextInput
+              style={styles.labInput}
+              placeholder="Date, optional"
+              placeholderTextColor="#8E8E93"
+              value={draft.date}
+              onChangeText={(date) => setDraft({ ...draft, date })}
+            />
+            {draftError ? <Text style={styles.labError}>{draftError}</Text> : null}
+            <TouchableOpacity style={styles.secondaryButton} onPress={addResult} accessibilityRole="button">
+              <Text style={styles.secondaryButtonText}>Add result</Text>
+            </TouchableOpacity>
+            {chat.results.map((r, i) => (
+              <View key={i} style={styles.labItem}>
+                <Text style={[styles.bodyText, { flex: 1 }]}>
+                  {`${r.test}: ${r.value}${r.unit ? ' ' + r.unit : ''}${r.range ? ' (range ' + r.range + ')' : ''}`}
+                </Text>
+                <TouchableOpacity onPress={() => removeResult(i)} accessibilityRole="button" accessibilityLabel="Remove this result">
+                  <Text style={styles.linkText}>Remove</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TextInput
+              style={[styles.labInput, styles.labMulti]}
+              placeholder="Imaging report, pasted as text (optional)"
+              placeholderTextColor="#8E8E93"
+              multiline
+              value={chat.imaging}
+              onChangeText={(imaging) => update((c) => ({ ...c, imaging: imaging.slice(0, 3000) }))}
+            />
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => setShowLabs(false)} accessibilityRole="button">
+              <Text style={styles.secondaryButtonText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <Text style={styles.footer}>Only what you type is sent. Nothing is saved on the server.</Text>
       </ScrollView>
 
@@ -423,6 +569,7 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
 
 // The list of saved results, and one saved result opened in full
 function SavedList({
+  header,
   saved,
   openSaved,
   onOpen,
@@ -430,6 +577,7 @@ function SavedList({
   onDelete,
   onBack,
 }: {
+  header: React.ReactNode;
   saved: SavedItem[];
   openSaved: SavedItem | null;
   onOpen: (item: SavedItem) => void;
@@ -439,6 +587,7 @@ function SavedList({
 }) {
   return (
     <View style={[styles.container, styles.belowTitle]}>
+      {header}
       <TouchableOpacity style={styles.secondaryButton} onPress={onBack} accessibilityRole="button">
         <Text style={styles.secondaryButtonText}>Back to chat</Text>
       </TouchableOpacity>
@@ -585,8 +734,26 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FAFAFA', padding: 16, gap: 12 },
   // The screens start right under the page title, so they have no top padding of their own
   belowTitle: { paddingTop: 0 },
-  intro: { backgroundColor: '#FFF', borderRadius: 14, padding: 14 },
-  introText: { fontSize: 14, lineHeight: 20, color: '#3C3C43' },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  titleText: { fontSize: 24, fontWeight: '700', color: '#000' },
+  titleActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  intro: { backgroundColor: '#F2F2F7', borderRadius: 12, padding: 12 },
+  introText: { fontSize: 13, lineHeight: 19, color: '#3C3C43' },
+  labsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#C6C6C8',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  labsText: { flex: 1, gap: 2 },
+  labsTitle: { fontSize: 14, fontWeight: '600', color: '#000' },
+  labsOptional: { fontSize: 12, fontWeight: '400', color: '#6C6C70' },
+  labsSub: { fontSize: 12, lineHeight: 17, color: '#6C6C70' },
   scroll: { flex: 1 },
   scrollContent: { gap: 10, paddingBottom: 16 },
   disclaimer: { backgroundColor: '#FFF9E6', borderRadius: 16, padding: 18, gap: 10 },
@@ -647,6 +814,21 @@ const styles = StyleSheet.create({
     borderColor: '#D1D1D6',
   },
   savedChipText: { fontSize: 14, color: '#007AFF', fontWeight: '600' },
+  labPanel: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, gap: 8 },
+  labRow: { flexDirection: 'row', gap: 8 },
+  labInput: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#C6C6C8',
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    fontSize: 15,
+    color: '#000',
+    backgroundColor: '#FFF',
+  },
+  labMulti: { minHeight: 80, textAlignVertical: 'top' },
+  labError: { fontSize: 13, color: '#B42318' },
+  labItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   savedRow: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, gap: 4 },
   savedTitle: { fontSize: 15, fontWeight: '600', color: '#000' },
   savedMeta: { fontSize: 12, color: '#6C6C70' },
