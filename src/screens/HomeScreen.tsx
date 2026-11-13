@@ -25,6 +25,7 @@ import {
   TextInput,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -1925,10 +1926,22 @@ export default function HomeScreen() {
         </DetailModal>
       )}
 
+      {/* AI-pinion has its own full-height screen, so the keyboard can lift the message box without the page scrolling */}
       {__DEV__ && (
-        <DetailModal visible={openPage === 'aipinion'} title="AI-pinion" onClose={closeDetail}>
-          <AiPinion onLeave={closeDetail} />
-        </DetailModal>
+        <Modal visible={openPage === 'aipinion'} animationType="slide" onRequestClose={closeDetail}>
+          <KeyboardAvoidingView style={styles.detailModal} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={styles.detailHeader}>
+              <View />
+              <TouchableOpacity onPress={closeDetail} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.detailClose}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.detailTitle}>AI-pinion</Text>
+            <View style={styles.aiPinionBody}>
+              <AiPinion onLeave={closeDetail} />
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       )}
 
       <DetailModal visible={openPage === 'allergies'} title="Allergies" onClose={closeDetail} onDismiss={runPendingEditor}>
@@ -3387,6 +3400,9 @@ const styles = StyleSheet.create({
   detailModal: {
     flex: 1,
     backgroundColor: '#FAFAFA',
+  },
+  aiPinionBody: {
+    flex: 1,
   },
   detailHeader: {
     flexDirection: 'row',

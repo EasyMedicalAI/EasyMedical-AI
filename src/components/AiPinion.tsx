@@ -1,8 +1,9 @@
 // AI-pinion (personal use, development builds only): a chat that works out the most likely causes of how a person
 // feels, and gives a top three to talk through with a clinician. It is shown only after the person agrees that
 // it is a computer, not a doctor. The agreement is asked again each time the screen opens, but the chat itself is
-// kept in memory, so closing the screen does not lose it. Nothing is written to disk.
-import React, { useRef, useState } from 'react';
+// kept in memory, so closing the screen does not lose it. Results are saved only when the person taps Save, and
+// they stay on this phone. Nothing is sent to the server for saving.
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,10 +11,12 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Alert,
   Keyboard,
   Linking,
   StyleSheet,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   aiPinionArticles,
   aiPinionTurn,
@@ -22,14 +25,30 @@ import {
   AiPinionResult,
   ChatTurn,
 } from '@/services/aiPinionService';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { SpeechModule, speechAvailable, useSpeechEvent } from '@/services/speech';
 
-const GREETING = 'Tell me what has been going on, in your own words. I will ask a few questions, then give you three possibilities to talk through with a clinician.';
+const DESCRIPTION =
+  'A computer program that helps you think through what might be going on, so you can talk it over with a doctor.';
+
+const GREETING ='Tell me what has been going on, in your own words. I will ask a few questions, then give you three possibilities to talk through with a clinician.';
+
+const SAVED_KEY = 'aipinion.saved.v1';
 
 interface Shown {
   id: number;
   role: 'user' | 'assistant';
   text: string;
   emergency?: boolean;
+}
+
+// A result the person chose to keep, with the conversation that led to it
+interface SavedItem {
+  id: string;
+  savedAt: string;
+  title: string;
+  shown: { role: 'user' | 'assistant'; text: string; emergency: boolean }[];
+  result: AiPinionResult;
 }
 
 interface ChatState {
@@ -46,6 +65,8 @@ interface ChatState {
   pending: AiPinionOutline[] | null;
   result: AiPinionResult | null;
   stopped: boolean;
+  // The id of the saved copy of this result, once it has been saved
+  savedId: string | null;
 }
 
 const freshChat = (): ChatState => ({
@@ -59,10 +80,30 @@ const freshChat = (): ChatState => ({
   pending: null,
   result: null,
   stopped: false,
+  savedId: null,
 });
 
 // The chat lives here, outside the component, so it survives closing the screen partway through a reply.
 let savedChat: ChatState = freshChat();
+
+// Saved results are read and written on this phone only. A failure is reported, not thrown.
+async function loadSaved(): Promise<SavedItem[]> {
+  try {
+    const raw = await AsyncStorage.getItem(SAVED_KEY);
+    return raw ? (JSON.parse(raw) as SavedItem[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeSaved(items: SavedItem[]): Promise<boolean> {
+  try {
+    await AsyncStorage.setItem(SAVED_KEY, JSON.stringify(items));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const messageOf = (e: unknown) =>
   e instanceof Error ? e.message : 'AI-pinion could not respond right now. Please try again.';
@@ -76,7 +117,14 @@ const addBubble = (c: ChatState, role: 'user' | 'assistant', text: string, emerg
 export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
   const [agreed, setAgreed] = useState(false);
   const [chat, setChat] = useState<ChatState>(savedChat);
+  const [saved, setSaved] = useState<SavedItem[]>([]);
+  const [view, setView] = useState<'chat' | 'saved'>('chat');
+  const [openSaved, setOpenSaved] = useState<SavedItem | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    loadSaved().then(setSaved);
+  }, []);
 
   // Every change goes through here. Replies that arrive after the screen closed are still saved.
   const update = (change: (c: ChatState) => ChatState) => {
@@ -155,26 +203,118 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
 
   const startOver = () => update(() => freshChat());
 
+  // Keeps the finished result and the conversation that led to it, on this phone only
+  const saveResult = async () => {
+    const current = savedChat;
+    if (!current.result || current.savedId) return;
+    const firstWords = current.history.find((m) => m.role === 'user')?.content ?? 'Saved result';
+    const item: SavedItem = {
+      id: String(Date.now()),
+      savedAt: new Date().toISOString(),
+      title: firstWords.slice(0, 80),
+      shown: current.shown.map(({ role, text, emergency }) => ({ role, text, emergency: !!emergency })),
+      result: current.result,
+    };
+    const next = [item, ...saved];
+    setSaved(next);
+    update((c) => ({ ...c, savedId: item.id }));
+    if (!(await writeSaved(next))) {
+      setSaved(saved);
+      update((c) => ({ ...c, savedId: null }));
+      Alert.alert('Could not save', 'This phone did not save the result. Please try again.');
+    }
+  };
+
+  const deleteSaved = (item: SavedItem) => {
+    Alert.alert('Delete this saved result?', 'It will be removed from this phone. This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          const next = saved.filter((s) => s.id !== item.id);
+          setSaved(next);
+          setOpenSaved(null);
+          if (savedChat.savedId === item.id) update((c) => ({ ...c, savedId: null }));
+          await writeSaved(next);
+        },
+      },
+    ]);
+  };
+
+  const [listening, setListening] = useState(false);
+  // Speech fills the box as the person talks. They check it, then tap Send.
+  useSpeechEvent('start', () => setListening(true));
+  useSpeechEvent('end', () => setListening(false));
+  useSpeechEvent('result', (event) => {
+    const transcript = event.results[0]?.transcript;
+    if (transcript) update((c) => ({ ...c, input: transcript }));
+  });
+  useSpeechEvent('error', (event) => {
+    setListening(false);
+    if (event.error !== 'aborted') {
+      Alert.alert('Could not hear that', event.message || 'Please try again, or type it instead.');
+    }
+  });
+
+  const toggleListening = async () => {
+    if (!speechAvailable || !SpeechModule) {
+      Alert.alert('Speaking needs an app update', 'This version of the app cannot listen yet. You can still type your message.');
+      return;
+    }
+    if (listening) {
+      SpeechModule.stop();
+      return;
+    }
+    const permission = await SpeechModule.requestPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Microphone off', 'Turn on Microphone and Speech Recognition for EasyMedical in Settings to speak your answers.');
+      return;
+    }
+    SpeechModule.start({ lang: 'en-US', interimResults: true, continuous: false });
+  };
+
   if (!agreed) {
     return (
-      <View style={styles.container}>
-        <View style={styles.disclaimer}>
-          <Text style={styles.disclaimerTitle}>Before you start</Text>
-          <Text style={styles.disclaimerLead}>AI-pinion is a computer program. It is not a doctor.</Text>
-          <Bullet>It is not medical advice, and it cannot diagnose you.</Bullet>
-          <Bullet>It can be wrong. It can misread what you tell it, and its sources are research articles, not your own records.</Bullet>
-          <Bullet>Use it only to prepare for a talk with a clinician. Do not start, stop or change any treatment because of it.</Bullet>
-          <Bullet>If you feel very sick, or symptoms are sudden or severe, call 911 or go to the nearest emergency room. Do not wait for AI-pinion.</Bullet>
-        </View>
-        <TouchableOpacity style={styles.primaryButton} onPress={() => setAgreed(true)} accessibilityRole="button">
-          <Text style={styles.primaryButtonText}>I agree: this is a computer, not a doctor</Text>
-        </TouchableOpacity>
-        {onLeave && (
-          <TouchableOpacity style={styles.secondaryButton} onPress={onLeave} accessibilityRole="button">
-            <Text style={styles.secondaryButtonText}>Go back</Text>
+      <View style={[styles.container, styles.belowTitle]}>
+        <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.intro}>
+            <Text style={styles.introText}>{DESCRIPTION}</Text>
+          </View>
+          <View style={styles.disclaimer}>
+            <Text style={styles.disclaimerTitle}>Before you start</Text>
+            <Text style={styles.disclaimerLead}>AI-pinion is a computer program. It is not a doctor.</Text>
+            <Bullet>It is not medical advice, and it cannot diagnose you.</Bullet>
+            <Bullet>It can be wrong. It can misread what you tell it, and its sources are research articles, not your own records.</Bullet>
+            <Bullet>Use it only to prepare for a talk with a clinician. Do not start, stop or change any treatment because of it.</Bullet>
+            <Bullet>If you feel very sick, or symptoms are sudden or severe, call 911 or go to the nearest emergency room. Do not wait for AI-pinion.</Bullet>
+          </View>
+          <TouchableOpacity style={styles.primaryButton} onPress={() => setAgreed(true)} accessibilityRole="button">
+            <Text style={styles.primaryButtonText}>I agree: this is a computer, not a doctor</Text>
           </TouchableOpacity>
-        )}
+          {onLeave && (
+            <TouchableOpacity style={styles.secondaryButton} onPress={onLeave} accessibilityRole="button">
+              <Text style={styles.secondaryButtonText}>Go back</Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
       </View>
+    );
+  }
+
+  if (view === 'saved') {
+    return (
+      <SavedList
+        saved={saved}
+        openSaved={openSaved}
+        onOpen={setOpenSaved}
+        onCloseOpen={() => setOpenSaved(null)}
+        onDelete={deleteSaved}
+        onBack={() => {
+          setOpenSaved(null);
+          setView('chat');
+        }}
+      />
     );
   }
 
@@ -182,7 +322,16 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
   const showPossibilities = chat.pending !== null || chat.result !== null;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, styles.belowTitle]}>
+      <View style={styles.intro}>
+        <Text style={styles.introText}>{DESCRIPTION}</Text>
+      </View>
+      {saved.length > 0 && (
+        <TouchableOpacity style={styles.savedChip} onPress={() => setView('saved')} accessibilityRole="button">
+          <MaterialCommunityIcons name="bookmark-outline" size={16} color="#007AFF" />
+          <Text style={styles.savedChipText}>Saved results ({saved.length})</Text>
+        </TouchableOpacity>
+      )}
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
@@ -222,6 +371,15 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
             onRetry={chat.pending && chat.stage === 'idle' ? () => loadArticles(savedChat.history, savedChat.pending ?? []) : undefined}
           />
         )}
+        {chat.result && chat.stage === 'idle' && (
+          chat.savedId ? (
+            <Text style={styles.savedNote}>Saved on this phone.</Text>
+          ) : (
+            <TouchableOpacity style={styles.secondaryButton} onPress={saveResult} accessibilityRole="button">
+              <Text style={styles.secondaryButtonText}>Save this result</Text>
+            </TouchableOpacity>
+          )
+        )}
         {chat.stage === 'idle' && chat.history.length > 0 && (
           <TouchableOpacity style={styles.secondaryButton} onPress={startOver} accessibilityRole="button">
             <Text style={styles.secondaryButtonText}>Start over</Text>
@@ -234,13 +392,21 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
         <View style={styles.inputBar}>
           <TextInput
             style={styles.input}
-            placeholder="Type here"
+            placeholder={listening ? 'Listening…' : 'Type, or tap the microphone to speak'}
             placeholderTextColor="#8E8E93"
             value={chat.input}
             onChangeText={(input) => update((c) => ({ ...c, input }))}
             multiline
             maxLength={1500}
           />
+          <TouchableOpacity
+            style={[styles.micButton, listening && styles.micButtonActive]}
+            onPress={toggleListening}
+            accessibilityRole="button"
+            accessibilityLabel={listening ? 'Stop listening' : 'Speak your answer'}
+          >
+            <MaterialCommunityIcons name={listening ? 'stop' : 'microphone-outline'} size={20} color={listening ? '#FFF' : '#007AFF'} />
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.sendButton, !chat.input.trim() && styles.sendButtonDisabled]}
             onPress={() => send()}
@@ -251,6 +417,58 @@ export default function AiPinion({ onLeave }: { onLeave?: () => void }) {
           </TouchableOpacity>
         </View>
       )}
+    </View>
+  );
+}
+
+// The list of saved results, and one saved result opened in full
+function SavedList({
+  saved,
+  openSaved,
+  onOpen,
+  onCloseOpen,
+  onDelete,
+  onBack,
+}: {
+  saved: SavedItem[];
+  openSaved: SavedItem | null;
+  onOpen: (item: SavedItem) => void;
+  onCloseOpen: () => void;
+  onDelete: (item: SavedItem) => void;
+  onBack: () => void;
+}) {
+  return (
+    <View style={[styles.container, styles.belowTitle]}>
+      <TouchableOpacity style={styles.secondaryButton} onPress={onBack} accessibilityRole="button">
+        <Text style={styles.secondaryButtonText}>Back to chat</Text>
+      </TouchableOpacity>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        {openSaved ? (
+          <>
+            <TouchableOpacity onPress={onCloseOpen} accessibilityRole="button">
+              <Text style={styles.linkText}>All saved results</Text>
+            </TouchableOpacity>
+            {openSaved.shown.map((m, i) => (
+              <Bubble key={i} role={m.role} text={m.text} emergency={m.emergency} />
+            ))}
+            <Possibilities candidates={openSaved.result.candidates} result={openSaved.result} loading={false} />
+            <TouchableOpacity style={styles.deleteButton} onPress={() => onDelete(openSaved)} accessibilityRole="button">
+              <Text style={styles.deleteButtonText}>Delete this saved result</Text>
+            </TouchableOpacity>
+          </>
+        ) : saved.length === 0 ? (
+          <Text style={styles.footer}>No saved results yet.</Text>
+        ) : (
+          saved.map((item) => (
+            <TouchableOpacity key={item.id} style={styles.savedRow} onPress={() => onOpen(item)} accessibilityRole="button">
+              <Text style={styles.savedTitle} numberOfLines={2}>{item.title}</Text>
+              <Text style={styles.savedMeta}>
+                {new Date(item.savedAt).toLocaleDateString()} · {item.result.candidates.map((c) => c.name).join(', ')}
+              </Text>
+            </TouchableOpacity>
+          ))
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -363,7 +581,12 @@ function Possibilities({
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F2F2F7', padding: 16, gap: 12 },
+  // Same colour as the page behind it (DetailModal in HomeScreen), so there is no band
+  container: { flex: 1, backgroundColor: '#FAFAFA', padding: 16, gap: 12 },
+  // The screens start right under the page title, so they have no top padding of their own
+  belowTitle: { paddingTop: 0 },
+  intro: { backgroundColor: '#FFF', borderRadius: 14, padding: 14 },
+  introText: { fontSize: 14, lineHeight: 20, color: '#3C3C43' },
   scroll: { flex: 1 },
   scrollContent: { gap: 10, paddingBottom: 16 },
   disclaimer: { backgroundColor: '#FFF9E6', borderRadius: 16, padding: 18, gap: 10 },
@@ -410,6 +633,26 @@ const styles = StyleSheet.create({
   safety: { fontSize: 13, lineHeight: 18, color: '#6C6C70' },
   optionButton: { backgroundColor: '#FFF', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, borderWidth: StyleSheet.hairlineWidth, borderColor: '#8E8E93' },
   optionText: { fontSize: 15, color: '#000' },
+  savedNote: { fontSize: 14, color: '#3C3C43', textAlign: 'center' },
+  savedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: '#FFF',
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#D1D1D6',
+  },
+  savedChipText: { fontSize: 14, color: '#007AFF', fontWeight: '600' },
+  savedRow: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, gap: 4 },
+  savedTitle: { fontSize: 15, fontWeight: '600', color: '#000' },
+  savedMeta: { fontSize: 12, color: '#6C6C70' },
+  linkText: { fontSize: 15, color: '#007AFF', fontWeight: '600' },
+  deleteButton: { borderRadius: 14, paddingVertical: 13, alignItems: 'center', backgroundColor: '#FFF', borderWidth: 1, borderColor: '#FF3B30' },
+  deleteButtonText: { color: '#FF3B30', fontSize: 15, fontWeight: '600' },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
   input: {
     flex: 1,
@@ -424,6 +667,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#000',
   },
+  micButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#FFF',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#D1D1D6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micButtonActive: { backgroundColor: '#FF3B30', borderColor: '#FF3B30' },
   sendButton: { backgroundColor: '#007AFF', borderRadius: 14, paddingVertical: 13, paddingHorizontal: 18 },
   sendButtonDisabled: { opacity: 0.4 },
   sendButtonText: { color: '#FFF', fontSize: 15, fontWeight: '600' },
